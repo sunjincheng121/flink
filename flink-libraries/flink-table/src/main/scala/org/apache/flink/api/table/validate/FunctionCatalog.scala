@@ -47,6 +47,13 @@ class FunctionCatalog {
     sqlFunctions += sqlFunction
   }
 
+  def registerSqlFunctions(functions: Array[SqlFunction]): Unit = {
+    if (functions.nonEmpty) {
+      sqlFunctions --= sqlFunctions.filter(_.getName == functions.head.getName)
+      sqlFunctions ++= functions
+    }
+  }
+
   def getSqlOperatorTable: SqlOperatorTable =
     ChainedSqlOperatorTable.of(
       new BasicOperatorTable(),

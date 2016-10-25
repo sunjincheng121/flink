@@ -17,9 +17,70 @@
  */
 package org.apache.flink.api.table.plan.rules.dataSet
 
-/**
-  * Created by jincheng.sunjc on 16/10/25.
-  */
-class DataSetCorrelateRule {
+import org.apache.calcite.plan.{Convention, RelOptRule, RelOptRuleCall, RelTraitSet}
+import org.apache.calcite.plan.volcano.RelSubset
+import org.apache.calcite.rel.RelNode
+import org.apache.calcite.rel.convert.ConverterRule
+import org.apache.calcite.rel.logical.{LogicalCorrelate, LogicalFilter, LogicalTableFunctionScan}
+import org.apache.calcite.rex.RexNode
+import org.apache.flink.api.table.plan.nodes.dataset.{DataSetConvention, DataSetCorrelate}
 
+class DataSetCorrelateRule
+  extends ConverterRule(
+    classOf[LogicalCorrelate],
+    Convention.NONE,
+    DataSetConvention.INSTANCE,
+    "DataSetCorrelateRule")
+{
+
+  override def matches(call: RelOptRuleCall): Boolean = {
+    val join: LogicalCorrelate = call.rel(0).asInstanceOf[LogicalCorrelate]
+    val right = join.getRight.asInstanceOf[RelSubset].getOriginal
+
+
+    right match {
+      // right node is a table function
+      case scan: LogicalTableFunctionScan => true
+      // a filter is pushed above the table function
+      case filter: LogicalFilter =>
+        filter.getInput.asInstanceOf[RelSubset].getOriginal
+          .isInstanceOf[LogicalTableFunctionScan]
+      case _ => false
+    }
+  }
+
+  override def convert(rel: RelNode): RelNode = {
+    val join: LogicalCorrelate = rel.asInstanceOf[LogicalCorrelate]
+    val traitSet: RelTraitSet = rel.getTraitSet.replace(DataSetConvention.INSTANCE)
+    val convInput: RelNode = RelOptRule.convert(join.getInput(0), DataSetConvention.INSTANCE)
+    val right: RelNode = join.getInput(1)
+
+    def convertToCorrelate(relNode: RelNode, condition: RexNode): DataSetCorrelate = {
+      relNode match {
+        case rel: RelSubset =>
+          convertToCorrelate(rel.getRelList.get(0), condition)
+
+        case filter: LogicalFilter =>
+          convertToCorrelate(filter.getInput.asInstanceOf[RelSubset].getOriginal,
+            filter.getCondition)
+
+        case scan: LogicalTableFunctionScan =>
+          new DataSetCorrelate(
+            rel.getCluster,
+            traitSet,
+            convInput,
+            scan,
+            condition,
+            rel.getRowType,
+            join.getRowType,
+            join.getJoinType,
+            description)
+      }
+    }
+    convertToCorrelate(right, null)
+  }
+}
+
+object DataSetCorrelateRule {
+  val INSTANCE: RelOptRule = new DataSetCorrelateRule
 }

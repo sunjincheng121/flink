@@ -26,7 +26,7 @@ import org.apache.calcite.sql.`type`.{BasicSqlType, SqlTypeName, SqlTypeUtil}
 import org.apache.calcite.sql.`type`.SqlTypeName._
 import org.apache.calcite.sql.parser.SqlParserPos
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
-import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
+import org.apache.flink.api.common.typeinfo.{NothingTypeInfo, SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.api.java.typeutils.ValueTypeInfo._
 import org.apache.flink.api.table.FlinkTypeFactory.typeInfoToSqlTypeName
 import org.apache.flink.api.table.plan.schema.GenericRelDataType
@@ -141,7 +141,8 @@ object FlinkTypeFactory {
     // symbol for special flags e.g. TRIM's BOTH, LEADING, TRAILING
     // are represented as integer
     case SYMBOL => INT_TYPE_INFO
-
+    //for table valued function
+    case ROW|CURSOR => new NothingTypeInfo
     // extract encapsulated TypeInformation
     case ANY if relDataType.isInstanceOf[GenericRelDataType] =>
       val genericRelDataType = relDataType.asInstanceOf[GenericRelDataType]

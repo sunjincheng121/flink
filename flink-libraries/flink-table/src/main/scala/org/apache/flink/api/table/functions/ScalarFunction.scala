@@ -41,14 +41,13 @@ import org.apache.flink.api.table.{FlinkTypeFactory, ValidationException}
   * By default the result type of an evaluation method is determined by Flink's type extraction
   * facilities. This is sufficient for basic types or simple POJOs but might be wrong for more
   * complex, custom, or composite types. In these cases [[TypeInformation]] of the result type
-  * can be manually defined by overriding [[getResultType()]].
+  * can be manually defined by overriding [[UserDefinedFunction.getResultType()]].
   *
   * Internally, the Table/SQL API code generation works with primitive values as much as possible.
   * If a user-defined scalar function should not introduce much overhead during runtime, it is
   * recommended to declare parameters and result types as primitive types instead of their boxed
   * classes. DATE/TIME is equal to int, TIMESTAMP is equal to long.
-  */
-abstract class ScalarFunction extends UserDefinedFunction {
+  */abstract class ScalarFunction extends UserDefinedFunction {
 
   /**
     * Creates a call to a [[ScalarFunction]] in Scala Table API.
@@ -60,84 +59,12 @@ abstract class ScalarFunction extends UserDefinedFunction {
     ScalarFunctionCall(this, params)
   }
 
-  // ----------------------------------------------------------------------------------------------
-
-  private val evalMethods = checkAndExtractEvalMethods()
-  private lazy val signatures = evalMethods.map(_.getParameterTypes)
-
-  /**
-    * Extracts evaluation methods and throws a [[ValidationException]] if no implementation
-    * can be found.
-    */
-  private def checkAndExtractEvalMethods(): Array[Method] = {
-    val methods = getClass.asSubclass(classOf[ScalarFunction])
-      .getDeclaredMethods
-      .filter { m =>
-        val modifiers = m.getModifiers
-        m.getName == "eval" && Modifier.isPublic(modifiers) && !Modifier.isAbstract(modifiers)
-      }
-
-    if (methods.isEmpty) {
-      throw new ValidationException(s"Scalar function class '$this' does not implement at least " +
-        s"one method named 'eval' which is public and not abstract.")
-    } else {
-      methods
-    }
-  }
-
-  /**
-    * Returns all found evaluation methods of the possibly overloaded function.
-    */
-  private[flink] final def getEvalMethods: Array[Method] = evalMethods
-
-  /**
-    * Returns all found signature of the possibly overloaded function.
-    */
-  private[flink] final def getSignatures: Array[Array[Class[_]]] = signatures
-
   override private[flink] final def createSqlFunction(
-      name: String,
-      typeFactory: FlinkTypeFactory)
-    : SqlFunction = {
+                                                       name: String,
+                                                       mothod:Method,
+                                                       typeFactory: FlinkTypeFactory)
+  : SqlFunction = {
     new ScalarSqlFunction(name, this, typeFactory)
   }
 
-  // ----------------------------------------------------------------------------------------------
-
-  /**
-    * Returns the result type of the evaluation method with a given signature.
-    *
-    * This method needs to be overriden in case Flink's type extraction facilities are not
-    * sufficient to extract the [[TypeInformation]] based on the return type of the evaluation
-    * method. Flink's type extraction facilities can handle basic types or
-    * simple POJOs but might be wrong for more complex, custom, or composite types.
-    *
-    * @param signature signature of the method the return type needs to be determined
-    * @return [[TypeInformation]] of result type or null if Flink should determine the type
-    */
-  def getResultType(signature: Array[Class[_]]): TypeInformation[_] = null
-
-  /**
-    * Returns [[TypeInformation]] about the operands of the evaluation method with a given
-    * signature.
-    *
-    * In order to perform operand type inference in SQL (especially when NULL is used) it might be
-    * necessary to determine the parameter [[TypeInformation]] of an evaluation method.
-    * By default Flink's type extraction facilities are used for this but might be wrong for
-    * more complex, custom, or composite types.
-    *
-    * @param signature signature of the method the operand types need to be determined
-    * @return [[TypeInformation]] of  operand types
-    */
-  def getParameterTypes(signature: Array[Class[_]]): Array[TypeInformation[_]] = {
-    signature.map { c =>
-      try {
-        TypeExtractor.getForClass(c)
-      } catch {
-        case ite: InvalidTypesException =>
-          throw new ValidationException(s"Parameter types of scalar function '$this' cannot be " +
-            s"automatically determined. Please provide type information manually.")
-      }
-    }
-  }
 }

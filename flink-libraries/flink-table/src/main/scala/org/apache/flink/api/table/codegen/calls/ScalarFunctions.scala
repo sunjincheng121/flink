@@ -28,7 +28,7 @@ import org.apache.calcite.util.BuiltInMethod
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.api.java.typeutils.GenericTypeInfo
-import org.apache.flink.api.table.functions.utils.ScalarSqlFunction
+import org.apache.flink.api.table.functions.utils.{ScalarSqlFunction, TableValuedSqlFunction}
 
 import scala.collection.mutable
 
@@ -304,7 +304,14 @@ object ScalarFunctions {
           resultType
         )
       )
-
+    case ssf: TableValuedSqlFunction =>
+      Some(
+        new TableValuedFunctionCallGen(
+          ssf.getTableFunction,
+          operandTypes,
+          resultType
+        )
+      )
     // built-in scalar function
     case _ =>
       sqlFunctions.get((sqlOperator, operandTypes))

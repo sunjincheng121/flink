@@ -19,6 +19,7 @@
 
 package org.apache.flink.api.table.functions.utils
 
+import java.lang.reflect.Method
 import java.sql.{Date, Time, Timestamp}
 
 import com.google.common.primitives.Primitives
@@ -26,7 +27,7 @@ import org.apache.flink.api.common.functions.InvalidTypesException
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.typeutils.TypeExtractor
 import org.apache.flink.api.table.ValidationException
-import org.apache.flink.api.table.functions.{ScalarFunction, UserDefinedFunction}
+import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction, UserDefinedFunction}
 import org.apache.flink.util.InstantiationUtil
 
 object UserDefinedFunctionUtils {
@@ -70,13 +71,13 @@ object UserDefinedFunctionUtils {
     * Prints one signature consisting of classes.
     */
   def signatureToString(signature: Array[Class[_]]): String =
-    "(" + signature.map { clazz =>
-      if (clazz == null) {
-        "null"
-      } else {
-        clazz.getCanonicalName
-      }
-    }.mkString(", ") + ")"
+  "(" + signature.map { clazz =>
+    if (clazz == null) {
+      "null"
+    } else {
+      clazz.getCanonicalName
+    }
+  }.mkString(", ") + ")"
 
   /**
     * Prints one signature consisting of TypeInformation.
@@ -89,13 +90,13 @@ object UserDefinedFunctionUtils {
     * Extracts type classes of [[TypeInformation]] in a null-aware way.
     */
   def typeInfoToClass(typeInfos: Seq[TypeInformation[_]]): Array[Class[_]] =
-    typeInfos.map { typeInfo =>
-      if (typeInfo == null) {
-        null
-      } else {
-        typeInfo.getTypeClass
-      }
-    }.toArray
+  typeInfos.map { typeInfo =>
+    if (typeInfo == null) {
+      null
+    } else {
+      typeInfo.getTypeClass
+    }
+  }.toArray
 
 
   /**
@@ -103,35 +104,35 @@ object UserDefinedFunctionUtils {
     * Candidate can be null (acts as a wildcard).
     */
   def parameterTypeEquals(candidate: Class[_], expected: Class[_]): Boolean =
-    candidate == null ||
-      candidate == expected ||
-      expected.isPrimitive && Primitives.wrap(expected) == candidate ||
-      candidate == classOf[Date] && expected == classOf[Int] ||
-      candidate == classOf[Time] && expected == classOf[Int] ||
-      candidate == classOf[Timestamp] && expected == classOf[Long]
+  candidate == null ||
+    candidate == expected ||
+    expected.isPrimitive && Primitives.wrap(expected) == candidate ||
+    candidate == classOf[Date] && expected == classOf[Int] ||
+    candidate == classOf[Time] && expected == classOf[Int] ||
+    candidate == classOf[Timestamp] && expected == classOf[Long]
 
   /**
     * Returns signatures matching the given signature of [[TypeInformation]].
     * Elements of the signature can be null (act as a wildcard).
     */
   def getSignature(
-      scalarFunction: ScalarFunction,
-      signature: Seq[TypeInformation[_]])
-    : Option[Array[Class[_]]] = {
+                    useDefinedFunction: UserDefinedFunction,
+                    signature: Seq[TypeInformation[_]])
+  : Option[Array[Class[_]]] = {
     // We compare the raw Java classes not the TypeInformation.
     // TypeInformation does not matter during runtime (e.g. within a MapFunction).
     val actualSignature = typeInfoToClass(signature)
 
-    scalarFunction
+    useDefinedFunction
       .getSignatures
       // go over all signatures and find one matching actual signature
       .find { curSig =>
-        // match parameters of signature to actual parameters
-        actualSignature.length == curSig.length &&
-          curSig.zipWithIndex.forall { case (clazz, i) =>
-            parameterTypeEquals(actualSignature(i), clazz)
-          }
-      }
+      // match parameters of signature to actual parameters
+      actualSignature.length == curSig.length &&
+        curSig.zipWithIndex.forall { case (clazz, i) =>
+          parameterTypeEquals(actualSignature(i), clazz)
+        }
+    }
   }
 
   /**
@@ -139,9 +140,9 @@ object UserDefinedFunctionUtils {
     * [[TypeExtractor]] as default return type inference.
     */
   def getResultType(
-      scalarFunction: ScalarFunction,
-      signature: Array[Class[_]])
-    : TypeInformation[_] = {
+                     scalarFunction: ScalarFunction,
+                     signature: Array[Class[_]])
+  : TypeInformation[_] = {
     // find method for signature
     val evalMethod = scalarFunction.getEvalMethods
       .find(m => signature.sameElements(m.getParameterTypes))
@@ -149,7 +150,7 @@ object UserDefinedFunctionUtils {
 
     val userDefinedTypeInfo = scalarFunction.getResultType(signature)
     if (userDefinedTypeInfo != null) {
-        userDefinedTypeInfo
+      userDefinedTypeInfo
     } else {
       try {
         TypeExtractor.getForClass(evalMethod.getReturnType)
@@ -160,14 +161,40 @@ object UserDefinedFunctionUtils {
       }
     }
   }
+  /**
+    * Internal method of [[TableValuedFunction#getResultType()]]
+    * that does some pre-checking and uses
+    * [[TypeExtractor]] as default return type inference.
+    */
+  def getResultType(
+                     tableFunction: TableValuedFunction[_],
+                     signature: Array[Class[_]])
+  : TypeInformation[_] = {
+    // find method for signature
+    val evalMethod = tableFunction.getEvalMethods
+      .find(m => signature.sameElements(m.getParameterTypes))
+      .getOrElse(throw new ValidationException("Given signature is invalid."))
 
+    val userDefinedTypeInfo = tableFunction.getResultType(signature)
+    if (userDefinedTypeInfo != null) {
+      userDefinedTypeInfo
+    } else {
+      try {
+        TypeExtractor.getForClass(evalMethod.getReturnType)
+      } catch {
+        case ite: InvalidTypesException =>
+          throw new ValidationException(s"Return type of scalar function '$this' cannot be " +
+            s"automatically determined. Please provide type information manually.")
+      }
+    }
+  }
   /**
     * Returns the return type of the evaluation method matching the given signature.
     */
   def getResultTypeClass(
-      scalarFunction: ScalarFunction,
-      signature: Array[Class[_]])
-    : Class[_] = {
+                          scalarFunction: ScalarFunction,
+                          signature: Array[Class[_]])
+  : Class[_] = {
     // find method for signature
     val evalMethod = scalarFunction.getEvalMethods
       .find(m => signature.sameElements(m.getParameterTypes))
@@ -178,8 +205,30 @@ object UserDefinedFunctionUtils {
   /**
     * Prints all signatures of a [[ScalarFunction]].
     */
-  def signaturesToString(scalarFunction: ScalarFunction): String = {
-    scalarFunction.getSignatures.map(signatureToString).mkString(", ")
+  def signaturesToString(userDefinedFunction: UserDefinedFunction): String = {
+    userDefinedFunction.getSignatures.map(signatureToString).mkString(", ")
   }
+  /**
+    * Returns eval method matching the given signature of [[TypeInformation]].
+    */
+  def getEvalMethod(
+                     function: UserDefinedFunction,
+                     signature: Seq[TypeInformation[_]])
+  : Option[Method] = {
+    // We compare the raw Java classes not the TypeInformation.
+    // TypeInformation does not matter during runtime (e.g. within a MapFunction).
+    val actualSignature = typeInfoToClass(signature)
 
+    function
+      .getEvalMethods
+      // go over all eval methods and find one matching
+      .find { cur =>
+      val signatures = cur.getParameterTypes
+      // match parameters of signature to actual parameters
+      actualSignature.length == signatures.length &&
+        signatures.zipWithIndex.forall { case (clazz, i) =>
+          parameterTypeEquals(actualSignature(i), clazz)
+        }
+    }
+  }
 }

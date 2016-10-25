@@ -19,10 +19,9 @@
 package org.apache.flink.api.table.plan.rules
 
 import org.apache.calcite.rel.rules._
-import org.apache.calcite.tools.{RuleSets, RuleSet}
+import org.apache.calcite.tools.{RuleSet, RuleSets}
 import org.apache.flink.api.table.plan.rules.dataSet._
-import org.apache.flink.api.table.plan.rules.datastream._
-import org.apache.flink.api.table.plan.rules.datastream.{DataStreamCalcRule, DataStreamScanRule, DataStreamUnionRule}
+import org.apache.flink.api.table.plan.rules.datastream.{DataStreamCalcRule, DataStreamCorrelateRule, DataStreamScanRule, DataStreamUnionRule, _}
 
 object FlinkRuleSets {
 
@@ -107,7 +106,8 @@ object FlinkRuleSets {
     DataSetMinusRule.INSTANCE,
     DataSetSortRule.INSTANCE,
     DataSetValuesRule.INSTANCE,
-    BatchTableSourceScanRule.INSTANCE
+    BatchTableSourceScanRule.INSTANCE,
+    DataSetCorrelateRule.INSTANCE
   )
 
   /**
@@ -150,7 +150,8 @@ object FlinkRuleSets {
       DataStreamScanRule.INSTANCE,
       DataStreamUnionRule.INSTANCE,
       DataStreamValuesRule.INSTANCE,
-      StreamTableSourceScanRule.INSTANCE
+      StreamTableSourceScanRule.INSTANCE,
+      DataStreamCorrelateRule.INSTANCE
   )
 
 }

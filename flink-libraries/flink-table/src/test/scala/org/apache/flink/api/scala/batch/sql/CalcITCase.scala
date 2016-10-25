@@ -28,7 +28,7 @@ import org.apache.flink.api.scala.batch.utils.TableProgramsTestBase
 import org.apache.flink.api.scala.batch.utils.TableProgramsTestBase.TableConfigMode
 import org.apache.flink.api.scala.table._
 import org.apache.flink.api.scala.util.CollectionDataSets
-import org.apache.flink.api.table.functions.ScalarFunction
+import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction}
 import org.apache.flink.api.table.{Row, TableEnvironment, ValidationException}
 import org.apache.flink.test.util.MultipleProgramsTestBase.TestExecutionMode
 import org.apache.flink.test.util.TestBaseUtils
@@ -37,6 +37,8 @@ import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 @RunWith(classOf[Parameterized])
 class CalcITCase(
@@ -309,8 +311,101 @@ class CalcITCase(
     val results = result.toDataSet[Row].collect()
     TestBaseUtils.compareResultAsText(results.asJava, expected)
   }
-}
+  @Test
+  def testCrossJoinUDTVF(): Unit = {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env, config)
 
+    val ds = getSmall3TupleDataSet(env).toTable(tEnv).as('a, 'b, 'c)
+    tEnv.registerTable("MyTable", ds)
+    tEnv.registerFunction("split", new CalcITCase.SplitTVF())
+    var sqlQuery = "SELECT MyTable.a, MyTable.b, t.s " +
+      "FROM MyTable,LATERAL TABLE(split(c)) AS t(s)"
+    val tab = tEnv.sql(sqlQuery)
+
+    val results = tab.toDataSet[Row].collect()
+    var expected = "1,1,Hi\n1,1,KEVIN\n2,2,Hello\n2,2,SUNNY\n4,3,LOVER\n4,3,PAN"
+    TestBaseUtils.compareResultAsText(results.asJava, expected)
+
+  }
+  @Test
+  def testCrossJoinWithOverLoadUDTVF(): Unit = {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env, config)
+
+    val ds = getSmall3TupleDataSet(env).toTable(tEnv).as('a, 'b, 'c)
+    tEnv.registerTable("MyTable", ds)
+    tEnv.registerFunction("split", new CalcITCase.SplitTVF())
+    var sqlQuery = "SELECT MyTable.a, MyTable.b, t.s FROM " +
+      "MyTable,LATERAL TABLE(split(c,'SUNNY')) AS t(s)"
+    val tab = tEnv.sql(sqlQuery)
+
+    val results = tab.toDataSet[Row].collect()
+    var expected = "1,1,Hi\n1,1,KEVIN\n4,3,LOVER\n4,3,PAN"
+    TestBaseUtils.compareResultAsText(results.asJava, expected)
+
+  }
+  @Test
+  def testLeftJoinUDTVF(): Unit = {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env, config)
+
+    val ds = getSmall3TupleDataSet2(env).toTable(tEnv).as('a, 'b, 'c)
+    tEnv.registerTable("MyTable", ds)
+    tEnv.registerFunction("split", new CalcITCase.SplitTVF())
+    var sqlQuery = "SELECT MyTable.a, MyTable.b, t.s FROM " +
+      "MyTable LEFT JOIN LATERAL TABLE(split(c)) AS t(s) ON TRUE"
+    val tab = tEnv.sql(sqlQuery)
+
+    val results = tab.toDataSet[Row].collect()
+    var expected = "1,1,Hi\n1,1,KEVIN\n2,2,Hello" +
+      "\n2,2,SUNNY\n3,2,null\n4,3,LOVER\n4,3,PAN"
+    TestBaseUtils.compareResultAsText(results.asJava, expected)
+
+  }
+  @Test
+  def testInnerJoinUDTVF(): Unit = {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env, config)
+
+    val ds = getSmall4TupleDataSet(env).toTable(tEnv).as('a, 'b, 'c,'d)
+    tEnv.registerTable("MyTable", ds)
+    tEnv.registerFunction("split", new CalcITCase.SplitTVF())
+    var sqlQuery = "SELECT MyTable.a, MyTable.b, t.s FROM " +
+      "MyTable JOIN LATERAL TABLE(split(c)) AS t(s) ON MyTable.d=t.s "
+    val tab = tEnv.sql(sqlQuery)
+
+    val results = tab.toDataSet[Row].collect()
+    var expected = "1,1,KEVIN\n2,2,SUNNY"
+    TestBaseUtils.compareResultAsText(results.asJava, expected)
+
+  }
+
+  def getSmall3TupleDataSet(env: ExecutionEnvironment): DataSet[(Int, Long, String)] = {
+    val data = new mutable.MutableList[(Int, Long, String)]
+    data.+=((1, 1L, "Hi#KEVIN"))
+    data.+=((2, 2L, "Hello#SUNNY"))
+    data.+=((3, 2L, "Hello world"))
+    data.+=((4, 3L, "PAN#LOVER"))
+    env.fromCollection(data)
+  }
+  def getSmall3TupleDataSet2(env: ExecutionEnvironment): DataSet[(Int, Long, String)] = {
+    val data = new mutable.MutableList[(Int, Long, String)]
+    data.+=((1, 1L, "Hi#KEVIN"))
+    data.+=((2, 2L, "Hello#SUNNY"))
+    data.+=((3, 2L, "Hello world"))
+    data.+=((4, 3L, "PAN#LOVER"))
+    env.fromCollection(data)
+  }
+  def getSmall4TupleDataSet(env: ExecutionEnvironment): DataSet[(Int, Long, String,String)] = {
+    val data = new mutable.MutableList[(Int, Long, String,String)]
+    data.+=((1, 1L, "Hi#KEVIN","KEVIN"))
+    data.+=((2, 2L, "Hello#SUNNY","SUNNY"))
+    data.+=((3, 2L, "Hello#world","a"))
+    data.+=((4, 3L, "PAN#LOVER","a"))
+    env.fromCollection(data)
+  }
+}
 object FilterITCase {
   object MyHashCode extends ScalarFunction {
     def eval(s: String): Int = s.hashCode()
@@ -318,7 +413,30 @@ object FilterITCase {
 }
 
 object CalcITCase {
+  class SplitTVF extends TableValuedFunction[String] {
 
+    def eval(str: String): Iterable[String] = {
+      val rows: ListBuffer[String] = new ListBuffer
+      if (str.contains("#")) {
+        val items = str.split("#")
+        for (item <- items)
+          rows += item
+      }
+      rows
+    }
+
+    def eval(str: String, ignore: String): Iterable[String] = {
+      val rows: ListBuffer[String] = new ListBuffer
+      if (str.contains("#") && !str.contains(ignore)) {
+        val items = str.split("#")
+        for (item <- items)
+          rows += item
+      }
+      rows
+    }
+
+
+  }
   @Parameterized.Parameters(name = "Execution mode = {0}, Table config = {1}")
   def parameters(): util.Collection[Array[java.lang.Object]] = {
     Seq[Array[AnyRef]](

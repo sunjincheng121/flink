@@ -17,9 +17,56 @@
  */
 package org.apache.flink.api.table.plan.schema
 
-/**
-  * Created by jincheng.sunjc on 16/10/24.
-  */
-class TableValuedFunctionImpl {
+import java.lang.reflect.{Method, Type}
+import java.util
 
+import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory}
+import org.apache.calcite.schema.TableFunction
+import org.apache.calcite.schema.impl.ReflectiveFunctionBase
+import org.apache.flink.api.common.typeinfo.{AtomicType, TypeInformation}
+import org.apache.flink.api.common.typeutils.CompositeType
+import org.apache.flink.api.table.{FlinkTypeFactory, TableException}
+
+/**
+  * Implementation of a function that is based on a method.
+  */
+class TableValuedFunctionImpl[T](val typeInfo: TypeInformation[T],
+                                 val fieldIndexes: Array[Int],
+                                 val fieldNames: Array[String],
+                                 val evalMethod: Method)
+  extends ReflectiveFunctionBase(evalMethod) with TableFunction {
+
+  if (fieldIndexes.length != fieldNames.length) throw new TableException(
+    "Number of field indexes and field names must be equal.")
+
+  // check uniqueness of field names
+  if (fieldNames.length != fieldNames.toSet.size) throw new TableException(
+    "Table field names must be unique.")
+
+  val fieldTypes: Array[TypeInformation[_]] =
+    typeInfo match {
+      case cType: CompositeType[T] =>
+        if (fieldNames.length != cType.getArity) throw new TableException(
+          s"Arity of type (" + cType.getFieldNames.deep + ") " +
+            "not equal to number of field names " + fieldNames.deep + ".")
+        fieldIndexes.map(cType.getTypeAt(_).asInstanceOf[TypeInformation[_]])
+      case aType: AtomicType[T] =>
+        if (fieldIndexes.length != 1 || fieldIndexes(0) != 0) throw new TableException(
+          "Non-composite input type may have only a single field and its index must be 0.")
+        Array(aType)
+    }
+
+  override def getElementType(arguments: util.List[AnyRef]): Type = classOf[Array[Object]]
+
+  override def getRowType(typeFactory: RelDataTypeFactory,
+                          arguments: util.List[AnyRef]): RelDataType = {
+    val flinkTypeFactory = typeFactory.asInstanceOf[FlinkTypeFactory]
+    val builder = flinkTypeFactory.builder
+    fieldNames
+      .zip(fieldTypes)
+      .foreach { f =>
+        builder.add(f._1, flinkTypeFactory.createTypeFromTypeInfo(f._2)).nullable(true)
+      }
+    builder.build
+  }
 }

@@ -25,7 +25,7 @@ import org.apache.calcite.config.Lex
 import org.apache.calcite.plan.RelOptPlanner
 import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rex.RexExecutorImpl
-import org.apache.calcite.schema.{Schemas, SchemaPlus}
+import org.apache.calcite.schema.{SchemaPlus, Schemas}
 import org.apache.calcite.schema.impl.AbstractTable
 import org.apache.calcite.sql.SqlOperatorTable
 import org.apache.calcite.sql.parser.SqlParser
@@ -38,7 +38,7 @@ import org.apache.flink.api.scala.table.{BatchTableEnvironment => ScalaBatchTabl
 import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
 import org.apache.flink.api.scala.{ExecutionEnvironment => ScalaBatchExecEnv}
 import org.apache.flink.api.table.expressions.{Alias, Expression, UnresolvedFieldReference}
-import org.apache.flink.api.table.functions.{ScalarFunction, UserDefinedFunction}
+import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction, UserDefinedFunction}
 import org.apache.flink.api.table.plan.cost.DataSetCostFactory
 import org.apache.flink.api.table.plan.schema.RelTable
 import org.apache.flink.api.table.sinks.TableSink
@@ -113,7 +113,25 @@ abstract class TableEnvironment(val config: TableConfig) {
         throw new TableException("Unsupported user-defined function type.")
     }
   }
+  /**
+    * Registers a [[TableValuedFunction]] under a unique name. Replaces already existing
+    * user-defined functions under this name.
+    */
+  def registerFunction[T: TypeInformation](name: String,
+                                                      function: TableValuedFunction[T]): Unit = {
+    function match {
+      case tvf: TableValuedFunction[T] =>
+        tvf.setResultType(implicitly[TypeInformation[T]])
 
+        // register in Table API
+        functionCatalog.registerFunction(name, function.getClass)
+
+        // register in SQL API
+        functionCatalog.registerSqlFunctions(tvf.createSqlFunctions(name, typeFactory))
+      case _ =>
+        throw new TableException("Unsupported user-defined function type.")
+    }
+  }
   /**
     * Registers a [[Table]] under a unique name in the TableEnvironment's catalog.
     * Registered tables can be referenced in SQL queries.
