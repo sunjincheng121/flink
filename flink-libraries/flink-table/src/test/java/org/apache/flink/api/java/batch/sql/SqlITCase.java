@@ -27,11 +27,15 @@ import org.apache.flink.api.scala.batch.utils.TableProgramsTestBase;
 import org.apache.flink.api.table.Row;
 import org.apache.flink.api.table.Table;
 import org.apache.flink.api.table.TableEnvironment;
+import org.apache.flink.api.table.functions.TableValuedFunction;
 import org.apache.flink.test.javaApiOperators.util.CollectionDataSets;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.util.ArrayList;
+
+import java.util.Collections;
 import java.util.List;
 
 @RunWith(Parameterized.class)
@@ -56,12 +60,12 @@ public class SqlITCase extends TableProgramsTestBase {
 		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
 		List<Row> results = resultSet.collect();
 		String expected = "1,Hi\n" + "2,Hello\n" + "3,Hello world\n" +
-			"4,Hello world, how are you?\n" + "5,I am fine.\n" + "6,Luke Skywalker\n" +
-			"7,Comment#1\n" + "8,Comment#2\n" + "9,Comment#3\n" + "10,Comment#4\n" +
-			"11,Comment#5\n" + "12,Comment#6\n" + "13,Comment#7\n" +
-			"14,Comment#8\n" + "15,Comment#9\n" + "16,Comment#10\n" +
-			"17,Comment#11\n" + "18,Comment#12\n" + "19,Comment#13\n" +
-			"20,Comment#14\n" + "21,Comment#15\n";
+				"4,Hello world, how are you?\n" + "5,I am fine.\n" + "6,Luke Skywalker\n" +
+				"7,Comment#1\n" + "8,Comment#2\n" + "9,Comment#3\n" + "10,Comment#4\n" +
+				"11,Comment#5\n" + "12,Comment#6\n" + "13,Comment#7\n" +
+				"14,Comment#8\n" + "15,Comment#9\n" + "16,Comment#10\n" +
+				"17,Comment#11\n" + "18,Comment#12\n" + "19,Comment#13\n" +
+				"20,Comment#14\n" + "21,Comment#15\n";
 		compareResultAsText(results, expected);
 	}
 
@@ -108,7 +112,7 @@ public class SqlITCase extends TableProgramsTestBase {
 		DataSet<Tuple5<Integer, Long, Integer, String, Long>> ds2 = CollectionDataSets.get5TupleDataSet(env);
 
 		tableEnv.registerDataSet("t1", ds1, "a, b, c");
-		tableEnv.registerDataSet("t2",ds2, "d, e, f, g, h");
+		tableEnv.registerDataSet("t2", ds2, "d, e, f, g, h");
 
 		String sqlQuery = "SELECT c, g FROM t1, t2 WHERE b = e";
 		Table result = tableEnv.sql(sqlQuery);
@@ -118,4 +122,36 @@ public class SqlITCase extends TableProgramsTestBase {
 		String expected = "Hi,Hallo\n" + "Hello,Hallo Welt\n" + "Hello world,Hallo Welt\n";
 		compareResultAsText(results, expected);
 	}
+
+	@Test
+	public void testUDTVF() throws Exception {
+		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
+
+		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
+		Table in = tableEnv.fromDataSet(ds, "a,b,c");
+		tableEnv.registerTable("MyTable", in);
+		tableEnv.registerFunction("split", new SplitTVF());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b, t.s FROM " +
+				"MyTable,LATERAL TABLE(split(c)) AS t(s)";
+		Table result = tableEnv.sql(sqlQuery);
+		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
+		List<Row> results = resultSet.collect();
+		String expected = "7,4,Comment\n7,4,1\n8,4,Comment\n"
+				+ "8,4,2\n9,4,Comment\n9,4,3";
+		compareResultAsText(results, expected);
+	}
+	public static DataSet<Tuple3<Integer, Long, String>> get3TupleDataSet(ExecutionEnvironment env) {
+
+		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
+		data.add(new Tuple3<>(1, 1L, "Hi"));
+		data.add(new Tuple3<>(7, 4L, "Comment#1"));
+		data.add(new Tuple3<>(8, 4L, "Comment#2"));
+		data.add(new Tuple3<>(9, 4L, "Comment#3"));
+		Collections.shuffle(data);
+
+		return env.fromCollection(data);
+	}
 }
+
+

@@ -58,11 +58,20 @@ class TableValuedFunctionCallGen (
     val functionCallCode =
       s"""
          |${parameters.map(_.code).mkString("\n")}
-         |scala.collection.Iterator iter =
-         |$functionReference.eval(${parameters.map(_.resultTerm).mkString(", ")}).iterator();
+         |scala.collection.Iterator  iter =  org.apache.flink.api.table.typeutils.Java2ScalaUtils.jiter2siter($functionReference.eval(${parameters.map(_.resultTerm).mkString(", ")}).iterator());
          |""".stripMargin
 
     // has no result
     GeneratedExpression(functionReference, "false", functionCallCode, returnType)
   }
+
+}
+
+object TableValuedFunctionCallGen{
+  def jiter2siter[T](iter: java.util.Iterator[T]): scala.collection.Iterator[T] =
+    new scala.collection.Iterator[T] {
+      def hasNext(): Boolean = iter.hasNext
+      def next(): T = iter.next
+      def remove(): Unit = throw new UnsupportedOperationException()
+    }
 }

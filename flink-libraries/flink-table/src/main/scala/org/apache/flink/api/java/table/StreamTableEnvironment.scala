@@ -17,10 +17,13 @@
  */
 package org.apache.flink.api.java.table
 
+import java.lang.reflect.{ParameterizedType, Type}
+
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.typeutils.TypeExtractor
-import org.apache.flink.api.table.{TableConfig, Table}
+import org.apache.flink.api.table.{Table, TableConfig, TableException}
 import org.apache.flink.api.table.expressions.ExpressionParser
+import org.apache.flink.api.table.functions.TableValuedFunction
 import org.apache.flink.streaming.api.datastream.DataStream
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
 
@@ -162,6 +165,25 @@ class StreamTableEnvironment(
     */
   def toDataStream[T](table: Table, typeInfo: TypeInformation[T]): DataStream[T] = {
     translate[T](table)(typeInfo)
+  }
+  /**
+    * Registers a [[TableValuedFunction]] under a unique name in the TableEnvironment's catalog.
+    * Registered functions can be referenced in SQL queries.
+    *
+    * @param name The name under which the function is registered.
+    * @param tf The TableValuedFunction to register
+    */
+  def registerFunction[T](name: String, tf: TableValuedFunction[T]): Unit ={
+    val clazz: Type = tf.getClass.getGenericSuperclass
+    val generic = clazz match {
+      case cls: ParameterizedType => cls.getActualTypeArguments.toSeq.head
+      case _ => throw new TableException(
+        "New TableValuedFunction classes have to inherit from TableValuedFunction class, " +
+          "and statement the generic type.")
+    }
+    implicit val typeInfo: TypeInformation[T] = TypeExtractor.createTypeInfo(generic)
+      .asInstanceOf[TypeInformation[T]]
+    super.registerFunction[T](name, tf)
   }
 
 }
