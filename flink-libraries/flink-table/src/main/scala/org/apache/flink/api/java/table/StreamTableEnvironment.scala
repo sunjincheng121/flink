@@ -174,11 +174,11 @@ class StreamTableEnvironment(
     * @param tf The TableValuedFunction to register
     */
   def registerFunction[T](name: String, tf: TableValuedFunction[T]): Unit ={
-    val clazz: Type = tf.getClass.getGenericSuperclass
+    val clazz: Type =tf.getClass.getGenericInterfaces()(0);
     val generic = clazz match {
       case cls: ParameterizedType => cls.getActualTypeArguments.toSeq.head
       case _ => throw new TableException(
-        "New TableValuedFunction classes have to inherit from TableValuedFunction class, " +
+        "New TableFunction classes have to inherit from TableFunction class, " +
           "and statement the generic type.")
     }
     implicit val typeInfo: TypeInformation[T] = TypeExtractor.createTypeInfo(generic)

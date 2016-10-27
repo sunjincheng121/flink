@@ -337,4 +337,21 @@ object UserDefinedFunctionUtils {
     val fieldIndexes = fieldNames.indices.toArray
     (fieldNames, fieldIndexes)
   }
+
+  /**
+    * Conver java.util.Iterator to scala.collection.Iterator when codegen
+    */
+  def jiter2siter[T](iter: Object): scala.collection.Iterator[T] ={
+    iter match {
+      case x : java.util.Iterator[T] => new scala.collection.Iterator[T] {
+        def hasNext(): Boolean = x.hasNext
+
+        def next(): T = x.next
+
+        def remove(): Unit = throw new UnsupportedOperationException()
+      }
+      case _ => iter.asInstanceOf[(scala.collection.Iterator[T])]
+    }
+
+  }
 }

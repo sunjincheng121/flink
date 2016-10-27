@@ -19,12 +19,14 @@
 package org.apache.flink.api.java.stream.sql;
 
 import org.apache.flink.api.java.table.StreamTableEnvironment;
+import org.apache.flink.api.java.table.expressions.utils.udfs.JavaTableFunction1;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple5;
 import org.apache.flink.api.scala.stream.utils.StreamITCase;
 import org.apache.flink.api.table.Row;
 import org.apache.flink.api.table.Table;
 import org.apache.flink.api.table.TableEnvironment;
+import org.apache.flink.api.table.expressions.utils.TableValuedFunction0;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase;
@@ -32,6 +34,7 @@ import org.apache.flink.api.java.stream.utils.StreamTestData;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class SqlITCase extends StreamingMultipleProgramsTestBase {
@@ -118,4 +121,139 @@ public class SqlITCase extends StreamingMultipleProgramsTestBase {
 
 		StreamITCase.compareWithList(expected);
 	}
+
+	@Test
+	public void testUDTF() throws Exception {
+		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		StreamTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env);
+		StreamITCase.clear();
+
+		DataStream<Tuple3<Integer, Long, String>> ds = getSmall3TupleDataSet2(env);
+		Table in = tableEnv.fromDataStream(ds, "a,b,c");
+		tableEnv.registerTable("MyTable", in);
+		tableEnv.registerFunction("split", new TableValuedFunction0());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s FROM " +
+				"MyTable,LATERAL TABLE(split(c)) AS t(s)";
+		Table result = tableEnv.sql(sqlQuery);
+
+		DataStream<Row> resultSet = tableEnv.toDataStream(result, Row.class);
+		resultSet.addSink(new StreamITCase.StringSink());
+		env.execute();
+
+		List<String> expected = new ArrayList<>();
+		expected.add("1,6,Hi");
+		expected.add("1,6,KEVIN");
+		expected.add("2,7,Hello");
+		expected.add("2,7,SUNNY");
+		expected.add("4,8,LOVER");
+		expected.add("4,8,PAN");
+
+		StreamITCase.compareWithList(expected);
+	}
+
+	@Test
+	public void testUDTFWithFilter() throws Exception {
+		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		StreamTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env);
+		StreamITCase.clear();
+
+		DataStream<Tuple3<Integer, Long, String>> ds = getSmall3TupleDataSet2(env);
+		Table in = tableEnv.fromDataStream(ds, "a,b,c");
+		tableEnv.registerTable("MyTable", in);
+		tableEnv.registerFunction("split", new TableValuedFunction0());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s FROM " +
+				"MyTable,LATERAL TABLE(split(c)) AS t(s) WHERE MyTable.a < 4";
+		Table result = tableEnv.sql(sqlQuery);
+
+		DataStream<Row> resultSet = tableEnv.toDataStream(result, Row.class);
+		resultSet.addSink(new StreamITCase.StringSink());
+		env.execute();
+
+		List<String> expected = new ArrayList<>();
+		expected.add("1,6,Hi");
+		expected.add("1,6,KEVIN");
+		expected.add("2,7,Hello");
+		expected.add("2,7,SUNNY");
+
+		StreamITCase.compareWithList(expected);
+	}
+	@Test
+	public void testLeftJoinUDTF() throws Exception {
+		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		StreamTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env);
+		StreamITCase.clear();
+
+		DataStream<Tuple3<Integer, Long, String>> ds = getSmall3TupleDataSet(env);
+		Table in = tableEnv.fromDataStream(ds, "a,b,c");
+		tableEnv.registerTable("MyTable", in);
+		tableEnv.registerFunction("split", new TableValuedFunction0());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
+				"FROM MyTable LEFT JOIN LATERAL TABLE(split(c)) AS t(s) ON TRUE";
+		Table result = tableEnv.sql(sqlQuery);
+		DataStream<Row> resultSet = tableEnv.toDataStream(result, Row.class);
+		resultSet.addSink(new StreamITCase.StringSink());
+		env.execute();
+
+		List<String> expected = new ArrayList<>();
+		expected.add("1,6,1");
+		expected.add("1,6,KEVIN");
+		expected.add("2,7,2");
+		expected.add("2,7,SUNNY");
+		expected.add("3,7,null");
+		expected.add("4,8,20");
+		expected.add("4,8,LOVER");
+
+		StreamITCase.compareWithList(expected);
+	}
+
+	@Test
+	public void testInnerJoinUDTF() throws Exception {
+		StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		StreamTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env);
+		StreamITCase.clear();
+
+		DataStream<Tuple3<Integer, Long, String>> ds = getSmall3TupleDataSet(env);
+		Table in = tableEnv.fromDataStream(ds, "a,b,c");
+		tableEnv.registerTable("MyTable", in);
+		tableEnv.registerFunction("split", new JavaTableFunction1());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.age,t.name FROM MyTable"+
+				" JOIN LATERAL TABLE(split(c)) AS t(age,name) ON MyTable.a = t.age ";
+		Table result = tableEnv.sql(sqlQuery);
+		DataStream<Row> resultSet = tableEnv.toDataStream(result, Row.class);
+		resultSet.addSink(new StreamITCase.StringSink());
+		env.execute();
+
+		List<String> expected = new ArrayList<>();
+		expected.add("1,6,1,KEVIN");
+		expected.add("2,7,2,SUNNY");
+
+		StreamITCase.compareWithList(expected);
+	}
+
+
+
+	public static DataStream<Tuple3<Integer, Long, String>> getSmall3TupleDataSet(StreamExecutionEnvironment env) {
+
+		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
+		data.add(new Tuple3<>(1, 1L, "1#KEVIN"));
+		data.add(new Tuple3<>(2, 2L, "2#SUNNY"));
+		data.add(new Tuple3<>(3, 2L, "Hello world"));
+		data.add(new Tuple3<>(4, 3L, "20#LOVER"));
+		Collections.shuffle(data);
+
+		return env.fromCollection(data);
+	}
+	public static DataStream<Tuple3<Integer, Long, String>> getSmall3TupleDataSet2(StreamExecutionEnvironment env) {
+
+		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
+		data.add(new Tuple3<>(1, 1L, "Hi#KEVIN"));
+		data.add(new Tuple3<>(2, 2L, "Hello#SUNNY"));
+		data.add(new Tuple3<>(3, 2L, "Hello world"));
+		data.add(new Tuple3<>(4, 3L, "PAN#LOVER"));
+		Collections.shuffle(data);
+
+		return env.fromCollection(data);
+	}
+
+
 }

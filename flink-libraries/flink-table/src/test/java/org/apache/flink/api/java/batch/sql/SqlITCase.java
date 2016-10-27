@@ -34,6 +34,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import org.apache.flink.api.table.expressions.utils.TableValuedFunction0;
+import org.apache.flink.api.java.table.expressions.utils.udfs.JavaTableFunction1;
 
 import java.util.ArrayList;
 

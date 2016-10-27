@@ -1,0 +1,2387 @@
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/java/table/BatchTableEnvironment.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/java/table/BatchTableEnvironment.scala
+index a4f40d5..f933f35 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/java/table/BatchTableEnvironment.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/java/table/BatchTableEnvironment.scala
+@@ -17,11 +17,16 @@
+  */
+ package org.apache.flink.api.java.table
+ 
++import java.lang.reflect.{ParameterizedType, Type}
++
+ import org.apache.flink.api.common.typeinfo.TypeInformation
+ import org.apache.flink.api.java.typeutils.TypeExtractor
+ import org.apache.flink.api.java.{DataSet, ExecutionEnvironment}
+ import org.apache.flink.api.table.expressions.ExpressionParser
+-import org.apache.flink.api.table.{Table, TableConfig}
++import org.apache.flink.api.table.functions.TableValuedFunction
++import org.apache.flink.api.table.{Table, TableConfig, TableException}
++
++import scala.xml.dtd.ContentModel._labelT
+ 
+ /**
+   * The [[org.apache.flink.api.table.TableEnvironment]] for a Java batch [[DataSet]]
+@@ -161,5 +166,25 @@ class BatchTableEnvironment(
+   def toDataSet[T](table: Table, typeInfo: TypeInformation[T]): DataSet[T] = {
+     translate[T](table)(typeInfo)
+   }
++  /**
++    * Registers a [[TableValuedFunction]] under a unique name in the TableEnvironment's catalog.
++    * Registered functions can be referenced in SQL queries.
++    *
++    * @param name The name under which the function is registered.
++    * @param tf The TableValuedFunction to register
++    */
++  def registerFunction[T](name: String, tf: TableValuedFunction[T]): Unit ={
++
++    val clazz: Type =tf.getClass.getGenericInterfaces()(0);
++    val generic = clazz match {
++      case cls: ParameterizedType => cls.getActualTypeArguments.toSeq.head
++      case _ => throw new TableException(
++        "New TableFunction classes have to inherit from TableFunction class, " +
++          "and statement the generic type.")
++    }
++    implicit val typeInfo: TypeInformation[T] = TypeExtractor.createTypeInfo(generic)
++      .asInstanceOf[TypeInformation[T]]
++    super.registerFunction[T](name, tf)
++  }
+ 
+ }
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/java/table/StreamTableEnvironment.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/java/table/StreamTableEnvironment.scala
+index f8dbc37..7029a7d 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/java/table/StreamTableEnvironment.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/java/table/StreamTableEnvironment.scala
+@@ -17,10 +17,13 @@
+  */
+ package org.apache.flink.api.java.table
+ 
++import java.lang.reflect.{ParameterizedType, Type}
++
+ import org.apache.flink.api.common.typeinfo.TypeInformation
+ import org.apache.flink.api.java.typeutils.TypeExtractor
+-import org.apache.flink.api.table.{TableConfig, Table}
++import org.apache.flink.api.table.{Table, TableConfig, TableException}
+ import org.apache.flink.api.table.expressions.ExpressionParser
++import org.apache.flink.api.table.functions.TableValuedFunction
+ import org.apache.flink.streaming.api.datastream.DataStream
+ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
+ 
+@@ -163,5 +166,24 @@ class StreamTableEnvironment(
+   def toDataStream[T](table: Table, typeInfo: TypeInformation[T]): DataStream[T] = {
+     translate[T](table)(typeInfo)
+   }
++  /**
++    * Registers a [[TableValuedFunction]] under a unique name in the TableEnvironment's catalog.
++    * Registered functions can be referenced in SQL queries.
++    *
++    * @param name The name under which the function is registered.
++    * @param tf The TableValuedFunction to register
++    */
++  def registerFunction[T](name: String, tf: TableValuedFunction[T]): Unit ={
++    val clazz: Type = tf.getClass.getGenericSuperclass
++    val generic = clazz match {
++      case cls: ParameterizedType => cls.getActualTypeArguments.toSeq.head
++      case _ => throw new TableException(
++        "New TableValuedFunction classes have to inherit from TableValuedFunction class, " +
++          "and statement the generic type.")
++    }
++    implicit val typeInfo: TypeInformation[T] = TypeExtractor.createTypeInfo(generic)
++      .asInstanceOf[TypeInformation[T]]
++    super.registerFunction[T](name, tf)
++  }
+ 
+ }
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/FlinkTypeFactory.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/FlinkTypeFactory.scala
+index 77eb907..07c5c5b 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/FlinkTypeFactory.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/FlinkTypeFactory.scala
+@@ -26,7 +26,7 @@ import org.apache.calcite.sql.`type`.{BasicSqlType, SqlTypeName, SqlTypeUtil}
+ import org.apache.calcite.sql.`type`.SqlTypeName._
+ import org.apache.calcite.sql.parser.SqlParserPos
+ import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
+-import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
++import org.apache.flink.api.common.typeinfo.{NothingTypeInfo, SqlTimeTypeInfo, TypeInformation}
+ import org.apache.flink.api.java.typeutils.ValueTypeInfo._
+ import org.apache.flink.api.table.FlinkTypeFactory.typeInfoToSqlTypeName
+ import org.apache.flink.api.table.plan.schema.GenericRelDataType
+@@ -141,7 +141,8 @@ object FlinkTypeFactory {
+     // symbol for special flags e.g. TRIM's BOTH, LEADING, TRAILING
+     // are represented as integer
+     case SYMBOL => INT_TYPE_INFO
+-
++    //for table valued function
++    case ROW|CURSOR => new NothingTypeInfo
+     // extract encapsulated TypeInformation
+     case ANY if relDataType.isInstanceOf[GenericRelDataType] =>
+       val genericRelDataType = relDataType.asInstanceOf[GenericRelDataType]
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/TableEnvironment.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/TableEnvironment.scala
+index c3b728b..010ad41 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/TableEnvironment.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/TableEnvironment.scala
+@@ -25,7 +25,7 @@ import org.apache.calcite.config.Lex
+ import org.apache.calcite.plan.RelOptPlanner
+ import org.apache.calcite.rel.`type`.RelDataType
+ import org.apache.calcite.rex.RexExecutorImpl
+-import org.apache.calcite.schema.{Schemas, SchemaPlus}
++import org.apache.calcite.schema.{SchemaPlus, Schemas}
+ import org.apache.calcite.schema.impl.AbstractTable
+ import org.apache.calcite.sql.SqlOperatorTable
+ import org.apache.calcite.sql.parser.SqlParser
+@@ -38,14 +38,15 @@ import org.apache.flink.api.scala.table.{BatchTableEnvironment => ScalaBatchTabl
+ import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
+ import org.apache.flink.api.scala.{ExecutionEnvironment => ScalaBatchExecEnv}
+ import org.apache.flink.api.table.expressions.{Alias, Expression, UnresolvedFieldReference}
+-import org.apache.flink.api.table.functions.{ScalarFunction, UserDefinedFunction}
++import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils
++import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction, UserDefinedFunction}
+ import org.apache.flink.api.table.plan.cost.DataSetCostFactory
+ import org.apache.flink.api.table.plan.schema.RelTable
+ import org.apache.flink.api.table.sinks.TableSink
+ import org.apache.flink.api.table.validate.FunctionCatalog
+ import org.apache.flink.streaming.api.environment.{StreamExecutionEnvironment => JavaStreamExecEnv}
+ import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment => ScalaStreamExecEnv}
+-
++import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils._
+ /**
+   * The abstract base class for batch and stream TableEnvironments.
+   *
+@@ -113,7 +114,23 @@ abstract class TableEnvironment(val config: TableConfig) {
+         throw new TableException("Unsupported user-defined function type.")
+     }
+   }
+-
++  /**
++    * Registers a [[TableValuedFunction]] under a unique name. Replaces already existing
++    * user-defined functions under this name.
++    */
++  def registerFunction[T: TypeInformation](name: String,
++                                                      function: TableValuedFunction[T]): Unit = {
++
++    val typeInfo = implicitly[TypeInformation[T]]
++    val (fieldNames, fieldIndexes) = UserDefinedFunctionUtils.getFieldInfo(typeInfo)
++
++    // check if function can be instantiated
++    checkForInstantiation(function.getClass)
++    // register in Table API
++    functionCatalog.registerFunction(name, function.getClass)
++    // register in SQL API
++    functionCatalog.registerSqlFunctions(createSqlFunctions(name, function, typeFactory))
++  }
+   /**
+     * Registers a [[Table]] under a unique name in the TableEnvironment's catalog.
+     * Registered tables can be referenced in SQL queries.
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/CodeGenerator.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/CodeGenerator.scala
+index b54c498..e189485 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/CodeGenerator.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/CodeGenerator.scala
+@@ -37,7 +37,7 @@ import org.apache.flink.api.table.codegen.calls.ScalarOperators._
+ import org.apache.flink.api.table.functions.UserDefinedFunction
+ import org.apache.flink.api.table.typeutils.RowTypeInfo
+ import org.apache.flink.api.table.typeutils.TypeCheckUtils._
+-import org.apache.flink.api.table.{FlinkTypeFactory, TableConfig}
++import org.apache.flink.api.table.{FlinkTypeFactory, TableConfig, TableException}
+ 
+ import scala.collection.JavaConversions._
+ import scala.collection.mutable
+@@ -255,7 +255,20 @@ class CodeGenerator(
+ 
+     GeneratedFunction(funcName, returnType, funcCode)
+   }
++  /**
++    * Generates an expression from the left input and the right table valued function.
++    */
++  def generateCorrelateAccessExprs: (Seq[GeneratedExpression], Seq[GeneratedExpression]) = {
++    val input1AccessExprs = for (i <- 0 until input1.getArity)
++      yield generateInputAccess(input1, input1Term, i)
+ 
++    val input2AccessExprs = input2 match {
++      case Some(ti) => for (i <- 0 until ti.getArity)
++        yield generateFieldAccess(ti, input2Term, i)
++      case None => throw new TableException("type information of input2 must not be null")
++    }
++    (input1AccessExprs, input2AccessExprs)
++  }
+   /**
+     * Generates an expression that converts the first input (and second input) into the given type.
+     * If two inputs are converted, the second input is appended. If objects or variables can
+@@ -545,8 +558,10 @@ class CodeGenerator(
+     generateInputAccess(input._1, input._2, index)
+   }
+ 
+-  override def visitFieldAccess(rexFieldAccess: RexFieldAccess): GeneratedExpression =
+-    throw new CodeGenException("Accesses to fields are not supported yet.")
++  override def visitFieldAccess(rexFieldAccess: RexFieldAccess): GeneratedExpression = {
++    val index = rexFieldAccess.getField.getIndex
++    generateInputAccess(input1, input1Term, index)
++  }
+ 
+ 
+   override def visitLiteral(literal: RexLiteral): GeneratedExpression = {
+@@ -1245,7 +1260,7 @@ class CodeGenerator(
+     * @param function [[UserDefinedFunction]] object to be instantiated during runtime
+     * @return member variable term
+     */
+-  def addReusableFunction(function: UserDefinedFunction): String = {
++  def addReusableFunction(function: Object): String = {
+     val classQualifier = function.getClass.getCanonicalName
+     val fieldTerm = s"function_${classQualifier.replace('.', '$')}"
+ 
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/calls/ScalarFunctions.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/calls/ScalarFunctions.scala
+index a39829c..323eca1 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/calls/ScalarFunctions.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/calls/ScalarFunctions.scala
+@@ -28,7 +28,7 @@ import org.apache.calcite.util.BuiltInMethod
+ import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
+ import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, SqlTimeTypeInfo, TypeInformation}
+ import org.apache.flink.api.java.typeutils.GenericTypeInfo
+-import org.apache.flink.api.table.functions.utils.ScalarSqlFunction
++import org.apache.flink.api.table.functions.utils.{ScalarSqlFunction, TableValuedSqlFunction}
+ 
+ import scala.collection.mutable
+ 
+@@ -304,7 +304,14 @@ object ScalarFunctions {
+           resultType
+         )
+       )
+-
++    case ssf: TableValuedSqlFunction =>
++      Some(
++        new TableValuedFunctionCallGen(
++          ssf.getTableFunction,
++          operandTypes,
++          resultType
++        )
++      )
+     // built-in scalar function
+     case _ =>
+       sqlFunctions.get((sqlOperator, operandTypes))
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/calls/TableValuedFunctionCallGen.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/calls/TableValuedFunctionCallGen.scala
+new file mode 100644
+index 0000000..af12367
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/codegen/calls/TableValuedFunctionCallGen.scala
+@@ -0,0 +1,77 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.codegen.calls
++
++import org.apache.flink.api.common.typeinfo.TypeInformation
++import org.apache.flink.api.table.codegen.CodeGenUtils._
++import org.apache.flink.api.table.codegen.{CodeGenException, CodeGenerator, GeneratedExpression}
++import org.apache.flink.api.table.functions.TableValuedFunction
++import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils._
++class TableValuedFunctionCallGen (
++                                   udtvf: TableValuedFunction[_],
++                                   signature: Seq[TypeInformation[_]],
++                                   returnType: TypeInformation[_])
++  extends CallGenerator {
++
++  override def generate(
++                         codeGenerator: CodeGenerator,
++                         operands: Seq[GeneratedExpression])
++  : GeneratedExpression = {
++    // determine function signature and result class
++    val matchingSignature = getSignature(udtvf.getClass, signature)
++      .getOrElse(throw new CodeGenException("No matching signature found."))
++    // convert parameters for function (output boxing)
++    val parameters = matchingSignature
++      .zip(operands)
++      .map { case (paramClass, operandExpr) =>
++        if (paramClass.isPrimitive) {
++          operandExpr
++        } else {
++          val boxedTypeTerm = boxedTypeTermForTypeInfo(operandExpr.resultType)
++          val boxedExpr = codeGenerator.generateOutputFieldBoxing(operandExpr)
++          val exprOrNull: String = if (codeGenerator.nullCheck) {
++            s"${boxedExpr.nullTerm} ? null : ($boxedTypeTerm) ${boxedExpr.resultTerm}"
++          } else {
++            boxedExpr.resultTerm
++          }
++          boxedExpr.copy(resultTerm = exprOrNull)
++        }
++      }
++
++    // generate function call
++    val functionReference = codeGenerator.addReusableFunction(udtvf)
++    val functionCallCode =
++      s"""
++         |${parameters.map(_.code).mkString("\n")}
++         |scala.collection.Iterator  iter =  org.apache.flink.api.table.typeutils.Java2ScalaUtils.jiter2siter($functionReference.eval(${parameters.map(_.resultTerm).mkString(", ")}).iterator());
++         |""".stripMargin
++
++    // has no result
++    GeneratedExpression(functionReference, "false", functionCallCode, returnType)
++  }
++
++}
++
++object TableValuedFunctionCallGen{
++  def jiter2siter[T](iter: java.util.Iterator[T]): scala.collection.Iterator[T] =
++    new scala.collection.Iterator[T] {
++      def hasNext(): Boolean = iter.hasNext
++      def next(): T = iter.next
++      def remove(): Unit = throw new UnsupportedOperationException()
++    }
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/ScalarFunction.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/ScalarFunction.scala
+index 5f9d834..af70f0e 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/ScalarFunction.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/ScalarFunction.scala
+@@ -21,13 +21,10 @@ package org.apache.flink.api.table.functions
+ import java.lang.reflect.{Method, Modifier}
+ 
+ import org.apache.calcite.sql.SqlFunction
+-import org.apache.flink.api.common.functions.InvalidTypesException
+ import org.apache.flink.api.common.typeinfo.TypeInformation
+-import org.apache.flink.api.java.typeutils.TypeExtractor
+ import org.apache.flink.api.table.expressions.{Expression, ScalarFunctionCall}
+ import org.apache.flink.api.table.functions.utils.ScalarSqlFunction
+-import org.apache.flink.api.table.{FlinkTypeFactory, ValidationException}
+-
++import org.apache.flink.api.table.FlinkTypeFactory
+ /**
+   * Base class for a user-defined scalar function. A user-defined scalar functions maps zero, one,
+   * or multiple scalar values to a new scalar value.
+@@ -41,7 +38,7 @@ import org.apache.flink.api.table.{FlinkTypeFactory, ValidationException}
+   * By default the result type of an evaluation method is determined by Flink's type extraction
+   * facilities. This is sufficient for basic types or simple POJOs but might be wrong for more
+   * complex, custom, or composite types. In these cases [[TypeInformation]] of the result type
+-  * can be manually defined by overriding [[getResultType()]].
++  * can be manually defined by overriding [[UserDefinedFunction.getResultType()]].
+   *
+   * Internally, the Table/SQL API code generation works with primitive values as much as possible.
+   * If a user-defined scalar function should not introduce much overhead during runtime, it is
+@@ -60,84 +57,12 @@ abstract class ScalarFunction extends UserDefinedFunction {
+     ScalarFunctionCall(this, params)
+   }
+ 
+-  // ----------------------------------------------------------------------------------------------
+-
+-  private val evalMethods = checkAndExtractEvalMethods()
+-  private lazy val signatures = evalMethods.map(_.getParameterTypes)
+-
+-  /**
+-    * Extracts evaluation methods and throws a [[ValidationException]] if no implementation
+-    * can be found.
+-    */
+-  private def checkAndExtractEvalMethods(): Array[Method] = {
+-    val methods = getClass.asSubclass(classOf[ScalarFunction])
+-      .getDeclaredMethods
+-      .filter { m =>
+-        val modifiers = m.getModifiers
+-        m.getName == "eval" && Modifier.isPublic(modifiers) && !Modifier.isAbstract(modifiers)
+-      }
+-
+-    if (methods.isEmpty) {
+-      throw new ValidationException(s"Scalar function class '$this' does not implement at least " +
+-        s"one method named 'eval' which is public and not abstract.")
+-    } else {
+-      methods
+-    }
+-  }
+-
+-  /**
+-    * Returns all found evaluation methods of the possibly overloaded function.
+-    */
+-  private[flink] final def getEvalMethods: Array[Method] = evalMethods
+-
+-  /**
+-    * Returns all found signature of the possibly overloaded function.
+-    */
+-  private[flink] final def getSignatures: Array[Array[Class[_]]] = signatures
+-
+   override private[flink] final def createSqlFunction(
+-      name: String,
+-      typeFactory: FlinkTypeFactory)
+-    : SqlFunction = {
++                                                       name: String,
++                                                       mothod:Method,
++                                                       typeFactory: FlinkTypeFactory)
++  : SqlFunction = {
+     new ScalarSqlFunction(name, this, typeFactory)
+   }
+ 
+-  // ----------------------------------------------------------------------------------------------
+-
+-  /**
+-    * Returns the result type of the evaluation method with a given signature.
+-    *
+-    * This method needs to be overriden in case Flink's type extraction facilities are not
+-    * sufficient to extract the [[TypeInformation]] based on the return type of the evaluation
+-    * method. Flink's type extraction facilities can handle basic types or
+-    * simple POJOs but might be wrong for more complex, custom, or composite types.
+-    *
+-    * @param signature signature of the method the return type needs to be determined
+-    * @return [[TypeInformation]] of result type or null if Flink should determine the type
+-    */
+-  def getResultType(signature: Array[Class[_]]): TypeInformation[_] = null
+-
+-  /**
+-    * Returns [[TypeInformation]] about the operands of the evaluation method with a given
+-    * signature.
+-    *
+-    * In order to perform operand type inference in SQL (especially when NULL is used) it might be
+-    * necessary to determine the parameter [[TypeInformation]] of an evaluation method.
+-    * By default Flink's type extraction facilities are used for this but might be wrong for
+-    * more complex, custom, or composite types.
+-    *
+-    * @param signature signature of the method the operand types need to be determined
+-    * @return [[TypeInformation]] of  operand types
+-    */
+-  def getParameterTypes(signature: Array[Class[_]]): Array[TypeInformation[_]] = {
+-    signature.map { c =>
+-      try {
+-        TypeExtractor.getForClass(c)
+-      } catch {
+-        case ite: InvalidTypesException =>
+-          throw new ValidationException(s"Parameter types of scalar function '$this' cannot be " +
+-            s"automatically determined. Please provide type information manually.")
+-      }
+-    }
+-  }
+ }
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/TableValuedFunction.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/TableValuedFunction.scala
+new file mode 100644
+index 0000000..4e18008
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/TableValuedFunction.scala
+@@ -0,0 +1,22 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.functions
++
++trait TableValuedFunction[T]  {
++
++}
+\ No newline at end of file
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/UserDefinedFunction.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/UserDefinedFunction.scala
+index 62afef0..8f12a60 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/UserDefinedFunction.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/UserDefinedFunction.scala
+@@ -18,9 +18,15 @@
+ 
+ package org.apache.flink.api.table.functions
+ 
++import java.lang.reflect.{Method, Modifier}
++
+ import org.apache.calcite.sql.SqlFunction
+-import org.apache.flink.api.table.FlinkTypeFactory
++import org.apache.flink.api.common.functions.InvalidTypesException
++import org.apache.flink.api.common.typeinfo.TypeInformation
++import org.apache.flink.api.java.typeutils.TypeExtractor
++import org.apache.flink.api.table.{FlinkTypeFactory, ValidationException}
+ import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils.checkForInstantiation
++import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils._
+ 
+ import scala.collection.mutable
+ 
+@@ -36,6 +42,40 @@ abstract class UserDefinedFunction {
+   // (i.e. for type inference, validation, etc.)
+   private val cachedSqlFunctions = mutable.HashMap[String, SqlFunction]()
+ 
++  private val evalMethods = checkAndExtractEvalMethods()
++
++  private lazy val signatures = evalMethods.map(_.getParameterTypes)
++
++  /**
++    * Extracts evaluation methods and throws a [[ValidationException]] if no implementation
++    * can be found.
++    */
++  private def checkAndExtractEvalMethods(): Array[Method] = {
++    val methods = getClass
++      .getDeclaredMethods
++      .filter { m =>
++        val modifiers = m.getModifiers
++        m.getName == "eval" && Modifier.isPublic(modifiers) && !Modifier.isAbstract(modifiers)
++      }
++
++    if (methods.isEmpty) {
++      throw new ValidationException(s"Table function class '$this' does not implement at least " +
++        s"one method named 'eval' which is public and not abstract.")
++    } else {
++      methods
++    }
++  }
++
++  /**
++    * Returns all found evaluation methods of the possibly overloaded function.
++    */
++  private[flink] final def getEvalMethods: Array[Method] = evalMethods
++
++  /**
++    * Returns all found signature of the possibly overloaded function.
++    */
++  private[flink] final def getSignatures: Array[Array[Class[_]]] = signatures
++
+   // check if function can be instantiated
+   checkForInstantiation(this.getClass)
+ 
+@@ -43,19 +83,77 @@ abstract class UserDefinedFunction {
+     * Returns the corresponding [[SqlFunction]]. Creates an instance if not already created.
+     */
+   private[flink] final def getSqlFunction(
+-      name: String,
+-      typeFactory: FlinkTypeFactory)
+-    : SqlFunction = {
+-    cachedSqlFunctions.getOrElseUpdate(name, createSqlFunction(name, typeFactory))
++                                           name: String,
++                                           typeFactory: FlinkTypeFactory)
++  : SqlFunction = {
++    cachedSqlFunctions.getOrElseUpdate(name, createSqlFunctions(name, typeFactory)(0))
++  }
++  // ----------------------------------------------------------------------------------------------
++
++  /**
++    * Returns the result type of the evaluation method with a given signature.
++    *
++    * This method needs to be overriden in case Flink's type extraction facilities are not
++    * sufficient to extract the [[TypeInformation]] based on the return type of the evaluation
++    * method. Flink's type extraction facilities can handle basic types or
++    * simple POJOs but might be wrong for more complex, custom, or composite types.
++    *
++    * @param signature signature of the method the return type needs to be determined
++    * @return [[TypeInformation]] of result type or null if Flink should determine the type
++    */
++  def getResultType(signature: Array[Class[_]]): TypeInformation[_] = {
++    val evalMethod = this.getEvalMethods
++      .find(m => signature.sameElements(m.getParameterTypes))
++      .getOrElse(throw new ValidationException("Given signature is invalid."))
++    try {
++      TypeExtractor.getForClass(evalMethod.getReturnType)
++    } catch {
++      case ite: InvalidTypesException =>
++        throw new ValidationException(s"Return type of scalar function '$this' cannot be " +
++          s"automatically determined. Please provide type information manually.")
++    }
++  }
++  /**
++    * Returns [[TypeInformation]] about the operands of the evaluation method with a given
++    * signature.
++    *
++    * In order to perform operand type inference in SQL (especially when NULL is used) it might be
++    * necessary to determine the parameter [[TypeInformation]] of an evaluation method.
++    * By default Flink's type extraction facilities are used for this but might be wrong for
++    * more complex, custom, or composite types.
++    *
++    * @param signature signature of the method the operand types need to be determined
++    * @return [[TypeInformation]] of  operand types
++    */
++  def getParameterTypes(signature: Array[Class[_]]): Array[TypeInformation[_]] = {
++    signature.map { c =>
++      try {
++        TypeExtractor.getForClass(c)
++      } catch {
++        case ite: InvalidTypesException =>
++          throw new ValidationException(
++            s"Parameter types of scalar function '$this' cannot be " +
++              s"automatically determined. Please provide type information manually.")
++      }
++    }
+   }
+ 
+   /**
+     * Creates corresponding [[SqlFunction]].
+     */
+   private[flink] def createSqlFunction(
+-      name: String,
+-      typeFactory: FlinkTypeFactory)
+-    : SqlFunction
++                                        name: String,
++                                        method:Method,
++                                        typeFactory: FlinkTypeFactory)
++  : SqlFunction
+ 
++  private[flink] final def createSqlFunctions(
++                                               name: String,
++                                               typeFactory: FlinkTypeFactory)
++  : Array[SqlFunction] = {
++    getEvalMethods.map(method => {
++      createSqlFunction(name, method, typeFactory)
++    })
++  }
+   override def toString = getClass.getCanonicalName
+ }
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/utils/TableValuedSqlFunction.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/utils/TableValuedSqlFunction.scala
+new file mode 100644
+index 0000000..26051b2
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/utils/TableValuedSqlFunction.scala
+@@ -0,0 +1,95 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.functions.utils
++
++import java.util
++
++import com.google.common.base.Predicate
++import org.apache.calcite.rel.`type`.RelDataType
++import org.apache.calcite.schema.{FunctionParameter, TableFunction}
++import org.apache.calcite.sql.SqlIdentifier
++import org.apache.calcite.sql.`type`._
++import org.apache.calcite.sql.parser.SqlParserPos
++import org.apache.calcite.sql.validate.SqlUserDefinedTableFunction
++import org.apache.calcite.util.Util
++import org.apache.flink.api.common.typeinfo.TypeInformation
++import org.apache.flink.api.table.FlinkTypeFactory
++import org.apache.flink.api.table.functions.TableValuedFunction
++import scala.collection.JavaConversions._
++import java.util
++/**
++  * Calcite wrapper for user-defined table functions.
++  */
++class TableValuedSqlFunction(
++                              name: String,
++                              udtvf: TableValuedFunction[_],
++                              rowTypeInfo: TypeInformation[_],
++                              returnTypeInference: SqlReturnTypeInference,
++                              operandTypeInference: SqlOperandTypeInference,
++                              operandTypeChecker: SqlOperandTypeChecker,
++                              paramTypes: util.List[RelDataType],
++                              function: TableFunction)
++  extends SqlUserDefinedTableFunction(
++    new SqlIdentifier(name, SqlParserPos.ZERO),
++    returnTypeInference,
++    operandTypeInference,
++    operandTypeChecker,
++    paramTypes,
++    function) {
++
++  def getTableFunction = udtvf
++
++  def getRowTypeInfo = rowTypeInfo
++
++}
++
++object TableValuedSqlFunction {
++  /**
++    *
++    * @param name function name (used by SQL parser)
++    * @param udtvf user defined table valued function to be called
++    * @param rowTypeInfo the row type information generated by the table function
++    * @param typeFactory type factory for converting Flink's between Calcite's types
++    * @param function calcite table function schema
++    * @return
++    */
++  def apply(
++             name: String,
++             udtvf: TableValuedFunction[_],
++             rowTypeInfo: TypeInformation[_],
++             typeFactory: FlinkTypeFactory,
++             function: TableFunction): TableValuedSqlFunction = {
++
++    val argTypes: util.List[RelDataType] = new util.ArrayList[RelDataType]
++    val typeFamilies: util.List[SqlTypeFamily] = new util.ArrayList[SqlTypeFamily]
++    for (functionParameter <- function.getParameters) {
++      val relType: RelDataType = functionParameter.getType(typeFactory)
++      argTypes.add(relType)
++      typeFamilies.add(Util.first(relType.getSqlTypeName.getFamily, SqlTypeFamily.ANY))
++    }
++    val optional: Predicate[Integer] = new Predicate[Integer]() {
++      def apply(input: Integer): Boolean = {
++        function.getParameters.get(input).isOptional
++      }
++    }
++    val typeChecker: FamilyOperandTypeChecker = OperandTypes.family(typeFamilies, optional)
++
++    new TableValuedSqlFunction(name, udtvf, rowTypeInfo, ReturnTypes.CURSOR,
++      InferTypes.explicit(argTypes), typeChecker, argTypes, function)
++  }
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/utils/UserDefinedFunctionUtils.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/utils/UserDefinedFunctionUtils.scala
+index e7416f7..8d2aedc 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/utils/UserDefinedFunctionUtils.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/functions/utils/UserDefinedFunctionUtils.scala
+@@ -19,14 +19,18 @@
+ 
+ package org.apache.flink.api.table.functions.utils
+ 
++import java.lang.reflect.{Method, Modifier, ParameterizedType}
+ import java.sql.{Date, Time, Timestamp}
+ 
+ import com.google.common.primitives.Primitives
++import org.apache.calcite.sql.SqlFunction
+ import org.apache.flink.api.common.functions.InvalidTypesException
+-import org.apache.flink.api.common.typeinfo.TypeInformation
+-import org.apache.flink.api.java.typeutils.TypeExtractor
+-import org.apache.flink.api.table.ValidationException
+-import org.apache.flink.api.table.functions.{ScalarFunction, UserDefinedFunction}
++import org.apache.flink.api.common.typeinfo.{AtomicType, TypeInformation}
++import org.apache.flink.api.java.typeutils.{PojoTypeInfo, TupleTypeInfo, TypeExtractor}
++import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
++import org.apache.flink.api.table.{FlinkTypeFactory, TableException, ValidationException}
++import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction, UserDefinedFunction}
++import org.apache.flink.api.table.plan.schema.TableValuedFunctionImpl
+ import org.apache.flink.util.InstantiationUtil
+ 
+ object UserDefinedFunctionUtils {
+@@ -70,13 +74,13 @@ object UserDefinedFunctionUtils {
+     * Prints one signature consisting of classes.
+     */
+   def signatureToString(signature: Array[Class[_]]): String =
+-    "(" + signature.map { clazz =>
+-      if (clazz == null) {
+-        "null"
+-      } else {
+-        clazz.getCanonicalName
+-      }
+-    }.mkString(", ") + ")"
++  "(" + signature.map { clazz =>
++    if (clazz == null) {
++      "null"
++    } else {
++      clazz.getCanonicalName
++    }
++  }.mkString(", ") + ")"
+ 
+   /**
+     * Prints one signature consisting of TypeInformation.
+@@ -89,13 +93,13 @@ object UserDefinedFunctionUtils {
+     * Extracts type classes of [[TypeInformation]] in a null-aware way.
+     */
+   def typeInfoToClass(typeInfos: Seq[TypeInformation[_]]): Array[Class[_]] =
+-    typeInfos.map { typeInfo =>
+-      if (typeInfo == null) {
+-        null
+-      } else {
+-        typeInfo.getTypeClass
+-      }
+-    }.toArray
++  typeInfos.map { typeInfo =>
++    if (typeInfo == null) {
++      null
++    } else {
++      typeInfo.getTypeClass
++    }
++  }.toArray
+ 
+ 
+   /**
+@@ -103,45 +107,69 @@ object UserDefinedFunctionUtils {
+     * Candidate can be null (acts as a wildcard).
+     */
+   def parameterTypeEquals(candidate: Class[_], expected: Class[_]): Boolean =
+-    candidate == null ||
+-      candidate == expected ||
+-      expected.isPrimitive && Primitives.wrap(expected) == candidate ||
+-      candidate == classOf[Date] && expected == classOf[Int] ||
+-      candidate == classOf[Time] && expected == classOf[Int] ||
+-      candidate == classOf[Timestamp] && expected == classOf[Long]
++  candidate == null ||
++    candidate == expected ||
++    expected.isPrimitive && Primitives.wrap(expected) == candidate ||
++    candidate == classOf[Date] && expected == classOf[Int] ||
++    candidate == classOf[Time] && expected == classOf[Int] ||
++    candidate == classOf[Timestamp] && expected == classOf[Long]
+ 
+   /**
+     * Returns signatures matching the given signature of [[TypeInformation]].
+     * Elements of the signature can be null (act as a wildcard).
+     */
+   def getSignature(
+-      scalarFunction: ScalarFunction,
+-      signature: Seq[TypeInformation[_]])
+-    : Option[Array[Class[_]]] = {
++                    useDefinedFunction: UserDefinedFunction,
++                    signature: Seq[TypeInformation[_]])
++  : Option[Array[Class[_]]] = {
+     // We compare the raw Java classes not the TypeInformation.
+     // TypeInformation does not matter during runtime (e.g. within a MapFunction).
+     val actualSignature = typeInfoToClass(signature)
+ 
+-    scalarFunction
++    useDefinedFunction
+       .getSignatures
+       // go over all signatures and find one matching actual signature
+       .find { curSig =>
+-        // match parameters of signature to actual parameters
+-        actualSignature.length == curSig.length &&
+-          curSig.zipWithIndex.forall { case (clazz, i) =>
+-            parameterTypeEquals(actualSignature(i), clazz)
+-          }
+-      }
++      // match parameters of signature to actual parameters
++      actualSignature.length == curSig.length &&
++        curSig.zipWithIndex.forall { case (clazz, i) =>
++          parameterTypeEquals(actualSignature(i), clazz)
++        }
++    }
++  }
++  /**
++    * Returns signatures for obj class
++    */
++  def getSignatures(clazz:Class[_]): Array[Array[Class[_]]] = checkAndExtractEvalMethods(clazz).map(_.getParameterTypes)
++  /**
++    * Returns signatures matching the given signature of [[TypeInformation]].
++    * Elements of the signature can be null (act as a wildcard).
++    */
++  def getSignature(
++                    clazz:Class[_],
++                    signature: Seq[TypeInformation[_]])
++  : Option[Array[Class[_]]] = {
++    // We compare the raw Java classes not the TypeInformation.
++    // TypeInformation does not matter during runtime (e.g. within a MapFunction).
++    val actualSignature = typeInfoToClass(signature)
++    getSignatures(clazz)
++      // go over all signatures and find one matching actual signature
++      .find { curSig =>
++      // match parameters of signature to actual parameters
++      actualSignature.length == curSig.length &&
++        curSig.zipWithIndex.forall { case (clazz, i) =>
++          parameterTypeEquals(actualSignature(i), clazz)
++        }
++    }
+   }
+-
+   /**
+     * Internal method of [[ScalarFunction#getResultType()]] that does some pre-checking and uses
+     * [[TypeExtractor]] as default return type inference.
+     */
+   def getResultType(
+-      scalarFunction: ScalarFunction,
+-      signature: Array[Class[_]])
+-    : TypeInformation[_] = {
++                     scalarFunction: ScalarFunction,
++                     signature: Array[Class[_]])
++  : TypeInformation[_] = {
+     // find method for signature
+     val evalMethod = scalarFunction.getEvalMethods
+       .find(m => signature.sameElements(m.getParameterTypes))
+@@ -149,7 +177,7 @@ object UserDefinedFunctionUtils {
+ 
+     val userDefinedTypeInfo = scalarFunction.getResultType(signature)
+     if (userDefinedTypeInfo != null) {
+-        userDefinedTypeInfo
++      userDefinedTypeInfo
+     } else {
+       try {
+         TypeExtractor.getForClass(evalMethod.getReturnType)
+@@ -161,13 +189,14 @@ object UserDefinedFunctionUtils {
+     }
+   }
+ 
++
+   /**
+     * Returns the return type of the evaluation method matching the given signature.
+     */
+   def getResultTypeClass(
+-      scalarFunction: ScalarFunction,
+-      signature: Array[Class[_]])
+-    : Class[_] = {
++                          scalarFunction: ScalarFunction,
++                          signature: Array[Class[_]])
++  : Class[_] = {
+     // find method for signature
+     val evalMethod = scalarFunction.getEvalMethods
+       .find(m => signature.sameElements(m.getParameterTypes))
+@@ -178,8 +207,134 @@ object UserDefinedFunctionUtils {
+   /**
+     * Prints all signatures of a [[ScalarFunction]].
+     */
+-  def signaturesToString(scalarFunction: ScalarFunction): String = {
+-    scalarFunction.getSignatures.map(signatureToString).mkString(", ")
++  def signaturesToString(userDefinedFunction: UserDefinedFunction): String = {
++    userDefinedFunction.getSignatures.map(signatureToString).mkString(", ")
+   }
+ 
++  /**
++    * Returns eval method matching the given signature of [[TypeInformation]].
++    */
++  def getEvalMethod(
++                     function: UserDefinedFunction,
++                     signature: Seq[TypeInformation[_]])
++  : Option[Method] = {
++    // We compare the raw Java classes not the TypeInformation.
++    // TypeInformation does not matter during runtime (e.g. within a MapFunction).
++    val actualSignature = typeInfoToClass(signature)
++
++    function
++      .getEvalMethods
++      // go over all eval methods and find one matching
++      .find { cur =>
++      val signatures = cur.getParameterTypes
++      // match parameters of signature to actual parameters
++      actualSignature.length == signatures.length &&
++        signatures.zipWithIndex.forall { case (clazz, i) =>
++          parameterTypeEquals(actualSignature(i), clazz)
++        }
++    }
++  }
++
++  // ----------------------------------------------------------------------------------------------
++  // Utilities for TableValuedFunction
++  // ----------------------------------------------------------------------------------------------
++
++  /**
++    * Extracts evaluation methods and throws a [[ValidationException]] if no implementation
++    * can be found.
++    */
++  def checkAndExtractEvalMethods(clazz: Class[_]): Array[Method] = {
++    val methods = clazz
++      .getDeclaredMethods
++      .filter { m =>
++        val modifiers = m.getModifiers
++        m.getName == "eval" && Modifier.isPublic(modifiers) && !Modifier.isAbstract(modifiers)
++      }
++
++    if (methods.isEmpty) {
++      throw new ValidationException(s"Table function class '$this' does not implement at least " +
++        s"one method named 'eval' which is public and not abstract.")
++    } else {
++      methods
++    }
++  }
++
++  /**
++    * Returns the result type of the evaluation method with a given signature.
++    * @param signature signature of the method the return type needs to be determined
++    * @return [[TypeInformation]] of result type or null if Flink should determine the type
++    */
++  def getResultType(
++                     clazz: Class[_],
++                     signature: Array[Class[_]])
++  : TypeInformation[_] = {
++    val evalMethod = checkAndExtractEvalMethods(clazz)
++      .find(m => signature.sameElements(m.getParameterTypes))
++      .getOrElse(throw new ValidationException("Given signature is invalid."))
++    try {
++      TypeExtractor.getForClass(evalMethod.getReturnType)
++    } catch {
++      case ite: InvalidTypesException =>
++        throw new ValidationException(s"Return type of scalar function '$this' cannot be " +
++          s"automatically determined. Please provide type information manually.")
++    }
++  }
++
++  /**
++    * Creates corresponding [[SqlFunction]].
++    */
++  def createSqlFunction[T: TypeInformation](
++                         name: String,
++                         method: Method,
++                         obj: Object,
++                         typeFactory: FlinkTypeFactory)
++  : SqlFunction = {
++    val clazz = obj.getClass
++    obj match {
++      case tf: TableValuedFunction[_] =>
++        val resultType = implicitly[TypeInformation[T]]
++        val (fieldNames, fieldIndexs): (Array[String], Array[Int]) = getFieldInfo(resultType)
++        val tableFunction = new TableValuedFunctionImpl(resultType,
++          fieldIndexs, fieldNames, method)
++        val function = TableValuedSqlFunction(name, obj.asInstanceOf[TableValuedFunction[_]], resultType,
++          typeFactory, tableFunction)
++        function
++      case _ => throw new TableException("Unsupported user-defined function type.")
++
++    }
++
++  }
++
++  /**
++    * Creates all corresponding [[SqlFunction]].
++    */
++  def createSqlFunctions[T: TypeInformation](name: String,
++                            obj: Object,
++                            typeFactory: FlinkTypeFactory): Array[SqlFunction] = checkAndExtractEvalMethods(obj.getClass).map(m => {
++    createSqlFunction(name, m, obj, typeFactory)
++  })
++
++
++  /**
++    * Returns field names and field positions for a given [[TypeInformation]].
++    *
++    * Field names are automatically extracted for
++    * [[org.apache.flink.api.common.typeutils.CompositeType]].
++    *
++    * @param inputType The TypeInformation extract the field names and positions from.
++    * @return A tuple of two arrays holding the field names and corresponding field positions.
++    */
++  def getFieldInfo(inputType: TypeInformation[_])
++  : (Array[String], Array[Int]) = {
++    val fieldNames: Array[String] = inputType match {
++      case t: TupleTypeInfo[_] => t.getFieldNames
++      case c: CaseClassTypeInfo[_] => c.getFieldNames
++      case p: PojoTypeInfo[_] => p.getFieldNames
++      case a: AtomicType[_] => Array("f0")
++      case tpe =>
++        throw new TableException(s"Type $tpe lacks explicit field naming")
++    }
++    val fieldIndexes = fieldNames.indices.toArray
++    (fieldNames, fieldIndexes)
++  }
+ }
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/FlinkCorrelate.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/FlinkCorrelate.scala
+new file mode 100644
+index 0000000..a4c421f
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/FlinkCorrelate.scala
+@@ -0,0 +1,157 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.plan.nodes
++
++import org.apache.calcite.plan.volcano.RelSubset
++import org.apache.calcite.rel.RelNode
++import org.apache.calcite.rel.`type`.RelDataType
++import org.apache.calcite.rel.logical.LogicalTableFunctionScan
++import org.apache.calcite.rex.{RexCall, RexNode}
++import org.apache.calcite.sql.SemiJoinType
++import org.apache.flink.api.common.functions.FlatMapFunction
++import org.apache.flink.api.common.typeinfo.TypeInformation
++import org.apache.flink.api.table.codegen.{CodeGenerator, GeneratedExpression, GeneratedFunction}
++import org.apache.flink.api.table.functions.utils.TableValuedSqlFunction
++import org.apache.flink.api.table.runtime.FlatMapRunner
++import org.apache.flink.api.table.typeutils.RowTypeInfo
++import org.apache.flink.api.table.typeutils.TypeConverter._
++import org.apache.flink.api.table.{FlinkTypeFactory, TableConfig}
++
++import scala.collection.JavaConversions._
++
++trait FlinkCorrelate {
++
++  private[flink] def functionBody(generator: CodeGenerator,
++                                  udtfTypeInfo: TypeInformation[Any],
++                                  rowType: RelDataType,
++                                  rexCall: RexCall,
++                                  condition: RexNode,
++                                  config: TableConfig,
++                                  joinType: SemiJoinType,
++                                  expectedType: Option[TypeInformation[Any]]): String = {
++
++    val returnType = determineReturnType(
++      rowType,
++      expectedType,
++      config.getNullCheck,
++      config.getEfficientTypeUsage)
++
++    val (input1AccessExprs, input2AccessExprs) = generator.generateCorrelateAccessExprs
++    val crossResultExpr = generator.generateResultExpression(input1AccessExprs ++ input2AccessExprs,
++      returnType, rowType.getFieldNames)
++
++    val input2NullExprs = input2AccessExprs.map(
++      x => GeneratedExpression("null", "true", "", x.resultType))
++    val outerResultExpr = generator.generateResultExpression(input1AccessExprs ++ input2NullExprs,
++      returnType, rowType.getFieldNames)
++
++    val call = generator.generateExpression(rexCall)
++    var body = call.code
++    if (joinType == SemiJoinType.INNER) {
++      // cross join
++      body +=
++        s"""
++           |if (iter.isEmpty()) {
++           |  return;
++           |}
++        """.stripMargin
++    } else {
++      // outer join
++      body +=
++        s"""
++           |if (iter.isEmpty()) {
++           |  ${outerResultExpr.code}
++           |  ${generator.collectorTerm}.collect(${outerResultExpr.resultTerm});
++           |  return;
++           |}
++        """.stripMargin
++    }
++
++    val projection = if (condition == null) {
++      s"""
++         |${crossResultExpr.code}
++         |${generator.collectorTerm}.collect(${crossResultExpr.resultTerm});
++       """.stripMargin
++    } else {
++      val filterGenerator = new CodeGenerator(config, false, udtfTypeInfo) {
++        override def input1Term: String = input2Term
++      }
++      val filterCondition = filterGenerator.generateExpression(condition)
++      s"""
++         |${filterGenerator.reuseInputUnboxingCode()}
++         |${filterCondition.code}
++         |if (${filterCondition.resultTerm}) {
++         |  ${crossResultExpr.code}
++         |  ${generator.collectorTerm}.collect(${crossResultExpr.resultTerm});
++         |}
++         |""".stripMargin
++    }
++
++    val outputTypeClass = udtfTypeInfo.getTypeClass.getCanonicalName
++    body +=
++      s"""
++         |while (iter.hasNext()) {
++         |  $outputTypeClass ${generator.input2Term} = ($outputTypeClass) iter.next();
++         |  $projection
++         |}
++       """.stripMargin
++    body
++  }
++
++  private[flink] def correlateMapFunction(
++ genFunction: GeneratedFunction[FlatMapFunction[Any, Any]]):
++  FlatMapRunner[Any, Any] = {
++
++    new FlatMapRunner[Any, Any](
++      genFunction.name,
++      genFunction.code,
++      genFunction.returnType)
++  }
++
++  private[flink] def inputRowType(input: RelNode): TypeInformation[Any] = {
++    val fieldTypes = input.getRowType.getFieldList.map(t =>
++      FlinkTypeFactory.toTypeInfo(t.getType))
++    new RowTypeInfo(fieldTypes).asInstanceOf[TypeInformation[Any]]
++  }
++
++  private[flink] def unwrap(relNode: RelNode): LogicalTableFunctionScan = {
++    relNode match {
++      case rel: LogicalTableFunctionScan => rel
++      case rel: RelSubset => unwrap(rel.getRelList.get(0))
++      case _ => ???
++    }
++  }
++
++  private[flink] def selectToString(rowType: RelDataType): String = {
++    rowType.getFieldNames.mkString(",")
++  }
++
++  private[flink] def correlateOpName(rexCall: RexCall,
++                                     sqlFunction: TableValuedSqlFunction,
++                                     rowType: RelDataType): String = {
++    s"correlate: ${correlateToString(rexCall, sqlFunction)}, select: ${selectToString(rowType)}"
++  }
++
++  private[flink] def correlateToString(rexCall: RexCall,
++                                       sqlFunction: TableValuedSqlFunction): String = {
++    val udtfName = sqlFunction.getName
++    val operands = rexCall.getOperands.map(_.toString).mkString(",")
++    s"table($udtfName($operands))"
++  }
++
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/dataset/DataSetCorrelate.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/dataset/DataSetCorrelate.scala
+new file mode 100644
+index 0000000..dc2c7b5
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/dataset/DataSetCorrelate.scala
+@@ -0,0 +1,132 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.plan.nodes.dataset
++import org.apache.calcite.plan.{RelOptCluster, RelOptCost, RelOptPlanner, RelTraitSet}
++import org.apache.calcite.rel.`type`.RelDataType
++import org.apache.calcite.rel.logical.LogicalTableFunctionScan
++import org.apache.calcite.rel.metadata.RelMetadataQuery
++import org.apache.calcite.rel.{RelNode, RelWriter, SingleRel}
++import org.apache.calcite.rex.{RexCall, RexNode}
++import org.apache.calcite.sql.SemiJoinType
++import org.apache.flink.api.common.functions.FlatMapFunction
++import org.apache.flink.api.common.typeinfo.TypeInformation
++import org.apache.flink.api.java.DataSet
++import org.apache.flink.api.table.BatchTableEnvironment
++import org.apache.flink.api.table.codegen.CodeGenerator
++import org.apache.flink.api.table.functions.utils.TableValuedSqlFunction
++import org.apache.flink.api.table.plan.nodes.FlinkCorrelate
++import org.apache.flink.api.table.typeutils.TypeConverter._
++
++/**
++  * Flink RelNode which matches along with cross apply a user defined table function.
++  */
++class DataSetCorrelate(
++                        cluster: RelOptCluster,
++                        traitSet: RelTraitSet,
++                        input: RelNode,
++                        scan: LogicalTableFunctionScan,
++                        condition: RexNode,
++                        rowType: RelDataType,
++                        joinRowType: RelDataType,
++                        joinType: SemiJoinType,
++                        ruleDescription: String)
++  extends SingleRel(cluster, traitSet, input)
++    with FlinkCorrelate
++    with DataSetRel {
++  override def deriveRowType() = rowType
++
++
++  override def computeSelfCost(planner: RelOptPlanner, metadata: RelMetadataQuery): RelOptCost = {
++    val rowCnt = metadata.getRowCount(getInput) + 10
++    planner.getCostFactory.makeCost(rowCnt, rowCnt, 0)
++  }
++
++  override def copy(traitSet: RelTraitSet, inputs: java.util.List[RelNode]): RelNode = {
++    new DataSetCorrelate(
++      cluster,
++      traitSet,
++      inputs.get(0),
++      scan,
++      condition,
++      rowType,
++      joinRowType,
++      joinType,
++      ruleDescription)
++  }
++
++  override def toString: String = {
++    val rexCall = scan.getCall.asInstanceOf[RexCall]
++    val sqlFunction = rexCall.getOperator.asInstanceOf[TableValuedSqlFunction]
++    correlateToString(rexCall, sqlFunction)
++  }
++
++  override def explainTerms(pw: RelWriter): RelWriter = {
++    val rexCall = scan.getCall.asInstanceOf[RexCall]
++    val sqlFunction = rexCall.getOperator.asInstanceOf[TableValuedSqlFunction]
++    super.explainTerms(pw)
++      .item("lateral", correlateToString(rexCall, sqlFunction))
++      .item("select", selectToString(rowType))
++  }
++
++
++  override def translateToPlan(tableEnv: BatchTableEnvironment,
++                               expectedType: Option[TypeInformation[Any]]): DataSet[Any] = {
++
++    val config = tableEnv.getConfig
++    val returnType = determineReturnType(
++      getRowType,
++      expectedType,
++      config.getNullCheck,
++      config.getEfficientTypeUsage)
++
++    val inputDS = input.asInstanceOf[DataSetRel]
++      .translateToPlan(tableEnv, Some(inputRowType(input)))
++
++    val funcRel = scan.asInstanceOf[LogicalTableFunctionScan]
++    val rexCall = funcRel.getCall.asInstanceOf[RexCall]
++    val sqlFunction = rexCall.getOperator.asInstanceOf[TableValuedSqlFunction]
++    val udtfTypeInfo = sqlFunction.getRowTypeInfo.asInstanceOf[TypeInformation[Any]]
++
++    val generator = new CodeGenerator(
++      config,
++      false,
++      inputDS.getType,
++      Some(udtfTypeInfo))
++
++    val body = functionBody(
++      generator,
++      udtfTypeInfo,
++      getRowType,
++      rexCall,
++      condition,
++      config,
++      joinType,
++      expectedType)
++
++    val genFunction = generator.generateFunction(
++      ruleDescription,
++      classOf[FlatMapFunction[Any, Any]],
++      body,
++      returnType)
++
++    val mapFunc = correlateMapFunction(genFunction)
++
++    inputDS.flatMap(mapFunc).name(correlateOpName(rexCall, sqlFunction, rowType))
++  }
++
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/datastream/DataStreamCorrelate.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/datastream/DataStreamCorrelate.scala
+new file mode 100644
+index 0000000..7caa265
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/nodes/datastream/DataStreamCorrelate.scala
+@@ -0,0 +1,134 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.plan.nodes.datastream
++import org.apache.calcite.plan.{RelOptCluster, RelOptCost, RelOptPlanner, RelTraitSet}
++import org.apache.calcite.rel.`type`.RelDataType
++import org.apache.calcite.rel.logical.LogicalTableFunctionScan
++import org.apache.calcite.rel.metadata.RelMetadataQuery
++import org.apache.calcite.rel.{RelNode, RelWriter, SingleRel}
++import org.apache.calcite.rex.{RexCall, RexNode}
++import org.apache.calcite.sql.SemiJoinType
++import org.apache.flink.api.common.functions.FlatMapFunction
++import org.apache.flink.api.common.typeinfo.TypeInformation
++import org.apache.flink.api.table.StreamTableEnvironment
++import org.apache.flink.api.table.codegen.CodeGenerator
++import org.apache.flink.api.table.functions.utils.TableValuedSqlFunction
++import org.apache.flink.api.table.plan.nodes.FlinkCorrelate
++import org.apache.flink.api.table.typeutils.TypeConverter._
++import org.apache.flink.streaming.api.datastream.DataStream
++
++/**
++  * Flink RelNode which matches along with cross join a user defined table valued function.
++  */
++class DataStreamCorrelate(
++                           cluster: RelOptCluster,
++                           traitSet: RelTraitSet,
++                           input: RelNode,
++                           scan: LogicalTableFunctionScan,
++                           condition: RexNode,
++                           rowType: RelDataType,
++                           joinRowType: RelDataType,
++                           joinType: SemiJoinType,
++                           ruleDescription: String)
++  extends SingleRel(cluster, traitSet, input)
++    with FlinkCorrelate
++    with DataStreamRel {
++  override def deriveRowType() = rowType
++
++
++  override def computeSelfCost(planner: RelOptPlanner, metadata: RelMetadataQuery): RelOptCost = {
++    val rowCnt = metadata.getRowCount(getInput) + 10
++    planner.getCostFactory.makeCost(rowCnt, rowCnt, 0)
++  }
++
++  override def copy(traitSet: RelTraitSet, inputs: java.util.List[RelNode]): RelNode = {
++    new DataStreamCorrelate(
++      cluster,
++      traitSet,
++      inputs.get(0),
++      scan,
++      condition,
++      rowType,
++      joinRowType,
++      joinType,
++      ruleDescription)
++  }
++
++  override def toString: String = {
++    val funcRel = unwrap(scan)
++    val rexCall = funcRel.getCall.asInstanceOf[RexCall]
++    val sqlFunction = rexCall.getOperator.asInstanceOf[TableValuedSqlFunction]
++    correlateToString(rexCall, sqlFunction)
++  }
++
++  override def explainTerms(pw: RelWriter): RelWriter = {
++    val funcRel = unwrap(scan)
++    val rexCall = funcRel.getCall.asInstanceOf[RexCall]
++    val sqlFunction = rexCall.getOperator.asInstanceOf[TableValuedSqlFunction]
++    super.explainTerms(pw)
++      .item("lateral", correlateToString(rexCall, sqlFunction))
++      .item("select", selectToString(rowType))
++  }
++
++
++  override def translateToPlan(tableEnv: StreamTableEnvironment,
++                               expectedType: Option[TypeInformation[Any]]): DataStream[Any] = {
++
++    val config = tableEnv.getConfig
++    val returnType = determineReturnType(
++      getRowType,
++      expectedType,
++      config.getNullCheck,
++      config.getEfficientTypeUsage)
++
++    val inputDS = input.asInstanceOf[DataStreamRel]
++      .translateToPlan(tableEnv, Some(inputRowType(input)))
++
++    val funcRel = scan.asInstanceOf[LogicalTableFunctionScan]
++    val rexCall = funcRel.getCall.asInstanceOf[RexCall]
++    val sqlFunction = rexCall.getOperator.asInstanceOf[TableValuedSqlFunction]
++    val udtfTypeInfo = sqlFunction.getRowTypeInfo.asInstanceOf[TypeInformation[Any]]
++
++    val generator = new CodeGenerator(
++      config,
++      false,
++      inputDS.getType,
++      Some(udtfTypeInfo))
++
++    val body = functionBody(
++      generator,
++      udtfTypeInfo,
++      getRowType,
++      rexCall,
++      condition,
++      config,
++      joinType,
++      expectedType)
++
++    val genFunction = generator.generateFunction(
++      ruleDescription,
++      classOf[FlatMapFunction[Any, Any]],
++      body,
++      returnType)
++
++    val mapFunc = correlateMapFunction(genFunction)
++
++    inputDS.flatMap(mapFunc).name(correlateOpName(rexCall, sqlFunction, rowType))
++  }
++
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/FlinkRuleSets.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/FlinkRuleSets.scala
+index 3ed4385..dd29d41 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/FlinkRuleSets.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/FlinkRuleSets.scala
+@@ -19,10 +19,9 @@
+ package org.apache.flink.api.table.plan.rules
+ 
+ import org.apache.calcite.rel.rules._
+-import org.apache.calcite.tools.{RuleSets, RuleSet}
++import org.apache.calcite.tools.{RuleSet, RuleSets}
+ import org.apache.flink.api.table.plan.rules.dataSet._
+-import org.apache.flink.api.table.plan.rules.datastream._
+-import org.apache.flink.api.table.plan.rules.datastream.{DataStreamCalcRule, DataStreamScanRule, DataStreamUnionRule}
++import org.apache.flink.api.table.plan.rules.datastream.{DataStreamCalcRule, DataStreamCorrelateRule, DataStreamScanRule, DataStreamUnionRule, _}
+ 
+ object FlinkRuleSets {
+ 
+@@ -107,7 +106,8 @@ object FlinkRuleSets {
+     DataSetMinusRule.INSTANCE,
+     DataSetSortRule.INSTANCE,
+     DataSetValuesRule.INSTANCE,
+-    BatchTableSourceScanRule.INSTANCE
++    BatchTableSourceScanRule.INSTANCE,
++    DataSetCorrelateRule.INSTANCE
+   )
+ 
+   /**
+@@ -150,7 +150,8 @@ object FlinkRuleSets {
+       DataStreamScanRule.INSTANCE,
+       DataStreamUnionRule.INSTANCE,
+       DataStreamValuesRule.INSTANCE,
+-      StreamTableSourceScanRule.INSTANCE
++      StreamTableSourceScanRule.INSTANCE,
++      DataStreamCorrelateRule.INSTANCE
+   )
+ 
+ }
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/dataSet/DataSetCorrelateRule.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/dataSet/DataSetCorrelateRule.scala
+new file mode 100644
+index 0000000..6a32a3f
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/dataSet/DataSetCorrelateRule.scala
+@@ -0,0 +1,86 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.plan.rules.dataSet
++
++import org.apache.calcite.plan.{Convention, RelOptRule, RelOptRuleCall, RelTraitSet}
++import org.apache.calcite.plan.volcano.RelSubset
++import org.apache.calcite.rel.RelNode
++import org.apache.calcite.rel.convert.ConverterRule
++import org.apache.calcite.rel.logical.{LogicalCorrelate, LogicalFilter, LogicalTableFunctionScan}
++import org.apache.calcite.rex.RexNode
++import org.apache.flink.api.table.plan.nodes.dataset.{DataSetConvention, DataSetCorrelate}
++
++class DataSetCorrelateRule
++  extends ConverterRule(
++    classOf[LogicalCorrelate],
++    Convention.NONE,
++    DataSetConvention.INSTANCE,
++    "DataSetCorrelateRule")
++{
++
++  override def matches(call: RelOptRuleCall): Boolean = {
++    val join: LogicalCorrelate = call.rel(0).asInstanceOf[LogicalCorrelate]
++    val right = join.getRight.asInstanceOf[RelSubset].getOriginal
++
++
++    right match {
++      // right node is a table function
++      case scan: LogicalTableFunctionScan => true
++      // a filter is pushed above the table function
++      case filter: LogicalFilter =>
++        filter.getInput.asInstanceOf[RelSubset].getOriginal
++          .isInstanceOf[LogicalTableFunctionScan]
++      case _ => false
++    }
++  }
++
++  override def convert(rel: RelNode): RelNode = {
++    val join: LogicalCorrelate = rel.asInstanceOf[LogicalCorrelate]
++    val traitSet: RelTraitSet = rel.getTraitSet.replace(DataSetConvention.INSTANCE)
++    val convInput: RelNode = RelOptRule.convert(join.getInput(0), DataSetConvention.INSTANCE)
++    val right: RelNode = join.getInput(1)
++
++    def convertToCorrelate(relNode: RelNode, condition: RexNode): DataSetCorrelate = {
++      relNode match {
++        case rel: RelSubset =>
++          convertToCorrelate(rel.getRelList.get(0), condition)
++
++        case filter: LogicalFilter =>
++          convertToCorrelate(filter.getInput.asInstanceOf[RelSubset].getOriginal,
++            filter.getCondition)
++
++        case scan: LogicalTableFunctionScan =>
++          new DataSetCorrelate(
++            rel.getCluster,
++            traitSet,
++            convInput,
++            scan,
++            condition,
++            rel.getRowType,
++            join.getRowType,
++            join.getJoinType,
++            description)
++      }
++    }
++    convertToCorrelate(right, null)
++  }
++}
++
++object DataSetCorrelateRule {
++  val INSTANCE: RelOptRule = new DataSetCorrelateRule
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/datastream/DataStreamCorrelateRule.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/datastream/DataStreamCorrelateRule.scala
+new file mode 100644
+index 0000000..dab932f
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/rules/datastream/DataStreamCorrelateRule.scala
+@@ -0,0 +1,85 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.plan.rules.datastream
++
++import org.apache.calcite.plan.{Convention, RelOptRule, RelOptRuleCall, RelTraitSet}
++import org.apache.calcite.plan.volcano.RelSubset
++import org.apache.calcite.rel.RelNode
++import org.apache.calcite.rel.convert.ConverterRule
++import org.apache.calcite.rel.logical.{LogicalCorrelate, LogicalFilter, LogicalTableFunctionScan}
++import org.apache.calcite.rex.RexNode
++import org.apache.flink.api.table.plan.nodes.datastream.{DataStreamConvention, DataStreamCorrelate}
++
++class DataStreamCorrelateRule  extends ConverterRule(
++  classOf[LogicalCorrelate],
++  Convention.NONE,
++  DataStreamConvention.INSTANCE,
++  "DataStreamCorrelateRule")
++{
++
++  override def matches(call: RelOptRuleCall): Boolean = {
++    val join: LogicalCorrelate = call.rel(0).asInstanceOf[LogicalCorrelate]
++    val right = join.getRight.asInstanceOf[RelSubset].getOriginal
++
++    right match {
++      // right node is a table function
++      case scan: LogicalTableFunctionScan => true
++      // a filter is pushed above the table function
++      case filter: LogicalFilter =>
++        filter.getInput.asInstanceOf[RelSubset].getOriginal
++          .isInstanceOf[LogicalTableFunctionScan]
++      case _ => false
++    }
++  }
++
++  override def convert(rel: RelNode): RelNode = {
++    val join: LogicalCorrelate = rel.asInstanceOf[LogicalCorrelate]
++    val traitSet: RelTraitSet = rel.getTraitSet.replace(DataStreamConvention.INSTANCE)
++    val convInput: RelNode = RelOptRule.convert(join.getInput(0), DataStreamConvention.INSTANCE)
++    val right: RelNode = join.getInput(1)
++
++    def convertToCorrelate(relNode: RelNode, condition: RexNode): DataStreamCorrelate = {
++      relNode match {
++        case rel: RelSubset =>
++          convertToCorrelate(rel.getRelList.get(0), condition)
++
++        case filter: LogicalFilter =>
++          convertToCorrelate(filter.getInput.asInstanceOf[RelSubset].getOriginal,
++            filter.getCondition)
++
++        case scan: LogicalTableFunctionScan =>
++          new DataStreamCorrelate(
++            rel.getCluster,
++            traitSet,
++            convInput,
++            scan,
++            condition,
++            rel.getRowType,
++            join.getRowType,
++            join.getJoinType,
++            description)
++      }
++    }
++    convertToCorrelate(right, null)
++  }
++
++}
++
++object DataStreamCorrelateRule {
++  val INSTANCE: RelOptRule = new DataStreamCorrelateRule
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/schema/TableValuedFunctionImpl.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/schema/TableValuedFunctionImpl.scala
+new file mode 100644
+index 0000000..868f4fe
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/plan/schema/TableValuedFunctionImpl.scala
+@@ -0,0 +1,72 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.plan.schema
++
++import java.lang.reflect.{Method, Type}
++import java.util
++
++import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFactory}
++import org.apache.calcite.schema.TableFunction
++import org.apache.calcite.schema.impl.ReflectiveFunctionBase
++import org.apache.flink.api.common.typeinfo.{AtomicType, TypeInformation}
++import org.apache.flink.api.common.typeutils.CompositeType
++import org.apache.flink.api.table.{FlinkTypeFactory, TableException}
++
++/**
++  * Implementation of a function that is based on a method.
++  */
++class TableValuedFunctionImpl[T](val typeInfo: TypeInformation[T],
++                                 val fieldIndexes: Array[Int],
++                                 val fieldNames: Array[String],
++                                 val evalMethod: Method)
++  extends ReflectiveFunctionBase(evalMethod) with TableFunction {
++
++  if (fieldIndexes.length != fieldNames.length) throw new TableException(
++    "Number of field indexes and field names must be equal.")
++
++  // check uniqueness of field names
++  if (fieldNames.length != fieldNames.toSet.size) throw new TableException(
++    "Table field names must be unique.")
++
++  val fieldTypes: Array[TypeInformation[_]] =
++    typeInfo match {
++      case cType: CompositeType[T] =>
++        if (fieldNames.length != cType.getArity) throw new TableException(
++          s"Arity of type (" + cType.getFieldNames.deep + ") " +
++            "not equal to number of field names " + fieldNames.deep + ".")
++        fieldIndexes.map(cType.getTypeAt(_).asInstanceOf[TypeInformation[_]])
++      case aType: AtomicType[T] =>
++        if (fieldIndexes.length != 1 || fieldIndexes(0) != 0) throw new TableException(
++          "Non-composite input type may have only a single field and its index must be 0.")
++        Array(aType)
++    }
++
++  override def getElementType(arguments: util.List[AnyRef]): Type = classOf[Array[Object]]
++
++  override def getRowType(typeFactory: RelDataTypeFactory,
++                          arguments: util.List[AnyRef]): RelDataType = {
++    val flinkTypeFactory = typeFactory.asInstanceOf[FlinkTypeFactory]
++    val builder = flinkTypeFactory.builder
++    fieldNames
++      .zip(fieldTypes)
++      .foreach { f =>
++        builder.add(f._1, flinkTypeFactory.createTypeFromTypeInfo(f._2)).nullable(true)
++      }
++    builder.build
++  }
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/typeutils/Java2ScalaUtils.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/typeutils/Java2ScalaUtils.scala
+new file mode 100644
+index 0000000..17f0c0c
+--- /dev/null
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/typeutils/Java2ScalaUtils.scala
+@@ -0,0 +1,34 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.typeutils
++
++object Java2ScalaUtils {
++  def jiter2siter[T](iter: Object): scala.collection.Iterator[T] ={
++    iter match {
++      case x : java.util.Iterator[T] => new scala.collection.Iterator[T] {
++        def hasNext(): Boolean = x.hasNext
++
++        def next(): T = x.next
++
++        def remove(): Unit = throw new UnsupportedOperationException()
++      }
++      case _ => iter.asInstanceOf[(scala.collection.Iterator[T])]
++    }
++
++  }
++}
+diff --git a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/validate/FunctionCatalog.scala b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/validate/FunctionCatalog.scala
+index 68e2f97..0c4984d 100644
+--- a/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/validate/FunctionCatalog.scala
++++ b/flink-libraries/flink-table/src/main/scala/org/apache/flink/api/table/validate/FunctionCatalog.scala
+@@ -47,6 +47,13 @@ class FunctionCatalog {
+     sqlFunctions += sqlFunction
+   }
+ 
++  def registerSqlFunctions(functions: Array[SqlFunction]): Unit = {
++    if (functions.nonEmpty) {
++      sqlFunctions --= sqlFunctions.filter(_.getName == functions.head.getName)
++      sqlFunctions ++= functions
++    }
++  }
++
+   def getSqlOperatorTable: SqlOperatorTable =
+     ChainedSqlOperatorTable.of(
+       new BasicOperatorTable(),
+diff --git a/flink-libraries/flink-table/src/test/java/org/apache/flink/api/java/batch/sql/SqlITCase.java b/flink-libraries/flink-table/src/test/java/org/apache/flink/api/java/batch/sql/SqlITCase.java
+index 1cc4ff7..ac48a9e 100644
+--- a/flink-libraries/flink-table/src/test/java/org/apache/flink/api/java/batch/sql/SqlITCase.java
++++ b/flink-libraries/flink-table/src/test/java/org/apache/flink/api/java/batch/sql/SqlITCase.java
+@@ -21,6 +21,7 @@ package org.apache.flink.api.java.batch.sql;
+ import org.apache.flink.api.java.DataSet;
+ import org.apache.flink.api.java.ExecutionEnvironment;
+ import org.apache.flink.api.java.table.BatchTableEnvironment;
++import org.apache.flink.api.java.table.expressions.utils.udfs.JavaTableFunction1;
+ import org.apache.flink.api.java.tuple.Tuple3;
+ import org.apache.flink.api.java.tuple.Tuple5;
+ import org.apache.flink.api.scala.batch.utils.TableProgramsTestBase;
+@@ -32,6 +33,11 @@ import org.junit.Test;
+ import org.junit.runner.RunWith;
+ import org.junit.runners.Parameterized;
+ 
++import org.apache.flink.api.table.expressions.utils.TableValuedFunction0;
++
++import java.util.ArrayList;
++
++import java.util.Collections;
+ import java.util.List;
+ 
+ @RunWith(Parameterized.class)
+@@ -56,12 +62,12 @@ public class SqlITCase extends TableProgramsTestBase {
+ 		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
+ 		List<Row> results = resultSet.collect();
+ 		String expected = "1,Hi\n" + "2,Hello\n" + "3,Hello world\n" +
+-			"4,Hello world, how are you?\n" + "5,I am fine.\n" + "6,Luke Skywalker\n" +
+-			"7,Comment#1\n" + "8,Comment#2\n" + "9,Comment#3\n" + "10,Comment#4\n" +
+-			"11,Comment#5\n" + "12,Comment#6\n" + "13,Comment#7\n" +
+-			"14,Comment#8\n" + "15,Comment#9\n" + "16,Comment#10\n" +
+-			"17,Comment#11\n" + "18,Comment#12\n" + "19,Comment#13\n" +
+-			"20,Comment#14\n" + "21,Comment#15\n";
++				"4,Hello world, how are you?\n" + "5,I am fine.\n" + "6,Luke Skywalker\n" +
++				"7,Comment#1\n" + "8,Comment#2\n" + "9,Comment#3\n" + "10,Comment#4\n" +
++				"11,Comment#5\n" + "12,Comment#6\n" + "13,Comment#7\n" +
++				"14,Comment#8\n" + "15,Comment#9\n" + "16,Comment#10\n" +
++				"17,Comment#11\n" + "18,Comment#12\n" + "19,Comment#13\n" +
++				"20,Comment#14\n" + "21,Comment#15\n";
+ 		compareResultAsText(results, expected);
+ 	}
+ 
+@@ -108,7 +114,7 @@ public class SqlITCase extends TableProgramsTestBase {
+ 		DataSet<Tuple5<Integer, Long, Integer, String, Long>> ds2 = CollectionDataSets.get5TupleDataSet(env);
+ 
+ 		tableEnv.registerDataSet("t1", ds1, "a, b, c");
+-		tableEnv.registerDataSet("t2",ds2, "d, e, f, g, h");
++		tableEnv.registerDataSet("t2", ds2, "d, e, f, g, h");
+ 
+ 		String sqlQuery = "SELECT c, g FROM t1, t2 WHERE b = e";
+ 		Table result = tableEnv.sql(sqlQuery);
+@@ -118,4 +124,106 @@ public class SqlITCase extends TableProgramsTestBase {
+ 		String expected = "Hi,Hallo\n" + "Hello,Hallo Welt\n" + "Hello world,Hallo Welt\n";
+ 		compareResultAsText(results, expected);
+ 	}
++
++	@Test
++	public void testUDTF() throws Exception {
++		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
++		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
++
++		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
++		Table in = tableEnv.fromDataSet(ds, "a,b,c");
++		tableEnv.registerTable("MyTable", in);
++		tableEnv.registerFunction("split", new TableValuedFunction0());
++		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s FROM " +
++				"MyTable,LATERAL TABLE(split(c)) AS t(s)";
++		Table result = tableEnv.sql(sqlQuery);
++		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
++		List<Row> results = resultSet.collect();
++
++		String expected = "1,6,Hi\n1,6,KEVIN\n2,7,Hello\n2,7,SUNNY\n4,8,LOVER\n4,8,PAN";
++		compareResultAsText(results, expected);
++	}
++
++	@Test
++	public void testUDTFWithFilter() throws Exception {
++		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
++		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
++
++		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
++		Table in = tableEnv.fromDataSet(ds, "a,b,c");
++		tableEnv.registerTable("MyTable", in);
++		tableEnv.registerFunction("split", new TableValuedFunction0());
++		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s FROM " +
++				"MyTable,LATERAL TABLE(split(c)) AS t(s) WHERE MyTable.a <4";
++		Table result = tableEnv.sql(sqlQuery);
++		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
++		List<Row> results = resultSet.collect();
++
++		String expected = "1,6,Hi\n1,6,KEVIN\n2,7,Hello\n2,7,SUNNY";
++		compareResultAsText(results, expected);
++	}
++
++	@Test
++	public void testLeftJoinUDTF() throws Exception {
++		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
++		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
++
++		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
++		Table in = tableEnv.fromDataSet(ds, "a,b,c");
++		tableEnv.registerTable("MyTable", in);
++		tableEnv.registerFunction("split", new TableValuedFunction0());
++		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s FROM " +
++				"MyTable LEFT JOIN LATERAL TABLE(split(c)) AS t(s) ON TRUE";
++		Table result = tableEnv.sql(sqlQuery);
++		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
++		List<Row> results = resultSet.collect();
++
++		String expected = "1,6,Hi\n1,6,KEVIN\n2,7,Hello\n2,7,SUNNY\n3,7,null\n4,8,LOVER\n4,8,PAN";
++		compareResultAsText(results, expected);
++	}
++
++	@Test
++	public void testInnerJoinUDTF() throws Exception {
++		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
++		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
++
++		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet2(env);
++		Table in = tableEnv.fromDataSet(ds, "a,b,c");
++		tableEnv.registerTable("MyTable", in);
++		tableEnv.registerFunction("split", new JavaTableFunction1());
++		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.age,t.name FROM MyTable"+
++				" JOIN LATERAL TABLE(split(c)) AS t(age,name) ON MyTable.a = t.age ";
++		Table result = tableEnv.sql(sqlQuery);
++		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
++		List<Row> results = resultSet.collect();
++		System.out.println(results);
++		String expected = "1,6,1,KEVIN\n2,7,2,SUNNY";
++		compareResultAsText(results, expected);
++	}
++
++	public static DataSet<Tuple3<Integer, Long, String>> get3TupleDataSet2(ExecutionEnvironment env) {
++
++		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
++		data.add(new Tuple3<>(1, 1L, "1#KEVIN"));
++		data.add(new Tuple3<>(2, 2L, "2#SUNNY"));
++		data.add(new Tuple3<>(3, 2L, "Hello world"));
++		data.add(new Tuple3<>(4, 3L, "20#LOVER"));
++		Collections.shuffle(data);
++
++		return env.fromCollection(data);
++	}
++	public static DataSet<Tuple3<Integer, Long, String>> get3TupleDataSet(ExecutionEnvironment env) {
++
++		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
++		data.add(new Tuple3<>(1, 1L, "Hi#KEVIN"));
++		data.add(new Tuple3<>(2, 2L, "Hello#SUNNY"));
++		data.add(new Tuple3<>(3, 2L, "Hello world"));
++		data.add(new Tuple3<>(4, 3L, "PAN#LOVER"));
++		Collections.shuffle(data);
++
++		return env.fromCollection(data);
++	}
++
++
+ }
++
+diff --git a/flink-libraries/flink-table/src/test/java/org/apache/flink/api/java/table/expressions/utils/udfs/JavaTableFunction1.java b/flink-libraries/flink-table/src/test/java/org/apache/flink/api/java/table/expressions/utils/udfs/JavaTableFunction1.java
+new file mode 100644
+index 0000000..71fd70f
+--- /dev/null
++++ b/flink-libraries/flink-table/src/test/java/org/apache/flink/api/java/table/expressions/utils/udfs/JavaTableFunction1.java
+@@ -0,0 +1,18 @@
++package org.apache.flink.api.java.table.expressions.utils.udfs;
++
++import org.apache.flink.api.java.tuple.Tuple2;
++import org.apache.flink.api.table.functions.TableValuedFunction;
++
++import java.util.List;
++import java.util.ArrayList;
++
++public class JavaTableFunction1 implements TableValuedFunction<Tuple2<Integer, String>> {
++	public Iterable<Tuple2<Integer, String>> eval(String data) {
++		List<Tuple2<Integer, String>> result = new ArrayList<Tuple2<Integer, String>>();
++		if (data.contains("#")) {
++			String[] items = data.split("#");
++			result.add(new Tuple2<>(Integer.parseInt(items[0]), items[1]));
++		}
++		return result;
++	}
++}
+diff --git a/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/scala/batch/sql/CalcITCase.scala b/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/scala/batch/sql/CalcITCase.scala
+index 155833b..d83e2b5 100644
+--- a/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/scala/batch/sql/CalcITCase.scala
++++ b/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/scala/batch/sql/CalcITCase.scala
+@@ -28,7 +28,7 @@ import org.apache.flink.api.scala.batch.utils.TableProgramsTestBase
+ import org.apache.flink.api.scala.batch.utils.TableProgramsTestBase.TableConfigMode
+ import org.apache.flink.api.scala.table._
+ import org.apache.flink.api.scala.util.CollectionDataSets
+-import org.apache.flink.api.table.functions.ScalarFunction
++import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction}
+ import org.apache.flink.api.table.{Row, TableEnvironment, ValidationException}
+ import org.apache.flink.test.util.MultipleProgramsTestBase.TestExecutionMode
+ import org.apache.flink.test.util.TestBaseUtils
+@@ -36,7 +36,11 @@ import org.junit._
+ import org.junit.runner.RunWith
+ import org.junit.runners.Parameterized
+ 
++import org.apache.flink.api.table.expressions.utils.TableValuedFunction0
++
+ import scala.collection.JavaConverters._
++import scala.collection.mutable
++import scala.collection.mutable.ListBuffer
+ 
+ @RunWith(classOf[Parameterized])
+ class CalcITCase(
+@@ -309,8 +313,96 @@ class CalcITCase(
+     val results = result.toDataSet[Row].collect()
+     TestBaseUtils.compareResultAsText(results.asJava, expected)
+   }
+-}
++  @Test
++  def testUDTF(): Unit = {
++    val env = ExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env, config)
++
++    val ds = getSmall3TupleDataSet(env).toTable(tEnv).as('a, 'b, 'c)
++    tEnv.registerTable("MyTable", ds)
++    tEnv.registerFunction("split", new TableValuedFunction0())
++    var sqlQuery = "SELECT MyTable.a, MyTable.b, t.s " +
++      "FROM MyTable,LATERAL TABLE(split(c)) AS t(s)"
++    val tab = tEnv.sql(sqlQuery)
++
++    val results = tab.toDataSet[Row].collect()
++    var expected = "1,1,Hi\n1,1,KEVIN\n2,2,Hello\n2,2,SUNNY\n4,3,LOVER\n4,3,PAN"
++    TestBaseUtils.compareResultAsText(results.asJava, expected)
++
++  }
+ 
++  @Test
++  def testUDTFWithFilter(): Unit = {
++    val env = ExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env, config)
++
++    val ds = getSmall3TupleDataSet(env).toTable(tEnv).as('a, 'b, 'c)
++    tEnv.registerTable("MyTable", ds)
++    tEnv.registerFunction("split", new TableValuedFunction0())
++    var sqlQuery = "SELECT MyTable.a, MyTable.b, t.s " +
++      "FROM MyTable,LATERAL TABLE(split(c)) AS t(s)" +
++      "WHERE MyTable.a <4"
++    val tab = tEnv.sql(sqlQuery)
++
++    val results = tab.toDataSet[Row].collect()
++    var expected = "1,1,Hi\n1,1,KEVIN\n2,2,Hello\n2,2,SUNNY"
++    TestBaseUtils.compareResultAsText(results.asJava, expected)
++
++  }
++
++  @Test
++  def testLeftJoinUDTF(): Unit = {
++    val env = ExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env, config)
++
++    val ds = getSmall3TupleDataSet(env).toTable(tEnv).as('a, 'b, 'c)
++    tEnv.registerTable("MyTable", ds)
++    tEnv.registerFunction("split", new TableValuedFunction0())
++    var sqlQuery = "SELECT MyTable.a, MyTable.b, t.s FROM " +
++      "MyTable LEFT JOIN LATERAL TABLE(split(c)) AS t(s) ON TRUE"
++    val tab = tEnv.sql(sqlQuery)
++
++    val results = tab.toDataSet[Row].collect()
++    var expected = "1,1,Hi\n1,1,KEVIN\n2,2,Hello" +
++      "\n2,2,SUNNY\n3,2,null\n4,3,LOVER\n4,3,PAN"
++    TestBaseUtils.compareResultAsText(results.asJava, expected)
++
++  }
++  @Test
++  def testInnerJoinUDTF(): Unit = {
++    val env = ExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env, config)
++
++    val ds = getSmall4TupleDataSet(env).toTable(tEnv).as('a, 'b, 'c,'d)
++    tEnv.registerTable("MyTable", ds)
++    tEnv.registerFunction("split", new TableValuedFunction0())
++    var sqlQuery = "SELECT MyTable.a, MyTable.b, t.s FROM " +
++      "MyTable JOIN LATERAL TABLE(split(c)) AS t(s) ON MyTable.d=t.s "
++    val tab = tEnv.sql(sqlQuery)
++
++    val results = tab.toDataSet[Row].collect()
++    var expected = "1,1,KEVIN\n2,2,SUNNY"
++    TestBaseUtils.compareResultAsText(results.asJava, expected)
++
++  }
++
++  def getSmall3TupleDataSet(env: ExecutionEnvironment): DataSet[(Int, Long, String)] = {
++    val data = new mutable.MutableList[(Int, Long, String)]
++    data.+=((1, 1L, "Hi#KEVIN"))
++    data.+=((2, 2L, "Hello#SUNNY"))
++    data.+=((3, 2L, "Hello world"))
++    data.+=((4, 3L, "PAN#LOVER"))
++    env.fromCollection(data)
++  }
++  def getSmall4TupleDataSet(env: ExecutionEnvironment): DataSet[(Int, Long, String,String)] = {
++    val data = new mutable.MutableList[(Int, Long, String,String)]
++    data.+=((1, 1L, "Hi#KEVIN","KEVIN"))
++    data.+=((2, 2L, "Hello#SUNNY","SUNNY"))
++    data.+=((3, 2L, "Hello#world","a"))
++    data.+=((4, 3L, "PAN#LOVER","a"))
++    env.fromCollection(data)
++  }
++}
+ object FilterITCase {
+   object MyHashCode extends ScalarFunction {
+     def eval(s: String): Int = s.hashCode()
+diff --git a/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/scala/stream/sql/SqlITCase.scala b/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/scala/stream/sql/SqlITCase.scala
+index 5b278c1..30f5bff 100644
+--- a/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/scala/stream/sql/SqlITCase.scala
++++ b/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/scala/stream/sql/SqlITCase.scala
+@@ -19,15 +19,17 @@
+ package org.apache.flink.api.scala.stream.sql
+ 
+ import org.apache.flink.api.scala._
+-import org.apache.flink.api.scala.stream.utils.{StreamTestData, StreamITCase}
++import org.apache.flink.api.scala.stream.utils.{StreamITCase, StreamTestData}
+ import org.apache.flink.api.scala.table._
++import org.apache.flink.api.table.expressions.utils.{TableValuedFunction0,TableValuedFunction1}
+ import org.apache.flink.api.table.{Row, TableEnvironment}
+-import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
++import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
+ import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
+ import org.junit.Assert._
+ import org.junit._
+ 
+ import scala.collection.mutable
++import scala.collection.mutable.ListBuffer
+ 
+ class SqlITCase extends StreamingMultipleProgramsTestBase {
+ 
+@@ -170,4 +172,135 @@ class SqlITCase extends StreamingMultipleProgramsTestBase {
+     val expected = mutable.MutableList("Hello", "Hello world")
+     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+   }
++
++  @Test
++  def testUDTF(): Unit = {
++    val env = StreamExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env)
++
++    val t = getSmall3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
++    tEnv.registerTable("MyTable", t)
++    tEnv.registerFunction("split", new TableValuedFunction0())
++    val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
++      "FROM MyTable,LATERAL TABLE(split(c)) AS t(s)"
++    val tab = tEnv.sql(sqlQuery)
++    val result = tab.toDataStream[Row]
++    result.addSink(new StreamITCase.StringSink)
++    env.execute()
++
++    val expected = mutable.MutableList("1,6,Hi",
++      "1,6,KEVIN", "2,7,Hello", "2,7,SUNNY", "4,8,LOVER", "4,8,PAN")
++    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
++  }
++
++  @Test
++  def testUDTFWithFilter(): Unit = {
++    val env = StreamExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env)
++
++    val t = getSmall3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
++    tEnv.registerTable("MyTable", t)
++    tEnv.registerFunction("split", new TableValuedFunction0())
++    val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
++      "FROM MyTable,LATERAL TABLE(split(c)) AS t(s)" +
++    "WHERE MyTable.a < 4"
++    val tab = tEnv.sql(sqlQuery)
++    val result = tab.toDataStream[Row]
++    result.addSink(new StreamITCase.StringSink)
++    env.execute()
++
++    val expected = mutable.MutableList("1,6,Hi",
++      "1,6,KEVIN", "2,7,Hello", "2,7,SUNNY")
++    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
++  }
++
++  @Test
++  def testLeftJoinUDTF(): Unit = {
++    val env = StreamExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env)
++
++    val t = getSmall3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
++    tEnv.registerTable("MyTable", t)
++    tEnv.registerFunction("split", new TableValuedFunction0())
++    val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
++      "FROM MyTable LEFT JOIN LATERAL TABLE(split(c)) AS t(s) ON TRUE"
++    val tab = tEnv.sql(sqlQuery)
++    val result = tab.toDataStream[Row]
++    result.addSink(new StreamITCase.StringSink)
++    env.execute()
++
++    val expected = mutable.MutableList("1,6,Hi",
++      "1,6,KEVIN", "2,7,Hello", "2,7,SUNNY","3,7,null", "4,8,LOVER", "4,8,PAN")
++    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
++  }
++
++  @Test
++  def testInnerJoinUDTF(): Unit = {
++    val env = StreamExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env)
++
++    val t = getSmall4TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c,'d)
++    tEnv.registerTable("MyTable", t)
++    tEnv.registerFunction("split", new TableValuedFunction0())
++    val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
++      "FROM MyTable JOIN LATERAL TABLE(split(c)) AS t(s) ON MyTable.d=t.s"
++    val tab = tEnv.sql(sqlQuery)
++    val result = tab.toDataStream[Row]
++    result.addSink(new StreamITCase.StringSink)
++    env.execute()
++
++    val expected = mutable.MutableList(
++      "1,6,KEVIN","2,7,SUNNY")
++    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
++  }
++
++  @Test
++  def testInnerJoinUDTF2(): Unit = {
++    val env = StreamExecutionEnvironment.getExecutionEnvironment
++    val tEnv = TableEnvironment.getTableEnvironment(env)
++
++    val t = getSmall3TupleDataStream2(env).toTable(tEnv).as('a, 'b, 'c)
++    tEnv.registerTable("MyTable", t)
++    tEnv.registerFunction("split", new TableValuedFunction1())
++    val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.age,t.name " +
++      "FROM MyTable JOIN LATERAL TABLE(split(c)) AS t(age,name) ON MyTable.a=t.age"
++    val tab = tEnv.sql(sqlQuery)
++    val result = tab.toDataStream[Row]
++    result.addSink(new StreamITCase.StringSink)
++    env.execute()
++
++    val expected = mutable.MutableList(
++      "1,6,1,KEVIN","2,7,2,SUNNY")
++    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
++  }
++
++  def getSmall3TupleDataStream(env:
++                               StreamExecutionEnvironment): DataStream[(Int, Long, String)] = {
++    val data = new mutable.MutableList[(Int, Long, String)]
++    data.+=((1, 1L, "Hi#KEVIN"))
++    data.+=((2, 2L, "Hello#SUNNY"))
++    data.+=((3, 2L, "Hello world"))
++    data.+=((4, 3L, "PAN#LOVER"))
++    env.fromCollection(data)
++  }
++  def getSmall3TupleDataStream2(env:
++                               StreamExecutionEnvironment): DataStream[(Int, Long, String)] = {
++    val data = new mutable.MutableList[(Int, Long, String)]
++    data.+=((1, 1L, "1#KEVIN"))
++    data.+=((2, 2L, "2#SUNNY"))
++    data.+=((3, 2L, "Hello world"))
++    data.+=((4, 3L, "20#LOVER"))
++    env.fromCollection(data)
++  }
++  def getSmall4TupleDataStream(env: StreamExecutionEnvironment):
++  DataStream[(Int, Long, String,String)] = {
++    val data = new mutable.MutableList[(Int, Long, String,String)]
++    data.+=((1, 1L, "Hi#KEVIN","KEVIN"))
++    data.+=((2, 2L, "Hello#SUNNY","SUNNY"))
++    data.+=((3, 2L, "Hello#world","a"))
++    data.+=((4, 3L, "PAN#LOVER","a"))
++    env.fromCollection(data)
++  }
+ }
++
++
+diff --git a/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/table/expressions/utils/UserDefinedTableValuedFunctions.scala b/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/table/expressions/utils/UserDefinedTableValuedFunctions.scala
+new file mode 100644
+index 0000000..3165140
+--- /dev/null
++++ b/flink-libraries/flink-table/src/test/scala/org/apache/flink/api/table/expressions/utils/UserDefinedTableValuedFunctions.scala
+@@ -0,0 +1,62 @@
++/*
++ * Licensed to the Apache Software Foundation (ASF) under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  The ASF licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package org.apache.flink.api.table.expressions.utils
++
++import org.apache.flink.api.table.functions.TableValuedFunction
++
++import scala.collection.mutable.ListBuffer
++
++class TableValuedFunction0 extends TableValuedFunction[String] {
++
++  def eval(str: String): Iterable[String] = {
++    val rows: ListBuffer[String] = new ListBuffer
++    if (str.contains("#")) {
++      val items = str.split("#")
++      for (item <- items)
++        rows += item
++    }
++    rows
++  }
++
++  def eval(str: String, ignore: String): Iterable[String] = {
++    val rows: ListBuffer[String] = new ListBuffer
++    if (str.contains("#") && !str.contains(ignore)) {
++      val items = str.split("#")
++      for (item <- items)
++        rows += item
++    }
++    rows
++  }
++
++
++}
++
++
++case class Child(age: Int, name: String)
++
++class TableValuedFunction1 extends TableValuedFunction[(Child)] {
++
++  def eval(str: String): Iterable[Child] = {
++    val rows: ListBuffer[Child] = new ListBuffer
++    if (str.contains("#")) {
++      val items = str.split("#")
++      rows += Child(items(0).toInt, items(1))
++    }
++    rows
++  }
++}

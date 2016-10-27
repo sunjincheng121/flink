@@ -58,7 +58,8 @@ class TableValuedFunctionCallGen (
     val functionCallCode =
       s"""
          |${parameters.map(_.code).mkString("\n")}
-         |scala.collection.Iterator  iter =  org.apache.flink.api.table.typeutils.Java2ScalaUtils.jiter2siter($functionReference.eval(${parameters.map(_.resultTerm).mkString(", ")}).iterator());
+         |scala.collection.Iterator  iter =
+         |org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils.jiter2siter($functionReference.eval(${parameters.map(_.resultTerm).mkString(", ")}).iterator());
          |""".stripMargin
 
     // has no result
