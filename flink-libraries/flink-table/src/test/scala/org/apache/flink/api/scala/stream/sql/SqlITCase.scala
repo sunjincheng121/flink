@@ -21,7 +21,7 @@ package org.apache.flink.api.scala.stream.sql
 import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.stream.utils.{StreamITCase, StreamTestData}
 import org.apache.flink.api.scala.table._
-import org.apache.flink.api.table.functions.TableValuedFunction
+import org.apache.flink.api.table.expressions.utils.{TableValuedFunction0,TableValuedFunction1}
 import org.apache.flink.api.table.{Row, TableEnvironment}
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
 import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
@@ -174,13 +174,13 @@ class SqlITCase extends StreamingMultipleProgramsTestBase {
   }
 
   @Test
-  def testUDTVF(): Unit = {
+  def testUDTF(): Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val tEnv = TableEnvironment.getTableEnvironment(env)
 
     val t = getSmall3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
     tEnv.registerTable("MyTable", t)
-    tEnv.registerFunction("split", new SqlITCase.SplitTVF())
+    tEnv.registerFunction("split", new TableValuedFunction0())
     val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
       "FROM MyTable,LATERAL TABLE(split(c)) AS t(s)"
     val tab = tEnv.sql(sqlQuery)
@@ -194,13 +194,34 @@ class SqlITCase extends StreamingMultipleProgramsTestBase {
   }
 
   @Test
-  def testLeftJoinUDTVF(): Unit = {
+  def testUDTFWithFilter(): Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val tEnv = TableEnvironment.getTableEnvironment(env)
 
     val t = getSmall3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
     tEnv.registerTable("MyTable", t)
-    tEnv.registerFunction("split", new SqlITCase.SplitTVF())
+    tEnv.registerFunction("split", new TableValuedFunction0())
+    val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
+      "FROM MyTable,LATERAL TABLE(split(c)) AS t(s)" +
+    "WHERE MyTable.a < 4"
+    val tab = tEnv.sql(sqlQuery)
+    val result = tab.toDataStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    val expected = mutable.MutableList("1,6,Hi",
+      "1,6,KEVIN", "2,7,Hello", "2,7,SUNNY")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testLeftJoinUDTF(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+
+    val t = getSmall3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
+    tEnv.registerTable("MyTable", t)
+    tEnv.registerFunction("split", new TableValuedFunction0())
     val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
       "FROM MyTable LEFT JOIN LATERAL TABLE(split(c)) AS t(s) ON TRUE"
     val tab = tEnv.sql(sqlQuery)
@@ -214,13 +235,13 @@ class SqlITCase extends StreamingMultipleProgramsTestBase {
   }
 
   @Test
-  def testInnerJoinUDTVF(): Unit = {
+  def testInnerJoinUDTF(): Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val tEnv = TableEnvironment.getTableEnvironment(env)
 
     val t = getSmall4TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c,'d)
     tEnv.registerTable("MyTable", t)
-    tEnv.registerFunction("split", new SqlITCase.SplitTVF())
+    tEnv.registerFunction("split", new TableValuedFunction0())
     val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s " +
       "FROM MyTable JOIN LATERAL TABLE(split(c)) AS t(s) ON MyTable.d=t.s"
     val tab = tEnv.sql(sqlQuery)
@@ -233,6 +254,26 @@ class SqlITCase extends StreamingMultipleProgramsTestBase {
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 
+  @Test
+  def testInnerJoinUDTF2(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+
+    val t = getSmall3TupleDataStream2(env).toTable(tEnv).as('a, 'b, 'c)
+    tEnv.registerTable("MyTable", t)
+    tEnv.registerFunction("split", new TableValuedFunction1())
+    val sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.age,t.name " +
+      "FROM MyTable JOIN LATERAL TABLE(split(c)) AS t(age,name) ON MyTable.a=t.age"
+    val tab = tEnv.sql(sqlQuery)
+    val result = tab.toDataStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    val expected = mutable.MutableList(
+      "1,6,1,KEVIN","2,7,2,SUNNY")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
   def getSmall3TupleDataStream(env:
                                StreamExecutionEnvironment): DataStream[(Int, Long, String)] = {
     val data = new mutable.MutableList[(Int, Long, String)]
@@ -240,6 +281,15 @@ class SqlITCase extends StreamingMultipleProgramsTestBase {
     data.+=((2, 2L, "Hello#SUNNY"))
     data.+=((3, 2L, "Hello world"))
     data.+=((4, 3L, "PAN#LOVER"))
+    env.fromCollection(data)
+  }
+  def getSmall3TupleDataStream2(env:
+                               StreamExecutionEnvironment): DataStream[(Int, Long, String)] = {
+    val data = new mutable.MutableList[(Int, Long, String)]
+    data.+=((1, 1L, "1#KEVIN"))
+    data.+=((2, 2L, "2#SUNNY"))
+    data.+=((3, 2L, "Hello world"))
+    data.+=((4, 3L, "20#LOVER"))
     env.fromCollection(data)
   }
   def getSmall4TupleDataStream(env: StreamExecutionEnvironment):
@@ -253,27 +303,4 @@ class SqlITCase extends StreamingMultipleProgramsTestBase {
   }
 }
 
-object SqlITCase{
-  class SplitTVF extends TableValuedFunction[String] {
-
-    def eval(str: String): Iterable[String] = {
-      val rows: ListBuffer[String] = new ListBuffer
-      if (str.contains("#")) {
-        val items = str.split("#")
-        for (item <- items)
-          rows += item
-      }
-      rows
-    }
-    def eval(str: String, ignore: String): Iterable[String] = {
-      val rows: ListBuffer[String] = new ListBuffer
-      if (str.contains("#") && !str.contains(ignore)) {
-        val items = str.split("#")
-        for (item <- items)
-          rows += item
-      }
-      rows
-    }
-  }
-}
 

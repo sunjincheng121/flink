@@ -1260,7 +1260,7 @@ class CodeGenerator(
     * @param function [[UserDefinedFunction]] object to be instantiated during runtime
     * @return member variable term
     */
-  def addReusableFunction(function: UserDefinedFunction): String = {
+  def addReusableFunction(function: Object): String = {
     val classQualifier = function.getClass.getCanonicalName
     val fieldTerm = s"function_${classQualifier.replace('.', '$')}"
 

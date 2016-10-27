@@ -38,6 +38,7 @@ import org.apache.flink.api.scala.table.{BatchTableEnvironment => ScalaBatchTabl
 import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
 import org.apache.flink.api.scala.{ExecutionEnvironment => ScalaBatchExecEnv}
 import org.apache.flink.api.table.expressions.{Alias, Expression, UnresolvedFieldReference}
+import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction, UserDefinedFunction}
 import org.apache.flink.api.table.plan.cost.DataSetCostFactory
 import org.apache.flink.api.table.plan.schema.RelTable
@@ -45,7 +46,7 @@ import org.apache.flink.api.table.sinks.TableSink
 import org.apache.flink.api.table.validate.FunctionCatalog
 import org.apache.flink.streaming.api.environment.{StreamExecutionEnvironment => JavaStreamExecEnv}
 import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment => ScalaStreamExecEnv}
-
+import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils._
 /**
   * The abstract base class for batch and stream TableEnvironments.
   *
@@ -119,18 +120,16 @@ abstract class TableEnvironment(val config: TableConfig) {
     */
   def registerFunction[T: TypeInformation](name: String,
                                                       function: TableValuedFunction[T]): Unit = {
-    function match {
-      case tvf: TableValuedFunction[T] =>
-        tvf.setResultType(implicitly[TypeInformation[T]])
 
-        // register in Table API
-        functionCatalog.registerFunction(name, function.getClass)
+    val typeInfo = implicitly[TypeInformation[T]]
+    val (fieldNames, fieldIndexes) = UserDefinedFunctionUtils.getFieldInfo(typeInfo)
 
-        // register in SQL API
-        functionCatalog.registerSqlFunctions(tvf.createSqlFunctions(name, typeFactory))
-      case _ =>
-        throw new TableException("Unsupported user-defined function type.")
-    }
+    // check if function can be instantiated
+    checkForInstantiation(function.getClass)
+    // register in Table API
+    functionCatalog.registerFunction(name, function.getClass)
+    // register in SQL API
+    functionCatalog.registerSqlFunctions(createSqlFunctions(name, function, typeFactory))
   }
   /**
     * Registers a [[Table]] under a unique name in the TableEnvironment's catalog.

@@ -26,6 +26,8 @@ import org.apache.flink.api.table.expressions.ExpressionParser
 import org.apache.flink.api.table.functions.TableValuedFunction
 import org.apache.flink.api.table.{Table, TableConfig, TableException}
 
+import scala.xml.dtd.ContentModel._labelT
+
 /**
   * The [[org.apache.flink.api.table.TableEnvironment]] for a Java batch [[DataSet]]
   * [[ExecutionEnvironment]].
@@ -172,11 +174,12 @@ class BatchTableEnvironment(
     * @param tf The TableValuedFunction to register
     */
   def registerFunction[T](name: String, tf: TableValuedFunction[T]): Unit ={
-    val clazz: Type = tf.getClass.getGenericSuperclass
+
+    val clazz: Type =tf.getClass.getGenericInterfaces()(0);
     val generic = clazz match {
       case cls: ParameterizedType => cls.getActualTypeArguments.toSeq.head
       case _ => throw new TableException(
-        "New TableValuedFunction classes have to inherit from TableValuedFunction class, " +
+        "New TableFunction classes have to inherit from TableFunction class, " +
           "and statement the generic type.")
     }
     implicit val typeInfo: TypeInformation[T] = TypeExtractor.createTypeInfo(generic)

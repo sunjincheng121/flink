@@ -21,17 +21,19 @@ package org.apache.flink.api.java.batch.sql;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.table.BatchTableEnvironment;
+import org.apache.flink.api.java.table.expressions.utils.udfs.JavaTableFunction1;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple5;
 import org.apache.flink.api.scala.batch.utils.TableProgramsTestBase;
 import org.apache.flink.api.table.Row;
 import org.apache.flink.api.table.Table;
 import org.apache.flink.api.table.TableEnvironment;
-import org.apache.flink.api.table.functions.TableValuedFunction;
 import org.apache.flink.test.javaApiOperators.util.CollectionDataSets;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
+import org.apache.flink.api.table.expressions.utils.TableValuedFunction0;
 
 import java.util.ArrayList;
 
@@ -124,34 +126,104 @@ public class SqlITCase extends TableProgramsTestBase {
 	}
 
 	@Test
-	public void testUDTVF() throws Exception {
+	public void testUDTF() throws Exception {
 		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
 		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
 
 		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
 		Table in = tableEnv.fromDataSet(ds, "a,b,c");
 		tableEnv.registerTable("MyTable", in);
-		tableEnv.registerFunction("split", new SplitTVF());
-		String sqlQuery = "SELECT MyTable.a, MyTable.b, t.s FROM " +
+		tableEnv.registerFunction("split", new TableValuedFunction0());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s FROM " +
 				"MyTable,LATERAL TABLE(split(c)) AS t(s)";
 		Table result = tableEnv.sql(sqlQuery);
 		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
 		List<Row> results = resultSet.collect();
-		String expected = "7,4,Comment\n7,4,1\n8,4,Comment\n"
-				+ "8,4,2\n9,4,Comment\n9,4,3";
+
+		String expected = "1,6,Hi\n1,6,KEVIN\n2,7,Hello\n2,7,SUNNY\n4,8,LOVER\n4,8,PAN";
 		compareResultAsText(results, expected);
 	}
-	public static DataSet<Tuple3<Integer, Long, String>> get3TupleDataSet(ExecutionEnvironment env) {
+
+	@Test
+	public void testUDTFWithFilter() throws Exception {
+		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
+
+		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
+		Table in = tableEnv.fromDataSet(ds, "a,b,c");
+		tableEnv.registerTable("MyTable", in);
+		tableEnv.registerFunction("split", new TableValuedFunction0());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s FROM " +
+				"MyTable,LATERAL TABLE(split(c)) AS t(s) WHERE MyTable.a <4";
+		Table result = tableEnv.sql(sqlQuery);
+		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
+		List<Row> results = resultSet.collect();
+
+		String expected = "1,6,Hi\n1,6,KEVIN\n2,7,Hello\n2,7,SUNNY";
+		compareResultAsText(results, expected);
+	}
+
+	@Test
+	public void testLeftJoinUDTF() throws Exception {
+		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
+
+		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
+		Table in = tableEnv.fromDataSet(ds, "a,b,c");
+		tableEnv.registerTable("MyTable", in);
+		tableEnv.registerFunction("split", new TableValuedFunction0());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.s FROM " +
+				"MyTable LEFT JOIN LATERAL TABLE(split(c)) AS t(s) ON TRUE";
+		Table result = tableEnv.sql(sqlQuery);
+		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
+		List<Row> results = resultSet.collect();
+
+		String expected = "1,6,Hi\n1,6,KEVIN\n2,7,Hello\n2,7,SUNNY\n3,7,null\n4,8,LOVER\n4,8,PAN";
+		compareResultAsText(results, expected);
+	}
+
+	@Test
+	public void testInnerJoinUDTF() throws Exception {
+		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
+
+		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet2(env);
+		Table in = tableEnv.fromDataSet(ds, "a,b,c");
+		tableEnv.registerTable("MyTable", in);
+		tableEnv.registerFunction("split", new JavaTableFunction1());
+		String sqlQuery = "SELECT MyTable.a, MyTable.b+5, t.age,t.name FROM MyTable"+
+				" JOIN LATERAL TABLE(split(c)) AS t(age,name) ON MyTable.a = t.age ";
+		Table result = tableEnv.sql(sqlQuery);
+		DataSet<Row> resultSet = tableEnv.toDataSet(result, Row.class);
+		List<Row> results = resultSet.collect();
+		System.out.println(results);
+		String expected = "1,6,1,KEVIN\n2,7,2,SUNNY";
+		compareResultAsText(results, expected);
+	}
+
+	public static DataSet<Tuple3<Integer, Long, String>> get3TupleDataSet2(ExecutionEnvironment env) {
 
 		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
-		data.add(new Tuple3<>(1, 1L, "Hi"));
-		data.add(new Tuple3<>(7, 4L, "Comment#1"));
-		data.add(new Tuple3<>(8, 4L, "Comment#2"));
-		data.add(new Tuple3<>(9, 4L, "Comment#3"));
+		data.add(new Tuple3<>(1, 1L, "1#KEVIN"));
+		data.add(new Tuple3<>(2, 2L, "2#SUNNY"));
+		data.add(new Tuple3<>(3, 2L, "Hello world"));
+		data.add(new Tuple3<>(4, 3L, "20#LOVER"));
 		Collections.shuffle(data);
 
 		return env.fromCollection(data);
 	}
-}
+	public static DataSet<Tuple3<Integer, Long, String>> get3TupleDataSet(ExecutionEnvironment env) {
 
+		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
+		data.add(new Tuple3<>(1, 1L, "Hi#KEVIN"));
+		data.add(new Tuple3<>(2, 2L, "Hello#SUNNY"));
+		data.add(new Tuple3<>(3, 2L, "Hello world"));
+		data.add(new Tuple3<>(4, 3L, "PAN#LOVER"));
+		Collections.shuffle(data);
+
+		return env.fromCollection(data);
+	}
+
+
+}
 

@@ -33,7 +33,7 @@ class TableValuedFunctionCallGen (
                          operands: Seq[GeneratedExpression])
   : GeneratedExpression = {
     // determine function signature and result class
-    val matchingSignature = getSignature(udtvf, signature)
+    val matchingSignature = getSignature(udtvf.getClass, signature)
       .getOrElse(throw new CodeGenException("No matching signature found."))
     // convert parameters for function (output boxing)
     val parameters = matchingSignature

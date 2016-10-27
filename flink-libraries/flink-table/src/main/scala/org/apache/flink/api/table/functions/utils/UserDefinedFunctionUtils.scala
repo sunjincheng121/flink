@@ -19,15 +19,18 @@
 
 package org.apache.flink.api.table.functions.utils
 
-import java.lang.reflect.Method
+import java.lang.reflect.{Method, Modifier, ParameterizedType}
 import java.sql.{Date, Time, Timestamp}
 
 import com.google.common.primitives.Primitives
+import org.apache.calcite.sql.SqlFunction
 import org.apache.flink.api.common.functions.InvalidTypesException
-import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.api.java.typeutils.TypeExtractor
-import org.apache.flink.api.table.ValidationException
+import org.apache.flink.api.common.typeinfo.{AtomicType, TypeInformation}
+import org.apache.flink.api.java.typeutils.{PojoTypeInfo, TupleTypeInfo, TypeExtractor}
+import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
+import org.apache.flink.api.table.{FlinkTypeFactory, TableException, ValidationException}
 import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction, UserDefinedFunction}
+import org.apache.flink.api.table.plan.schema.TableValuedFunctionImpl
 import org.apache.flink.util.InstantiationUtil
 
 object UserDefinedFunctionUtils {
@@ -134,7 +137,31 @@ object UserDefinedFunctionUtils {
         }
     }
   }
-
+  /**
+    * Returns signatures for obj class
+    */
+  def getSignatures(clazz:Class[_]): Array[Array[Class[_]]] = checkAndExtractEvalMethods(clazz).map(_.getParameterTypes)
+  /**
+    * Returns signatures matching the given signature of [[TypeInformation]].
+    * Elements of the signature can be null (act as a wildcard).
+    */
+  def getSignature(
+                    clazz:Class[_],
+                    signature: Seq[TypeInformation[_]])
+  : Option[Array[Class[_]]] = {
+    // We compare the raw Java classes not the TypeInformation.
+    // TypeInformation does not matter during runtime (e.g. within a MapFunction).
+    val actualSignature = typeInfoToClass(signature)
+    getSignatures(clazz)
+      // go over all signatures and find one matching actual signature
+      .find { curSig =>
+      // match parameters of signature to actual parameters
+      actualSignature.length == curSig.length &&
+        curSig.zipWithIndex.forall { case (clazz, i) =>
+          parameterTypeEquals(actualSignature(i), clazz)
+        }
+    }
+  }
   /**
     * Internal method of [[ScalarFunction#getResultType()]] that does some pre-checking and uses
     * [[TypeExtractor]] as default return type inference.
@@ -161,33 +188,8 @@ object UserDefinedFunctionUtils {
       }
     }
   }
-  /**
-    * Internal method of [[TableValuedFunction#getResultType()]]
-    * that does some pre-checking and uses
-    * [[TypeExtractor]] as default return type inference.
-    */
-  def getResultType(
-                     tableFunction: TableValuedFunction[_],
-                     signature: Array[Class[_]])
-  : TypeInformation[_] = {
-    // find method for signature
-    val evalMethod = tableFunction.getEvalMethods
-      .find(m => signature.sameElements(m.getParameterTypes))
-      .getOrElse(throw new ValidationException("Given signature is invalid."))
 
-    val userDefinedTypeInfo = tableFunction.getResultType(signature)
-    if (userDefinedTypeInfo != null) {
-      userDefinedTypeInfo
-    } else {
-      try {
-        TypeExtractor.getForClass(evalMethod.getReturnType)
-      } catch {
-        case ite: InvalidTypesException =>
-          throw new ValidationException(s"Return type of scalar function '$this' cannot be " +
-            s"automatically determined. Please provide type information manually.")
-      }
-    }
-  }
+
   /**
     * Returns the return type of the evaluation method matching the given signature.
     */
@@ -208,6 +210,7 @@ object UserDefinedFunctionUtils {
   def signaturesToString(userDefinedFunction: UserDefinedFunction): String = {
     userDefinedFunction.getSignatures.map(signatureToString).mkString(", ")
   }
+
   /**
     * Returns eval method matching the given signature of [[TypeInformation]].
     */
@@ -230,5 +233,108 @@ object UserDefinedFunctionUtils {
           parameterTypeEquals(actualSignature(i), clazz)
         }
     }
+  }
+
+  // ----------------------------------------------------------------------------------------------
+  // Utilities for TableValuedFunction
+  // ----------------------------------------------------------------------------------------------
+
+  /**
+    * Extracts evaluation methods and throws a [[ValidationException]] if no implementation
+    * can be found.
+    */
+  def checkAndExtractEvalMethods(clazz: Class[_]): Array[Method] = {
+    val methods = clazz
+      .getDeclaredMethods
+      .filter { m =>
+        val modifiers = m.getModifiers
+        m.getName == "eval" && Modifier.isPublic(modifiers) && !Modifier.isAbstract(modifiers)
+      }
+
+    if (methods.isEmpty) {
+      throw new ValidationException(s"Table function class '$this' does not implement at least " +
+        s"one method named 'eval' which is public and not abstract.")
+    } else {
+      methods
+    }
+  }
+
+  /**
+    * Returns the result type of the evaluation method with a given signature.
+    * @param signature signature of the method the return type needs to be determined
+    * @return [[TypeInformation]] of result type or null if Flink should determine the type
+    */
+  def getResultType(
+                     clazz: Class[_],
+                     signature: Array[Class[_]])
+  : TypeInformation[_] = {
+    val evalMethod = checkAndExtractEvalMethods(clazz)
+      .find(m => signature.sameElements(m.getParameterTypes))
+      .getOrElse(throw new ValidationException("Given signature is invalid."))
+    try {
+      TypeExtractor.getForClass(evalMethod.getReturnType)
+    } catch {
+      case ite: InvalidTypesException =>
+        throw new ValidationException(s"Return type of scalar function '$this' cannot be " +
+          s"automatically determined. Please provide type information manually.")
+    }
+  }
+
+  /**
+    * Creates corresponding [[SqlFunction]].
+    */
+  def createSqlFunction[T: TypeInformation](
+                         name: String,
+                         method: Method,
+                         obj: Object,
+                         typeFactory: FlinkTypeFactory)
+  : SqlFunction = {
+    val clazz = obj.getClass
+    obj match {
+      case tf: TableValuedFunction[_] =>
+        val resultType = implicitly[TypeInformation[T]]
+        val (fieldNames, fieldIndexs): (Array[String], Array[Int]) = getFieldInfo(resultType)
+        val tableFunction = new TableValuedFunctionImpl(resultType,
+          fieldIndexs, fieldNames, method)
+        val function = TableValuedSqlFunction(name, obj.asInstanceOf[TableValuedFunction[_]], resultType,
+          typeFactory, tableFunction)
+        function
+      case _ => throw new TableException("Unsupported user-defined function type.")
+
+    }
+
+  }
+
+  /**
+    * Creates all corresponding [[SqlFunction]].
+    */
+  def createSqlFunctions[T: TypeInformation](name: String,
+                            obj: Object,
+                            typeFactory: FlinkTypeFactory): Array[SqlFunction] = checkAndExtractEvalMethods(obj.getClass).map(m => {
+    createSqlFunction(name, m, obj, typeFactory)
+  })
+
+
+  /**
+    * Returns field names and field positions for a given [[TypeInformation]].
+    *
+    * Field names are automatically extracted for
+    * [[org.apache.flink.api.common.typeutils.CompositeType]].
+    *
+    * @param inputType The TypeInformation extract the field names and positions from.
+    * @return A tuple of two arrays holding the field names and corresponding field positions.
+    */
+  def getFieldInfo(inputType: TypeInformation[_])
+  : (Array[String], Array[Int]) = {
+    val fieldNames: Array[String] = inputType match {
+      case t: TupleTypeInfo[_] => t.getFieldNames
+      case c: CaseClassTypeInfo[_] => c.getFieldNames
+      case p: PojoTypeInfo[_] => p.getFieldNames
+      case a: AtomicType[_] => Array("f0")
+      case tpe =>
+        throw new TableException(s"Type $tpe lacks explicit field naming")
+    }
+    val fieldIndexes = fieldNames.indices.toArray
+    (fieldNames, fieldIndexes)
   }
 }

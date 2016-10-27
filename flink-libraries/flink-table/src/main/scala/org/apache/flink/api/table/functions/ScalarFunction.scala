@@ -21,13 +21,10 @@ package org.apache.flink.api.table.functions
 import java.lang.reflect.{Method, Modifier}
 
 import org.apache.calcite.sql.SqlFunction
-import org.apache.flink.api.common.functions.InvalidTypesException
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.api.java.typeutils.TypeExtractor
 import org.apache.flink.api.table.expressions.{Expression, ScalarFunctionCall}
 import org.apache.flink.api.table.functions.utils.ScalarSqlFunction
-import org.apache.flink.api.table.{FlinkTypeFactory, ValidationException}
-
+import org.apache.flink.api.table.FlinkTypeFactory
 /**
   * Base class for a user-defined scalar function. A user-defined scalar functions maps zero, one,
   * or multiple scalar values to a new scalar value.
@@ -47,7 +44,8 @@ import org.apache.flink.api.table.{FlinkTypeFactory, ValidationException}
   * If a user-defined scalar function should not introduce much overhead during runtime, it is
   * recommended to declare parameters and result types as primitive types instead of their boxed
   * classes. DATE/TIME is equal to int, TIMESTAMP is equal to long.
-  */abstract class ScalarFunction extends UserDefinedFunction {
+  */
+abstract class ScalarFunction extends UserDefinedFunction {
 
   /**
     * Creates a call to a [[ScalarFunction]] in Scala Table API.
