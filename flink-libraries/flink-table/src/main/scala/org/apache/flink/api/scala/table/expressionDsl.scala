@@ -19,12 +19,13 @@ package org.apache.flink.api.scala.table
 
 import java.sql.{Date, Time, Timestamp}
 
+import org.apache.flink.api.table.plan.logical.TableValuedFunctionNodeBuilder
 import org.apache.calcite.avatica.util.DateTimeUtils._
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.api.table.expressions.ExpressionUtils.{toMilliInterval, toMonthInterval}
 import org.apache.flink.api.table.expressions.TimeIntervalUnit.TimeIntervalUnit
 import org.apache.flink.api.table.expressions._
-
+import org.apache.flink.api.table.functions.TableValuedFunction
 import scala.language.implicitConversions
 
 /**
@@ -447,6 +448,8 @@ trait ImplicitExpressionConversions {
   implicit def sqlDate2Literal(sqlDate: Date): Expression = Literal(sqlDate)
   implicit def sqlTime2Literal(sqlTime: Time): Expression = Literal(sqlTime)
   implicit def sqlTimestamp2Literal(sqlTimestamp: Timestamp): Expression = Literal(sqlTimestamp)
+  implicit def UDTF2LogicalNode[T: TypeInformation](udtf: TableValuedFunction[T]):
+      TableValuedFunctionNodeBuilder[T] = TableValuedFunctionNodeBuilder(udtf)
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -81,6 +81,8 @@ class CodeGenerator(
     case _ => // ok
   }
 
+
+
   /**
     * A code generator for generating unary Flink
     * [[org.apache.flink.api.common.functions.Function]]s with one input.

@@ -121,9 +121,6 @@ abstract class TableEnvironment(val config: TableConfig) {
   def registerFunction[T: TypeInformation](name: String,
                                                       function: TableValuedFunction[T]): Unit = {
 
-    val typeInfo = implicitly[TypeInformation[T]]
-    val (fieldNames, fieldIndexes) = UserDefinedFunctionUtils.getFieldInfo(typeInfo)
-
     // check if function can be instantiated
     checkForInstantiation(function.getClass)
     // register in Table API

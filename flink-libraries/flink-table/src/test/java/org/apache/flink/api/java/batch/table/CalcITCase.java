@@ -18,6 +18,7 @@
 
 package org.apache.flink.api.java.batch.table;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import org.apache.flink.api.java.operators.DataSource;
@@ -30,12 +31,14 @@ import org.apache.flink.api.java.table.BatchTableEnvironment;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.table.TableEnvironment;
 import org.apache.flink.api.table.ValidationException;
+import org.apache.flink.api.table.expressions.utils.TableValuedFunction0;
 import org.apache.flink.api.table.functions.ScalarFunction;
 import org.apache.flink.test.javaApiOperators.util.CollectionDataSets;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.util.Collections;
 import java.util.List;
 
 @RunWith(Parameterized.class)
@@ -318,6 +321,66 @@ public class CalcITCase extends TableProgramsTestBase {
 		List<Integer> results = ds.collect();
 		String expected = "97\n98\n99";
 		compareResultAsText(results, expected);
+	}
+	@Test
+	public void testUDTF() throws Exception {
+		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
+
+		tableEnv.registerFunction("split", new TableValuedFunction0());
+
+		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
+
+		Table table = tableEnv.fromDataSet(ds, "a,b,c");
+
+		Table result = table.join("split(c)","w").select("a,b,w");
+
+		DataSet<Row> rds = tableEnv.toDataSet(result, Row.class);
+		List<Row> results = rds.collect();
+		String expected = "1,1,Hi\n1,1,KEVIN\n2,2,Hello\n2,2,SUNNY\n4,3,PAN\n4,3,LOVER";
+		compareResultAsText(results, expected);
+	}
+
+	@Test
+	public void testLeftJoinUDTF() throws Exception {
+		ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+		BatchTableEnvironment tableEnv = TableEnvironment.getTableEnvironment(env, config());
+
+		tableEnv.registerFunction("split", new TableValuedFunction0());
+
+		DataSet<Tuple3<Integer, Long, String>> ds = get3TupleDataSet(env);
+
+		Table table = tableEnv.fromDataSet(ds, "a,b,c");
+
+		Table result = table.leftJoin("split(c)","w").select("a,b,w");
+
+		DataSet<Row> rds = tableEnv.toDataSet(result, Row.class);
+		List<Row> results = rds.collect();
+		String expected = "1,1,Hi\n1,1,KEVIN\n2,2,Hello\n2,2,SUNNY\n3,2,null\n4,3,PAN\n4,3,LOVER";
+		compareResultAsText(results, expected);
+	}
+
+	DataSet<Tuple3<Integer, Long, String>> get3TupleDataSet2(ExecutionEnvironment env) {
+
+		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
+		data.add(new Tuple3<>(1, 1L, "1#KEVIN"));
+		data.add(new Tuple3<>(2, 2L, "2#SUNNY"));
+		data.add(new Tuple3<>(3, 2L, "Hello world"));
+		data.add(new Tuple3<>(4, 3L, "20#LOVER"));
+		Collections.shuffle(data);
+
+		return env.fromCollection(data);
+	}
+	DataSet<Tuple3<Integer, Long, String>> get3TupleDataSet(ExecutionEnvironment env) {
+
+		List<Tuple3<Integer, Long, String>> data = new ArrayList<>();
+		data.add(new Tuple3<>(1, 1L, "Hi#KEVIN"));
+		data.add(new Tuple3<>(2, 2L, "Hello#SUNNY"));
+		data.add(new Tuple3<>(3, 2L, "Hello world"));
+		data.add(new Tuple3<>(4, 3L, "PAN#LOVER"));
+		Collections.shuffle(data);
+
+		return env.fromCollection(data);
 	}
 
 }

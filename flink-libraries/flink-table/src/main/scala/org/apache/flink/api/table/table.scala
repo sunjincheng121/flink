@@ -20,9 +20,9 @@ package org.apache.flink.api.table
 import org.apache.calcite.rel.RelNode
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
-import org.apache.flink.api.table.expressions.{Asc, ExpressionParser, UnresolvedAlias, Expression, Ordering}
+import org.apache.flink.api.table.expressions.{Asc, Call, Expression, ExpressionParser, Ordering, TableValuedFunctionCall, UnresolvedAlias}
 import org.apache.flink.api.table.plan.RexNodeTranslator._
-import org.apache.flink.api.table.plan.logical._
+import org.apache.flink.api.table.plan.logical.{TableValuedFunctionNode, _}
 import org.apache.flink.api.table.sinks.TableSink
 
 import scala.collection.JavaConverters._
@@ -284,19 +284,63 @@ class Table(
     join(right, Some(joinPredicate), JoinType.INNER)
   }
 
-  /**
-    * Joins two [[Table]]s. Similar to an SQL left outer join. The fields of the two joined
-    * operations must not overlap, use [[as]] to rename fields if necessary.
-    *
-    * Note: Both tables must be bound to the same [[TableEnvironment]] and its [[TableConfig]] must
-    * have nullCheck enabled.
-    *
-    * Example:
-    *
-    * {{{
-    *   left.leftOuterJoin(right, "a = b").select('a, 'b, 'd)
-    * }}}
-    */
+  def join(udtf: LogicalNode): Table = {
+    applyInternal(udtf, Seq(), JoinType.INNER)
+  }
+
+  def join(udtf: String, as: String): Table = {
+    val expr = ExpressionParser.parseExpression(udtf)
+    val fieldExprs = ExpressionParser.parseExpressionList(as)
+    applyInternal(expr, fieldExprs, JoinType.INNER)
+  }
+
+  def join(udtf: String): Table = {
+    val expr = ExpressionParser.parseExpression(udtf)
+    applyInternal(expr, Seq(), JoinType.INNER)
+  }
+  def leftJoin(udtf: LogicalNode, as: Expression*): Table = {
+    applyInternal(udtf, Seq(), JoinType.LEFT_OUTER)
+  }
+
+  def leftJoin(udtf: String, as: String): Table = {
+    val expr = ExpressionParser.parseExpression(udtf)
+    val fieldExprs = ExpressionParser.parseExpressionList(as)
+    applyInternal(expr, fieldExprs, JoinType.LEFT_OUTER)
+  }
+
+  def leftJoin(udtf: String): Table = {
+    val expr = ExpressionParser.parseExpression(udtf)
+    applyInternal(expr, Seq(), JoinType.LEFT_OUTER)
+  }
+
+  private def applyInternal(expr: Expression, as: Seq[Expression], joinType: JoinType): Table = {
+    expr match {
+      case call @ Call(name, children) => {
+        val udtfExpr = tableEnv.getFunctionCatalog.lookupFunction(name, children)
+        udtfExpr match {
+          case u: TableValuedFunctionCall[_] => applyInternal(u.toLogicalNode, as, joinType)
+          case _ => throw new TableException("Cross/Outer Apply only accept UDTF")
+        }
+      }
+      case _ => throw new TableException("Cross/Outer Apply only accept UDTF")
+    }
+  }
+
+  private def applyInternal(node: LogicalNode, as: Seq[Expression], joinType: JoinType): Table = {
+    node match {
+      case udtf: TableValuedFunctionNode[_] =>
+        if (as.nonEmpty) {
+          udtf.as(as: _*)
+        }
+        udtf.setChild(this.logicalPlan)
+        new Table(
+          tableEnv,
+          Join(this.logicalPlan, udtf.validate(tableEnv), joinType, None,
+            Some(relBuilder.getCluster.createCorrel())).validate(tableEnv))
+      case _ => throw new TableException("Cross/Outer Apply only accept UDTF function")
+    }
+  }
+
   def leftOuterJoin(right: Table, joinPredicate: String): Table = {
     join(right, joinPredicate, JoinType.LEFT_OUTER)
   }

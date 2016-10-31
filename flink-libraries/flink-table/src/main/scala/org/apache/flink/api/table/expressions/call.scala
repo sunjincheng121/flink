@@ -17,13 +17,18 @@
  */
 package org.apache.flink.api.table.expressions
 
+import java.lang.reflect.{ParameterizedType, Type}
+
 import org.apache.calcite.rex.RexNode
 import org.apache.calcite.tools.RelBuilder
-import org.apache.flink.api.table.functions.ScalarFunction
+import org.apache.flink.api.common.typeinfo.TypeInformation
+import org.apache.flink.api.java.typeutils.TypeExtractor
 import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils.{getResultType, getSignature, signatureToString, signaturesToString}
+import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction}
+import org.apache.flink.api.table.plan.logical.LogicalNode
 import org.apache.flink.api.table.validate.{ExprValidationResult, ValidationFailure, ValidationSuccess}
-import org.apache.flink.api.table.{FlinkTypeFactory, UnresolvedException}
-
+import org.apache.flink.api.table.{FlinkTypeFactory, TableException, UnresolvedException}
+import org.apache.flink.api.table.plan.logical.TableValuedFunctionNode
 /**
   * General expression for unresolved function calls. The function can be a built-in
   * scalar function or a user-defined scalar function.
@@ -83,5 +88,30 @@ case class ScalarFunctionCall(
       ValidationSuccess
     }
   }
-
 }
+
+  case class TableValuedFunctionCall[T](
+                                   tableFunction: TableValuedFunction[T],
+                                   parameters: Seq[Expression])
+    extends Expression {
+
+    override private[flink] def children: Seq[Expression] = parameters
+
+    override def toString = s"$tableFunction(${parameters.mkString(", ")})"
+
+    // will not be called
+    override private[flink] def resultType = ???
+
+    def toLogicalNode: LogicalNode = {
+      val clazz: Type =tableFunction.getClass.getGenericInterfaces()(0)
+      val generic = clazz match {
+        case cls: ParameterizedType => cls.getActualTypeArguments.toSeq.head
+        case _ => throw new TableException(
+          "New TableFunction classes need to inherit from TableFunction class," +
+            " and statement the generic type.")
+      }
+      implicit val typeInfo: TypeInformation[T] = TypeExtractor.createTypeInfo(generic)
+        .asInstanceOf[TypeInformation[T]]
+      TableValuedFunctionNode(tableFunction, parameters)
+    }
+  }

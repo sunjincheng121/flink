@@ -29,7 +29,7 @@ import org.apache.flink.api.common.typeinfo.{AtomicType, TypeInformation}
 import org.apache.flink.api.java.typeutils.{PojoTypeInfo, TupleTypeInfo, TypeExtractor}
 import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
 import org.apache.flink.api.table.{FlinkTypeFactory, TableException, ValidationException}
-import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction, UserDefinedFunction}
+import org.apache.flink.api.table.functions.{ ScalarFunction, TableValuedFunction, UserDefinedFunction}
 import org.apache.flink.api.table.plan.schema.TableValuedFunctionImpl
 import org.apache.flink.util.InstantiationUtil
 
@@ -38,7 +38,7 @@ object UserDefinedFunctionUtils {
   /**
     * Instantiates a user-defined function.
     */
-  def instantiate[T <: UserDefinedFunction](clazz: Class[T]): T = {
+  def instantiate[T](clazz: Class[T]): T = {
     val constructor = clazz.getDeclaredConstructor()
     constructor.setAccessible(true)
     constructor.newInstance()
@@ -69,6 +69,11 @@ object UserDefinedFunctionUtils {
   // ----------------------------------------------------------------------------------------------
   // Utilities for ScalarFunction
   // ----------------------------------------------------------------------------------------------
+
+  /**
+    * Prints one signature consisting of classes.
+    */
+  def signatureToString(clazz: Class[_]): String = getSignatures(clazz).map(signatureToString).mkString(", ")
 
   /**
     * Prints one signature consisting of classes.
@@ -137,16 +142,18 @@ object UserDefinedFunctionUtils {
         }
     }
   }
+
   /**
     * Returns signatures for obj class
     */
-  def getSignatures(clazz:Class[_]): Array[Array[Class[_]]] = checkAndExtractEvalMethods(clazz).map(_.getParameterTypes)
+  def getSignatures(clazz: Class[_]): Array[Array[Class[_]]] = checkAndExtractEvalMethods(clazz).map(_.getParameterTypes)
+
   /**
     * Returns signatures matching the given signature of [[TypeInformation]].
     * Elements of the signature can be null (act as a wildcard).
     */
   def getSignature(
-                    clazz:Class[_],
+                    clazz: Class[_],
                     signature: Seq[TypeInformation[_]])
   : Option[Array[Class[_]]] = {
     // We compare the raw Java classes not the TypeInformation.
@@ -162,6 +169,7 @@ object UserDefinedFunctionUtils {
         }
     }
   }
+
   /**
     * Internal method of [[ScalarFunction#getResultType()]] that does some pre-checking and uses
     * [[TypeExtractor]] as default return type inference.
@@ -234,7 +242,27 @@ object UserDefinedFunctionUtils {
         }
     }
   }
-
+  /**
+    * Returns eval method matching the given signature of [[TypeInformation]].
+    */
+  def getEvalMethod(
+                     clazz:Class[_],
+                     signature: Seq[TypeInformation[_]])
+  : Option[Method] = {
+    // We compare the raw Java classes not the TypeInformation.
+    // TypeInformation does not matter during runtime (e.g. within a MapFunction).
+    val actualSignature = typeInfoToClass(signature)
+    checkAndExtractEvalMethods(clazz)
+      // go over all eval methods and find one matching
+      .find { cur =>
+      val signatures = cur.getParameterTypes
+      // match parameters of signature to actual parameters
+      actualSignature.length == signatures.length &&
+        signatures.zipWithIndex.forall { case (clazz, i) =>
+          parameterTypeEquals(actualSignature(i), clazz)
+        }
+    }
+  }
   // ----------------------------------------------------------------------------------------------
   // Utilities for TableValuedFunction
   // ----------------------------------------------------------------------------------------------
@@ -261,6 +289,7 @@ object UserDefinedFunctionUtils {
 
   /**
     * Returns the result type of the evaluation method with a given signature.
+    *
     * @param signature signature of the method the return type needs to be determined
     * @return [[TypeInformation]] of result type or null if Flink should determine the type
     */
@@ -284,10 +313,10 @@ object UserDefinedFunctionUtils {
     * Creates corresponding [[SqlFunction]].
     */
   def createSqlFunction[T: TypeInformation](
-                         name: String,
-                         method: Method,
-                         obj: Object,
-                         typeFactory: FlinkTypeFactory)
+                                             name: String,
+                                             method: Method,
+                                             obj: Object,
+                                             typeFactory: FlinkTypeFactory)
   : SqlFunction = {
     val clazz = obj.getClass
     obj match {
@@ -309,8 +338,8 @@ object UserDefinedFunctionUtils {
     * Creates all corresponding [[SqlFunction]].
     */
   def createSqlFunctions[T: TypeInformation](name: String,
-                            obj: Object,
-                            typeFactory: FlinkTypeFactory): Array[SqlFunction] = checkAndExtractEvalMethods(obj.getClass).map(m => {
+                                             obj: Object,
+                                             typeFactory: FlinkTypeFactory): Array[SqlFunction] = checkAndExtractEvalMethods(obj.getClass).map(m => {
     createSqlFunction(name, m, obj, typeFactory)
   })
 
@@ -339,11 +368,44 @@ object UserDefinedFunctionUtils {
   }
 
   /**
+    * Returns field names and field types for a given [[TypeInformation]].
+    *
+    * Field names are automatically extracted for
+    * [[org.apache.flink.api.common.typeutils.CompositeType]].
+    *
+    * @param inputType The TypeInformation extract the field names and types from.
+    * @tparam T The type of the TypeInformation.
+    * @return A tuple of two arrays holding the field names and corresponding field types.
+    */
+  def getFieldAttribute[T](inputType: TypeInformation[T])
+  : (Array[String], Array[TypeInformation[_]]) = {
+    val fieldNames: Array[String] = inputType match {
+      case t: TupleTypeInfo[T] => t.getFieldNames
+      case c: CaseClassTypeInfo[T] => c.getFieldNames
+      case p: PojoTypeInfo[T] => p.getFieldNames
+      case a: AtomicType[T] => Array("f0")
+      case tpe =>
+        throw new TableException(s"Type $tpe lacks explicit field naming")
+    }
+    val fieldTypes: Array[TypeInformation[_]] = fieldNames.map { i =>
+      inputType match {
+        case t: TupleTypeInfo[T] => t.getTypeAt(i).asInstanceOf[TypeInformation[_]]
+        case c: CaseClassTypeInfo[T] => c.getTypeAt(i).asInstanceOf[TypeInformation[_]]
+        case p: PojoTypeInfo[T] => p.getTypeAt(i).asInstanceOf[TypeInformation[_]]
+        case a: AtomicType[T] => a.asInstanceOf[TypeInformation[_]]
+        case tpe =>
+          throw new TableException(s"Type $tpe lacks explicit field naming")
+      }
+    }
+    (fieldNames, fieldTypes)
+  }
+
+  /**
     * Conver java.util.Iterator to scala.collection.Iterator when codegen
     */
-  def jiter2siter[T](iter: Object): scala.collection.Iterator[T] ={
+  def jiter2siter[T](iter: Object): scala.collection.Iterator[T] = {
     iter match {
-      case x : java.util.Iterator[T] => new scala.collection.Iterator[T] {
+      case x: java.util.Iterator[T] => new scala.collection.Iterator[T] {
         def hasNext(): Boolean = x.hasNext
 
         def next(): T = x.next

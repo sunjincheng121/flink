@@ -22,8 +22,9 @@ import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.stream.utils.{StreamITCase, StreamTestData}
 import org.apache.flink.api.scala.table._
 import org.apache.flink.api.table.expressions.Literal
+import org.apache.flink.api.table.expressions.utils.TableValuedFunction0
 import org.apache.flink.api.table.{Row, TableEnvironment, TableException}
-import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
+import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
 import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
 import org.junit.Assert._
 import org.junit.Test
@@ -281,5 +282,45 @@ class CalcITCase extends StreamingMultipleProgramsTestBase {
       "11,5,Comment#5", "13,5,Comment#7", "15,5,Comment#9",
       "17,6,Comment#11", "19,6,Comment#13", "21,6,Comment#15")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+  @Test
+  def testUDTF(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    val t = getSmall4TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
+
+    val udtf = new TableValuedFunction0
+    val result = t.join(udtf('c) as ('w))
+      .select('a, 'b + 5, 'w)
+      .toDataStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+    val expected = mutable.MutableList("1,6,Hi", "1,6,KEVIN",
+      "2,7,Hello", "2,7,SUNNY", "4,8,LOVER", "4,8,PAN")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+  @Test
+  def testLeftUDTF(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    val t = getSmall4TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
+
+    val udtf = new TableValuedFunction0
+    val result = t.leftJoin(udtf('c) as ('w))
+      .select('a, 'b + 5, 'w)
+      .toDataStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+    val expected = mutable.MutableList("1,6,Hi", "1,6,KEVIN",
+      "2,7,Hello", "2,7,SUNNY","3,7,null","4,8,LOVER", "4,8,PAN")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+  def getSmall4TupleDataStream(env: StreamExecutionEnvironment): DataStream[(Int, Long, String)] = {
+    val data = new mutable.MutableList[(Int, Long, String)]
+    data.+=((1, 1L, "Hi#KEVIN"))
+    data.+=((2, 2L, "Hello#SUNNY"))
+    data.+=((3, 2L, "Hello world"))
+    data.+=((4, 3L, "PAN#LOVER"))
+    env.fromCollection(data)
   }
 }

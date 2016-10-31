@@ -22,8 +22,8 @@ import org.apache.calcite.sql.fun.SqlStdOperatorTable
 import org.apache.calcite.sql.util.{ChainedSqlOperatorTable, ListSqlOperatorTable, ReflectiveSqlOperatorTable}
 import org.apache.calcite.sql.{SqlFunction, SqlOperator, SqlOperatorTable}
 import org.apache.flink.api.table.ValidationException
-import org.apache.flink.api.table.expressions._
-import org.apache.flink.api.table.functions.ScalarFunction
+import org.apache.flink.api.table.expressions.{TableValuedFunctionCall, _}
+import org.apache.flink.api.table.functions.{ScalarFunction, TableValuedFunction}
 import org.apache.flink.api.table.functions.utils.UserDefinedFunctionUtils
 
 import scala.collection.JavaConversions._
@@ -81,7 +81,12 @@ class FunctionCatalog {
           case Success(scalarFunction) => ScalarFunctionCall(scalarFunction, children)
           case Failure(e) => throw ValidationException(e.getMessage)
         }
-
+      // user-defined table function call
+      case tf if classOf[TableValuedFunction[_]].isAssignableFrom(tf) =>
+        Try(UserDefinedFunctionUtils.instantiate(tf.asInstanceOf[Class[TableValuedFunction[_]]])) match {
+          case Success(tableFunction) => TableValuedFunctionCall(tableFunction, children)
+          case Failure(e) => throw ValidationException(e.getMessage)
+        }
       // general expression call
       case expression if classOf[Expression].isAssignableFrom(expression) =>
         // try to find a constructor accepts `Seq[Expression]`
