@@ -29,6 +29,10 @@ abstract class EventTimeGroupWindow(
     time: Expression)
   extends LogicalWindow(name) {
 
+  def getTime: Expression = {
+    time
+  }
+
   override def validate(tableEnv: TableEnvironment): ValidationResult = {
     val valid = super.validate(tableEnv)
     if (valid.isFailure) {
@@ -55,7 +59,24 @@ abstract class EventTimeGroupWindow(
   }
 }
 
-abstract class ProcessingTimeGroupWindow(name: Option[Expression]) extends LogicalWindow(name)
+abstract class ProcessingTimeGroupWindow(
+    name: Option[Expression],
+    windowDivisionExpression: Expression)
+  extends LogicalWindow(name) {
+
+  override def validate(tableEnv: TableEnvironment): ValidationResult = {
+    windowDivisionExpression match {
+      case Literal(timeInterval: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS)
+        if tableEnv.isInstanceOf[BatchTableEnvironment] =>
+        ValidationFailure(
+          "Window with time interval on batch tables require a time " +
+            "attribute " +
+            " over which the query is evaluated.")
+      case _ => super.validate(tableEnv)
+    }
+  }
+
+}
 
 // ------------------------------------------------------------------------------------------------
 // Tumbling group windows
@@ -76,7 +97,7 @@ object TumblingGroupWindow {
 case class ProcessingTimeTumblingGroupWindow(
     name: Option[Expression],
     size: Expression)
-  extends ProcessingTimeGroupWindow(name) {
+  extends ProcessingTimeGroupWindow(name,size) {
 
   override def resolveExpressions(resolve: (Expression) => Expression): LogicalWindow =
     ProcessingTimeTumblingGroupWindow(
@@ -164,7 +185,7 @@ case class ProcessingTimeSlidingGroupWindow(
     name: Option[Expression],
     size: Expression,
     slide: Expression)
-  extends ProcessingTimeGroupWindow(name) {
+  extends ProcessingTimeGroupWindow(name,size) {
 
   override def resolveExpressions(resolve: (Expression) => Expression): LogicalWindow =
     ProcessingTimeSlidingGroupWindow(
@@ -224,7 +245,7 @@ object SessionGroupWindow {
 case class ProcessingTimeSessionGroupWindow(
     name: Option[Expression],
     gap: Expression)
-  extends ProcessingTimeGroupWindow(name) {
+  extends ProcessingTimeGroupWindow(name,gap) {
 
   override def resolveExpressions(resolve: (Expression) => Expression): LogicalWindow =
     ProcessingTimeSessionGroupWindow(

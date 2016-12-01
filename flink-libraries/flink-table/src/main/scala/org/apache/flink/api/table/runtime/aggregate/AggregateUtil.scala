@@ -19,23 +19,26 @@ package org.apache.flink.api.table.runtime.aggregate
 
 import java.util
 
-import org.apache.calcite.rel.`type`._
+import org.apache.calcite.rel.`type`.{RelDataType, _}
 import org.apache.calcite.rel.core.AggregateCall
 import org.apache.calcite.sql.{SqlAggFunction, SqlKind}
 import org.apache.calcite.sql.`type`.SqlTypeName._
 import org.apache.calcite.sql.`type`.{SqlTypeFactoryImpl, SqlTypeName}
 import org.apache.calcite.sql.fun._
-import org.apache.flink.api.common.functions.{MapFunction, RichGroupReduceFunction}
-import org.apache.flink.api.common.typeinfo.TypeInformation
+import org.apache.flink.api.common.functions.{MapFunction, RichGroupCombineFunction, RichGroupReduceFunction}
+import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
 import org.apache.flink.api.java.tuple.Tuple
 import org.apache.flink.api.table.FlinkRelBuilder.NamedWindowProperty
-import org.apache.flink.api.table.expressions.{WindowEnd, WindowStart}
-import org.apache.flink.api.table.plan.logical._
+import org.apache.flink.api.table.expressions.{ResolvedFieldReference, WindowEnd, WindowStart}
+import org.apache.flink.api.table.plan.logical.{EventTimeGroupWindow, _}
 import org.apache.flink.api.table.typeutils.RowTypeInfo
 import org.apache.flink.api.table.typeutils.TypeCheckUtils._
 import org.apache.flink.api.table.{FlinkTypeFactory, Row, TableException}
 import org.apache.flink.streaming.api.functions.windowing.{AllWindowFunction, WindowFunction}
 import org.apache.flink.streaming.api.windowing.windows.{Window => DataStreamWindow}
+import org.apache.flink.api.common.typeinfo.SqlTimeTypeInfo
+import java.sql.Timestamp
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer
 
@@ -82,6 +85,63 @@ object AggregateUtil {
       mapReturnType.asInstanceOf[RowTypeInfo]).asInstanceOf[MapFunction[Any, Row]]
 
     mapFunction
+  }
+
+  /**
+    * Create a [[org.apache.flink.api.common.functions.MapFunction]] that prepares for aggregates.
+    * The function returns intermediate aggregate values of all aggregate function which are
+    * organized by the following format:
+    *
+    * {{{
+    *                   avg(x) aggOffsetInRow = 2          count(z) aggOffsetInRow = 5
+    *                             |                          |
+    *                             v                          v
+    *        +---------+---------+--------+--------+--------+--------+-------+
+    *        |groupKey1|groupKey2|  sum1  | count1 |  sum2  | count2 |rowtime|
+    *        +---------+---------+--------+--------+--------+--------+-------+
+    *                                              ^                 ^
+    *                                              |                 |
+    *                               sum(y) aggOffsetInRow = 4    windowKey(rowtime)
+    *
+    * }}}
+    *
+    */
+  private[flink] def createDataSetWindowPrepareMapFunction(
+    window: LogicalWindow,
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    groupings: Array[Int],
+    inputType: RelDataType): MapFunction[Any, Row] = {
+
+    val (aggFieldIndexes, aggregates) = transformToAggregateFunctions(
+      namedAggregates.map(_.getKey),
+      inputType,
+      groupings.length)
+
+    window match {
+      case EventTimeSessionGroupWindow(_, _, _) =>
+        val mapReturnType: RowTypeInfo =
+          createAggregateBufferDataType(
+            groupings,
+            aggregates,
+            inputType,
+            Option(Array(BasicTypeInfo.LONG_TYPE_INFO)))
+
+        val (rowTimeFieldPos, rowTimeFieldType) =
+          getTimeFieldInfo(window.asInstanceOf[EventTimeGroupWindow], inputType)
+
+        new DataSetWindowAggregateMapFunction[Row, Row](
+          aggregates,
+          aggFieldIndexes,
+          groupings,
+          Some(rowTimeFieldPos),
+          Some(rowTimeFieldType),
+          mapReturnType.asInstanceOf[RowTypeInfo]).asInstanceOf[MapFunction[Any, Row]]
+
+      case _ =>
+        throw new UnsupportedOperationException(
+          "windows are currently only supported EventTimeSessionGroupWindow " +
+            "on batch tables")
+    }
   }
 
   /**
@@ -132,6 +192,123 @@ object AggregateUtil {
           outputType.getFieldCount)
       }
     groupReduceFunction
+  }
+
+  /**
+    * Create a [[org.apache.flink.api.common.functions.GroupCombineFunction]] that pre-aggregation
+    * for aggregates.
+    * The function returns intermediate aggregate values of all aggregate function which are
+    * organized by the following format:
+    *
+    * {{{
+    *                   avg(x) aggOffsetInRow = 2          count(z) aggOffsetInRow = 5
+    *                             |                          |
+    *                             v                          v
+    *        +---------+---------+--------+--------+--------+--------+-----------+---------+
+    *        |groupKey1|groupKey2|  sum1  | count1 |  sum2  | count2 |windowStart|windowEnd|
+    *        +---------+---------+--------+--------+--------+--------+-----------+---------+
+    *                                              ^                 ^
+    *                                              |                 |
+    *                               sum(y) aggOffsetInRow = 4    windowKey(windowStart,windowEnd)
+    *
+    * }}}
+    *
+    */
+  private[flink] def createDataSetSessionWindowAggregateCombineFunction(
+    window: LogicalWindow,
+    properties: Seq[NamedWindowProperty],
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    inputType: RelDataType,
+    outputType: RelDataType,
+    groupings: Array[Int]): RichGroupCombineFunction[Row,Row] = {
+
+    val aggregates = transformToAggregateFunctions(
+      namedAggregates.map(_.getKey),
+      inputType,
+      groupings.length)._2
+
+    val windowKeyFieldLength = 2
+    val intermediateRowArity = groupings.length +
+      aggregates.map(_.intermediateDataType.length).sum + windowKeyFieldLength
+
+    window match {
+      case EventTimeSessionGroupWindow(_, _, _) =>
+        val combineReturnType: RowTypeInfo =
+          createAggregateBufferDataType(
+            groupings,
+            aggregates,
+            inputType,
+            Option(Array(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO)))
+
+        val gap = window.asInstanceOf[EventTimeSessionGroupWindow]
+                  .gap.productElement(0)
+                  .asInstanceOf[Long]
+
+        new DataSetSessionWindowAggregateCombineGroupFunction(
+          aggregates,
+          groupings,
+          intermediateRowArity,
+          gap,
+          combineReturnType)
+      case _ =>
+        throw new UnsupportedOperationException(
+          "windows are currently only supported EventTimeSessionGroupWindow " +
+            "on batch tables")
+    }
+  }
+
+  private[flink] def createDataSetWindowAggregateReduceGroupFunction(
+    window: LogicalWindow,
+    properties: Seq[NamedWindowProperty],
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    inputType: RelDataType,
+    outputType: RelDataType,
+    groupings: Array[Int]): RichGroupReduceFunction[Row, Row] = {
+
+    val aggregates = transformToAggregateFunctions(
+      namedAggregates.map(_.getKey),
+      inputType,
+      groupings.length)._2
+
+    val (groupingOffsetMapping, aggOffsetMapping) =
+      getGroupingOffsetAndAggOffsetMapping(
+        namedAggregates,
+        inputType,
+        outputType,
+        groupings)
+
+    val windowKeyFieldLength = 2
+    val intermediateRowArity = groupings.length +
+      aggregates.map(_.intermediateDataType.length).sum + windowKeyFieldLength
+
+    val (startPos, endPos) =
+      if (isTimeWindow(window)) {
+        computeWindowStartEndPropertyPos(properties)
+      } else {
+        (None, None)
+      }
+
+
+
+    window match {
+      case EventTimeSessionGroupWindow(_, _, _) =>
+          val gap = window.asInstanceOf[EventTimeSessionGroupWindow]
+                  .gap.productElement(0)
+                  .asInstanceOf[Long]
+          new DataSetSessionWindowAggregateReduceGroupFunction(
+            aggregates,
+            groupingOffsetMapping,
+            aggOffsetMapping,
+            intermediateRowArity,
+            outputType.getFieldCount,
+            startPos,
+            endPos,
+            gap)
+      case _ =>
+        throw new UnsupportedOperationException(
+          "windows are currently only supported EventTimeSessionGroupWindow " +
+            "on batch tables")
+    }
   }
 
   /**
@@ -305,6 +482,35 @@ object AggregateUtil {
     }
   }
 
+  private[flink] def getWindowKeyPos(
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    inputType: RelDataType,
+    groupings: Array[Int]): (Int, Int) = {
+    val aggregates = transformToAggregateFunctions(
+      namedAggregates.map(_.getKey),
+      inputType,
+      groupings.length)._2
+    val windowStartPos = groupings.length +
+      aggregates.map(_.intermediateDataType.length).sum
+    (windowStartPos, windowStartPos + 1)
+  }
+
+  private[flink] def getTimestamp(timeField: Any, typeInfo: TypeInformation[_]): Long = {
+    typeInfo match {
+      case BasicTypeInfo.CHAR_TYPE_INFO => timeField.asInstanceOf[Character].toLong
+      case BasicTypeInfo.FLOAT_TYPE_INFO => timeField.asInstanceOf[Float].toLong
+      case BasicTypeInfo.SHORT_TYPE_INFO => timeField.asInstanceOf[Short].toLong
+      case BasicTypeInfo.BYTE_TYPE_INFO => timeField.asInstanceOf[Byte].toLong
+      case BasicTypeInfo.DOUBLE_TYPE_INFO => timeField.asInstanceOf[Double].toLong
+      case BasicTypeInfo.LONG_TYPE_INFO => timeField.asInstanceOf[Long]
+      case BasicTypeInfo.INT_TYPE_INFO => timeField.asInstanceOf[Int].toLong
+      case BasicTypeInfo.STRING_TYPE_INFO => timeField.asInstanceOf[String].toLong
+      case SqlTimeTypeInfo.TIMESTAMP => timeField.asInstanceOf[Timestamp].getTime
+      case other@_ =>
+        throw new RuntimeException(s"Window time field doesn't support $other type currently")
+    }
+  }
+
   /**
     * Return true if all aggregates can be partially computed. False otherwise.
     */
@@ -316,6 +522,22 @@ object AggregateUtil {
       aggregateCalls,
       inputType,
       groupKeysCount)._2.forall(_.supportPartial)
+  }
+
+  private def getTimeFieldInfo(
+    groupWindow: EventTimeGroupWindow,
+    inputType: RelDataType): (Int,
+    TypeInformation[_]) = {
+    groupWindow.getTime match {
+      case ResolvedFieldReference(name, resultType) =>
+        val relDataType = inputType.getFieldList.filter(r => name.equals(r.getName))
+        if (relDataType.length == 1) {
+          (relDataType.head.getIndex, FlinkTypeFactory.toTypeInfo(relDataType.head.getType))
+        } else {
+          throw new IllegalArgumentException()
+        }
+      case _ => throw new IllegalArgumentException()
+    }
   }
 
   /**
@@ -514,7 +736,8 @@ object AggregateUtil {
   private def createAggregateBufferDataType(
     groupings: Array[Int],
     aggregates: Array[Aggregate[_]],
-    inputType: RelDataType): RowTypeInfo = {
+    inputType: RelDataType,
+    windowKeyTypes: Option[Array[TypeInformation[_]]] = None): RowTypeInfo = {
 
     // get the field data types of group keys.
     val groupingTypes: Seq[TypeInformation[_]] = groupings
@@ -527,8 +750,11 @@ object AggregateUtil {
     // get all field data types of all intermediate aggregates
     val aggTypes: Seq[TypeInformation[_]] = aggregates.flatMap(_.intermediateDataType)
 
-    // concat group key types and aggregation types
-    val allFieldTypes = groupingTypes ++: aggTypes
+    // concat group key types and aggregation types and window key types
+    val allFieldTypes:Seq[TypeInformation[_]] = windowKeyTypes match {
+      case None => groupingTypes ++: aggTypes
+      case _ => groupingTypes ++: aggTypes ++: windowKeyTypes.get
+    }
     val partialType = new RowTypeInfo(allFieldTypes)
     partialType
   }

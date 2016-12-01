@@ -399,6 +399,42 @@ class AggregationsITCase(
     val results = t.toDataSet[Row].collect()
     TestBaseUtils.compareResultAsText(results.asJava, expected)
   }
+  @Test
+  def testEventTimeSessionGroupWindow(): Unit = {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env, config)
 
+    val table = CollectionDataSets.get2TupleDataSet(env).toTable(tEnv, 'rowtime, 'string)
+    val windowedTable = table
+      .groupBy('string)
+      .window(Session withGap 7.milli on 'rowtime as 'w)
+      .select('string, 'string.count, 'w.start, 'w.end)
+    val results = windowedTable.toDataSet[Row].collect()
+    val expected = "Hello world,1,1970-01-01 00:00:00.008,1970-01-01 00:00:00.015\nHello world,1," +
+      "1970-01-01 00:00:00.017,1970-01-01 00:00:00.024\nHello,2,1970-01-01 00:00:00.002," +
+      "1970-01-01 00:00:00.011\nHi,1,1970-01-01 00:00:00.001,1970-01-01 00:00:00.008"
+    TestBaseUtils.compareResultAsText(results.asJava, expected)
+  }
+
+  @Test(expected = classOf[ValidationException])
+  def testNonGroupedEventTimeSessionGroupWindow(): Unit = {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env, config)
+    val table = CollectionDataSets.get2TupleDataSet(env).toTable(tEnv, 'rowtime, 'string)
+    table
+    .window(Session withGap 7.milli on 'rowtime as 'w)
+    .select('string.count)
+  }
+
+  @Test(expected = classOf[ValidationException])
+  def testProcessingTimeSessionGroupWindow(): Unit = {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env, config)
+    val table = CollectionDataSets.get2TupleDataSet(env).toTable(tEnv, 'rowtime, 'string)
+    table
+    .groupBy('string)
+    .window(Session withGap 7.milli as 'w)
+    .select('int.count)
+  }
 }
 
