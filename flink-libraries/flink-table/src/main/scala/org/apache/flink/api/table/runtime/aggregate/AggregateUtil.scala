@@ -97,13 +97,15 @@ object AggregateUtil {
     *                             |                          |
     *                             v                          v
     *        +---------+---------+--------+--------+--------+--------+-------+
-    *        |groupKey1|groupKey2|  sum1  | count1 |  sum2  | count2 |rowtime|
+    *        |groupKey1|groupKey2|  sum1  | count1 |  sum2  | count2 |rowTime|
     *        +---------+---------+--------+--------+--------+--------+-------+
     *                                              ^                 ^
-    *                                              |                 |
-    *                               sum(y) aggOffsetInRow = 4    windowKey(rowtime)
+    *                                              |                 |windowKeyOffsetInRow = 6
+    *                               sum(y) aggOffsetInRow = 4    windowKey(rowTime)
     *
     * }}}
+    *
+    * @param window  According to the window type to create the corresponding mapFunction
     *
     */
   private[flink] def createDataSetWindowPrepareMapFunction(
@@ -118,7 +120,7 @@ object AggregateUtil {
       groupings.length)
 
     window match {
-      case EventTimeSessionGroupWindow(_, _, _) =>
+      case w@EventTimeSessionGroupWindow(_, _, _) =>
         val mapReturnType: RowTypeInfo =
           createAggregateBufferDataType(
             groupings,
@@ -126,21 +128,20 @@ object AggregateUtil {
             inputType,
             Option(Array(BasicTypeInfo.LONG_TYPE_INFO)))
 
-        val (rowTimeFieldPos, rowTimeFieldType) =
-          getTimeFieldInfo(window.asInstanceOf[EventTimeGroupWindow], inputType)
+        val (rowTimeFieldPos, rowTimeFieldType) = getTimeFieldInfo(w, inputType)
 
         new DataSetWindowAggregateMapFunction[Row, Row](
           aggregates,
           aggFieldIndexes,
           groupings,
-          Some(rowTimeFieldPos),
-          Some(rowTimeFieldType),
+          rowTimeFieldPos,
+          rowTimeFieldType,
           mapReturnType.asInstanceOf[RowTypeInfo]).asInstanceOf[MapFunction[Any, Row]]
 
       case _ =>
         throw new UnsupportedOperationException(
-          "windows are currently only supported EventTimeSessionGroupWindow " +
-            "on batch tables")
+          s"windows are currently not supported $window " +
+            s"on batch tables")
     }
   }
 
@@ -208,7 +209,7 @@ object AggregateUtil {
     *        |groupKey1|groupKey2|  sum1  | count1 |  sum2  | count2 |windowStart|windowEnd|
     *        +---------+---------+--------+--------+--------+--------+-----------+---------+
     *                                              ^                 ^
-    *                                              |                 |
+    *                                              |                 |windowKeyOffsetInRow = 6
     *                               sum(y) aggOffsetInRow = 4    windowKey(windowStart,windowEnd)
     *
     * }}}
@@ -216,23 +217,21 @@ object AggregateUtil {
     */
   private[flink] def createDataSetSessionWindowAggregateCombineFunction(
     window: LogicalWindow,
-    properties: Seq[NamedWindowProperty],
     namedAggregates: Seq[CalcitePair[AggregateCall, String]],
     inputType: RelDataType,
-    outputType: RelDataType,
     groupings: Array[Int]): RichGroupCombineFunction[Row,Row] = {
 
     val aggregates = transformToAggregateFunctions(
       namedAggregates.map(_.getKey),
       inputType,
       groupings.length)._2
-
-    val windowKeyFieldLength = 2
+    //The arity used to store window start and properties
+    val WINDOW_START_END_ARITY = 2
     val intermediateRowArity = groupings.length +
-      aggregates.map(_.intermediateDataType.length).sum + windowKeyFieldLength
+      aggregates.map(_.intermediateDataType.length).sum + WINDOW_START_END_ARITY
 
     window match {
-      case EventTimeSessionGroupWindow(_, _, _) =>
+      case w@EventTimeSessionGroupWindow(_, _, _) =>
         val combineReturnType: RowTypeInfo =
           createAggregateBufferDataType(
             groupings,
@@ -240,9 +239,7 @@ object AggregateUtil {
             inputType,
             Option(Array(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO)))
 
-        val gap = window.asInstanceOf[EventTimeSessionGroupWindow]
-                  .gap.productElement(0)
-                  .asInstanceOf[Long]
+        val gap = w.gap.productElement(0).asInstanceOf[Long]
 
         new DataSetSessionWindowAggregateCombineGroupFunction(
           aggregates,
@@ -252,11 +249,14 @@ object AggregateUtil {
           combineReturnType)
       case _ =>
         throw new UnsupportedOperationException(
-          "windows are currently only supported EventTimeSessionGroupWindow " +
-            "on batch tables")
+          s"windows are currently only supported $window " +
+            s"on batch tables")
     }
   }
 
+  /**
+    * @param window According to the window type to create the corresponding groupReduceFunction
+    */
   private[flink] def createDataSetWindowAggregateReduceGroupFunction(
     window: LogicalWindow,
     properties: Seq[NamedWindowProperty],
@@ -277,9 +277,10 @@ object AggregateUtil {
         outputType,
         groupings)
 
-    val windowKeyFieldLength = 2
+    //The arity used to store window start and properties
+    val WINDOW_START_END_ARITY = 2
     val intermediateRowArity = groupings.length +
-      aggregates.map(_.intermediateDataType.length).sum + windowKeyFieldLength
+      aggregates.map(_.intermediateDataType.length).sum + WINDOW_START_END_ARITY
 
     val (startPos, endPos) =
       if (isTimeWindow(window)) {
@@ -287,8 +288,6 @@ object AggregateUtil {
       } else {
         (None, None)
       }
-
-
 
     window match {
       case EventTimeSessionGroupWindow(_, _, _) =>
@@ -304,9 +303,9 @@ object AggregateUtil {
             startPos,
             endPos,
             gap)
-      case _ =>
+      case w@_ =>
         throw new UnsupportedOperationException(
-          "windows are currently only supported EventTimeSessionGroupWindow " +
+          s"windows are currently only supported $window " +
             "on batch tables")
     }
   }
@@ -482,19 +481,6 @@ object AggregateUtil {
     }
   }
 
-  private[flink] def getWindowKeyPos(
-    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
-    inputType: RelDataType,
-    groupings: Array[Int]): (Int, Int) = {
-    val aggregates = transformToAggregateFunctions(
-      namedAggregates.map(_.getKey),
-      inputType,
-      groupings.length)._2
-    val windowStartPos = groupings.length +
-      aggregates.map(_.intermediateDataType.length).sum
-    (windowStartPos, windowStartPos + 1)
-  }
-
   private[flink] def getTimestamp(timeField: Any, typeInfo: TypeInformation[_]): Long = {
     typeInfo match {
       case BasicTypeInfo.CHAR_TYPE_INFO => timeField.asInstanceOf[Character].toLong
@@ -526,9 +512,8 @@ object AggregateUtil {
 
   private def getTimeFieldInfo(
     groupWindow: EventTimeGroupWindow,
-    inputType: RelDataType): (Int,
-    TypeInformation[_]) = {
-    groupWindow.getTime match {
+    inputType: RelDataType): (Int, TypeInformation[_]) = {
+    groupWindow.time match {
       case ResolvedFieldReference(name, resultType) =>
         val relDataType = inputType.getFieldList.filter(r => name.equals(r.getName))
         if (relDataType.length == 1) {
@@ -577,6 +562,19 @@ object AggregateUtil {
       case EventTimeSlidingGroupWindow(_, _, size, _) => isTimeInterval(size.resultType)
       case EventTimeSessionGroupWindow(_, _, _) => true
     }
+  }
+
+  private[flink] def computeWindowStartEndPropertyIntermediatePos(
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    inputType: RelDataType,
+    groupings: Array[Int]): (Int, Int) = {
+    val aggregates = transformToAggregateFunctions(
+      namedAggregates.map(_.getKey),
+      inputType,
+      groupings.length)._2
+    val windowStartPos = groupings.length +
+      aggregates.map(_.intermediateDataType.length).sum
+    (windowStartPos, windowStartPos + 1)
   }
 
   private def computeWindowStartEndPropertyPos(

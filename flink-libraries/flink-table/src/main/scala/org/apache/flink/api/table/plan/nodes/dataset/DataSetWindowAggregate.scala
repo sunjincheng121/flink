@@ -23,11 +23,13 @@ import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rel.core.AggregateCall
 import org.apache.calcite.rel.metadata.RelMetadataQuery
 import org.apache.calcite.rel.{RelNode, RelWriter, SingleRel}
+import org.apache.flink.api.common.functions.{MapFunction, RichGroupReduceFunction}
 import org.apache.flink.api.common.operators.Order
-import org.apache.flink.api.common.typeinfo.{TypeInformation}
+import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.DataSet
+import org.apache.flink.api.java.operators.{MapOperator, UnsortedGrouping}
 import org.apache.flink.api.table.FlinkRelBuilder.NamedWindowProperty
-import org.apache.flink.api.table.plan.logical.LogicalWindow
+import org.apache.flink.api.table.plan.logical.{EventTimeSessionGroupWindow, LogicalWindow}
 import org.apache.flink.api.table.plan.nodes.FlinkAggregate
 import org.apache.flink.api.table.runtime.aggregate.AggregateUtil
 import org.apache.flink.api.table.runtime.aggregate.AggregateUtil.CalcitePair
@@ -37,7 +39,7 @@ import org.apache.flink.api.table.{BatchTableEnvironment, FlinkTypeFactory, Row}
 import scala.collection.JavaConverters._
 
 /**
-  * Flink RelNode which matches along with a LogicalAggregate.
+  * Flink RelNode which matches along with a LogicalWindow.
   */
 class DataSetWindowAggregate(
     window: LogicalWindow,
@@ -107,20 +109,18 @@ class DataSetWindowAggregate(
     planner.getCostFactory.makeCost(rowCnt, rowCnt * aggCnt, rowCnt * rowSize)
   }
 
-
   override def translateToPlan(
     tableEnv: BatchTableEnvironment,
     expectedType: Option[TypeInformation[Any]]): DataSet[Any] = {
 
     val config = tableEnv.getConfig
-
     val groupingKeys = grouping.indices.toArray
 
     // get the output types
     val fieldTypes: Array[TypeInformation[_]] =
-      getRowType.getFieldList.asScala
-      .map(field => FlinkTypeFactory.toTypeInfo(field.getType))
-      .toArray
+    getRowType.getFieldList.asScala
+    .map(field => FlinkTypeFactory.toTypeInfo(field.getType))
+    .toArray
 
     val rowTypeInfo = new RowTypeInfo(fieldTypes)
 
@@ -138,16 +138,16 @@ class DataSetWindowAggregate(
 
     val prepareOpName = s"prepare select: ($aggString)"
     val aggOpName = s"groupBy: (${groupingToString(inputType, grouping)}), " +
-      s"select: ($aggString)"
+      s"window: ($window), select: ($aggString)"
 
-    //According to the window type to create the corresponding mapFunction
+    //create mapFunction for initializing the aggregations
     val mapFunction = AggregateUtil.createDataSetWindowPrepareMapFunction(
       window,
       namedAggregates,
       grouping,
       inputType)
 
-    //According to the window type to create the corresponding groupReduceFunction
+    // create groupReduceFunction for calculate the aggregations
     val groupReduceFunction =
     AggregateUtil.createDataSetWindowAggregateReduceGroupFunction(
       window,
@@ -157,53 +157,41 @@ class DataSetWindowAggregate(
       rowRelDataType,
       grouping)
 
-    val mappedInput = inputDS.map(mapFunction).name(prepareOpName)
-
+    // Gets the position of the window start and end attributes in the intermediate result for
+    // Combine and reduce.
     val (windowStartPos, windowEndPos) =
-      AggregateUtil.getWindowKeyPos(
-        namedAggregates,
-        inputType,
-        grouping)
+    AggregateUtil.computeWindowStartEndPropertyIntermediatePos(
+      namedAggregates,
+      inputType,
+      grouping)
 
+    // the position of the rowtime field in the intermediate result for map output
     val rowtimeFilePos = windowStartPos
 
-    val sortedGroupInput = mappedInput
-    .groupBy(groupingKeys: _*)
-    .sortGroup(rowtimeFilePos, Order.ASCENDING)
+    val mappedInput = inputDS
+                      .map(mapFunction)
+                      .name(prepareOpName)
 
     // check whether all aggregates support partial aggregate
-    val result: DataSet[Any] = if (AggregateUtil.doAllSupportPartialAggregation(
-      namedAggregates.map(_.getKey),
-      inputType,
-      grouping.length)) {
-      val combineGroupFunction =
-        AggregateUtil.createDataSetSessionWindowAggregateCombineFunction(
-          window,
-          namedProperties,
-          namedAggregates,
-          inputType,
-          rowRelDataType,
-          grouping)
-
-      sortedGroupInput
-      .combineGroup(combineGroupFunction).asInstanceOf[DataSet[Row]]
-      .groupBy(groupingKeys: _*)
-      .sortGroup(windowStartPos, Order.ASCENDING)
-      .sortGroup(windowEndPos, Order.ASCENDING)
-      .reduceGroup(groupReduceFunction)
-      .returns(rowTypeInfo)
-      .name(aggOpName)
-      .asInstanceOf[DataSet[Any]]
+    val result: DataSet[Any] = {
+      window match {
+        case EventTimeSessionGroupWindow(_, _, _) =>
+          doEventTimeSessionGroupWindow(
+            groupingKeys,
+            rowTypeInfo,
+            aggOpName,
+            groupReduceFunction,
+            windowStartPos,
+            windowEndPos,
+            rowtimeFilePos,
+            mappedInput)
+        case _ =>
+          throw new UnsupportedOperationException(
+            s"windows are currently bot supported $window " +
+              s"on batch tables")
+      }
 
     }
-    else {
-      sortedGroupInput
-      .reduceGroup(groupReduceFunction)
-      .returns(rowTypeInfo)
-      .name(aggOpName)
-      .asInstanceOf[DataSet[Any]]
-    }
-
     // if the expected type is not a Row, inject a mapper to convert to the expected type
     expectedType match {
       case Some(typeInfo) if typeInfo.getTypeClass != classOf[Row] =>
@@ -219,6 +207,52 @@ class DataSetWindowAggregate(
           ))
         .name(mapName)
       case _ => result
+    }
+  }
+
+  private def doEventTimeSessionGroupWindow(
+    groupingKeys: Array[Int],
+    rowTypeInfo: RowTypeInfo,
+    aggOpName: String,
+    groupReduceFunction: RichGroupReduceFunction[Row, Row],
+    windowStartPos: Int,
+    windowEndPos: Int,
+    rowtimeFilePos: Int,
+    mappedInput: MapOperator[Any, Row]): DataSet[Any] = {
+    if (groupingKeys.length > 0) {
+      if (AggregateUtil.doAllSupportPartialAggregation(
+        namedAggregates.map(_.getKey),
+        inputType,
+        grouping.length)) {
+        val combineGroupFunction =
+          AggregateUtil.createDataSetSessionWindowAggregateCombineFunction(
+            window,
+            namedAggregates,
+            inputType,
+            grouping)
+
+        mappedInput.groupBy(groupingKeys: _*)
+        .sortGroup(rowtimeFilePos, Order.ASCENDING)
+        .combineGroup(combineGroupFunction)
+        .groupBy(groupingKeys: _*)
+        .sortGroup(windowStartPos, Order.ASCENDING)
+        .sortGroup(windowEndPos, Order.ASCENDING)
+        .reduceGroup(groupReduceFunction)
+        .returns(rowTypeInfo)
+        .name(aggOpName)
+        .asInstanceOf[DataSet[Any]]
+      }
+      else {
+        mappedInput.groupBy(groupingKeys: _*)
+        .sortGroup(rowtimeFilePos, Order.ASCENDING)
+        .reduceGroup(groupReduceFunction)
+        .returns(rowTypeInfo)
+        .name(aggOpName)
+        .asInstanceOf[DataSet[Any]]
+      }
+    } else {
+      throw new UnsupportedOperationException(
+        "Session non-grouping window on event-time are currently not supported.")
     }
   }
 }

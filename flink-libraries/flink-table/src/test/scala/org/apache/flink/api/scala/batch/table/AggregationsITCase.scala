@@ -416,14 +416,14 @@ class AggregationsITCase(
     TestBaseUtils.compareResultAsText(results.asJava, expected)
   }
 
-  @Test(expected = classOf[ValidationException])
+  @Test(expected = classOf[UnsupportedOperationException])
   def testNonGroupedEventTimeSessionGroupWindow(): Unit = {
     val env = ExecutionEnvironment.getExecutionEnvironment
     val tEnv = TableEnvironment.getTableEnvironment(env, config)
     val table = CollectionDataSets.get2TupleDataSet(env).toTable(tEnv, 'rowtime, 'string)
     table
     .window(Session withGap 7.milli on 'rowtime as 'w)
-    .select('string.count)
+    .select('string.count).toDataSet[Row].collect()
   }
 
   @Test(expected = classOf[ValidationException])
@@ -434,7 +434,7 @@ class AggregationsITCase(
     table
     .groupBy('string)
     .window(Session withGap 7.milli as 'w)
-    .select('int.count)
+    .select('string,'string.count).toDataSet[Row].collect()
   }
 }
 

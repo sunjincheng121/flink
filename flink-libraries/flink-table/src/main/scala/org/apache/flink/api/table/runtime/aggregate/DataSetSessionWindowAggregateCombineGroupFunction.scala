@@ -28,82 +28,98 @@ import org.apache.flink.util.{Collector, Preconditions}
 
 import scala.collection.JavaConversions._
 
-
+/**
+  * It wraps the aggregate logic inside of
+  * [[org.apache.flink.api.java.operators.GroupCombineOperator]].
+  *
+  * @param aggregates       The aggregate functions.
+  */
 class DataSetSessionWindowAggregateCombineGroupFunction(
-    private val aggregates: Array[Aggregate[_ <: Any]],
-    private val groupingKeys: Array[Int],
-    private var intermediateRowArity: Int,
-    private val gap:Long,
-    @transient private val returnType: TypeInformation[Row])
+    aggregates: Array[Aggregate[_ <: Any]],
+    groupingKeys: Array[Int],
+    intermediateRowArity: Int,
+    gap:Long,
+    @transient returnType: TypeInformation[Row])
   extends RichGroupCombineFunction[Row,Row]
   with ResultTypeQueryable[Row] {
 
   private var aggregateBuffer: Row = _
-  private var intermediateRowWindowStartPos = 0
-  private var intermediateRowWindowEndPos = 0
+  private var rowTimePos = 0
 
   override def open(config: Configuration) {
     Preconditions.checkNotNull(aggregates)
     Preconditions.checkNotNull(groupingKeys)
     aggregateBuffer = new Row(intermediateRowArity)
-    intermediateRowWindowStartPos = intermediateRowArity - 2
-    intermediateRowWindowEndPos = intermediateRowArity - 1
+    rowTimePos = intermediateRowArity - 2
   }
 
+  /**
+    * For sub-grouped intermediate aggregate Rows, dividing  window according to the row-time
+    * and merge data within a unified window into aggregate buffer.
+    * The algorithm of dividing window is  current'row-time -  previous’row-time > gap.
+    *
+    * @param records  Sub-grouped intermediate aggregate Rows iterator.
+    * @return Combined intermediate aggregate Row.
+    *
+    */
   override def combine(
     records: Iterable[Row],
     out: Collector[Row]): Unit = {
-    // Merge intermediate aggregate value to buffer.
-    var last:Row = null
+
     var head:Row = null
-    var lastWindowEnd: Long = -1
-    var currentWindowStart: Long = -1
+    var lastRowTime: Option[Long] = None
+    var currentRowTime: Option[Long] = None
 
     records.foreach(
       (record) => {
-        currentWindowStart =
-          record.productElement(intermediateRowWindowStartPos).asInstanceOf[Long]
+        currentRowTime = Some(record.productElement(rowTimePos).asInstanceOf[Long])
 
-        if (lastWindowEnd == -1) {
+        // Initial traversal or new window open
+        // Current session window end is last row-time + gap
+        if (lastRowTime == None ||
+          (lastRowTime != None && (currentRowTime.get > (lastRowTime.get + gap)))) {
+
+          // Calculate the current window and open a new window
+          if (lastRowTime != None) {
+            // Emit the current window's merged data
+            doCollect(out, head, lastRowTime.get)
+          }
+
           // Initiate intermediate aggregate value.
           aggregates.foreach(_.initiate(aggregateBuffer))
           head = record
-          lastWindowEnd = currentWindowStart
         }
 
-        if (currentWindowStart > lastWindowEnd) {
-          doCollect(out, last, head)
-          head = record
-          // Initiate intermediate aggregate value.
-          aggregates.foreach(_.initiate(aggregateBuffer))
-        }
+        // Merge intermediate aggregate value to buffer.
         aggregates.foreach(_.merge(record, aggregateBuffer))
-        last = record
-        lastWindowEnd =
-          record.productElement(intermediateRowWindowStartPos).asInstanceOf[Long] + gap
+
+        //The current row-time is the last row-time of the next calculation
+        lastRowTime = currentRowTime
       })
-
-    doCollect(out, last, head)
-
+    // Emit the current window's merged data
+    doCollect(out, head, lastRowTime.get)
   }
 
   def doCollect(
     out: Collector[Row],
-    last: Row,
-    head: Row): Unit =
-  {
+    head: Row,
+    lastRowTime: Long): Unit = {
+
     // Set group keys to aggregateBuffer.
     for (i <- 0 until groupingKeys.length) {
-      aggregateBuffer.setField(i, last.productElement(i))
+      aggregateBuffer.setField(i, head.productElement(i))
     }
 
-    val start = head.productElement(intermediateRowWindowStartPos)
-                .asInstanceOf[Long]
-    val end = last.productElement(intermediateRowWindowStartPos)
-              .asInstanceOf[Long] + gap
+    //The window's start attribute value is the min (row-time) of all rows in the window
+    val windowStart = head.productElement(rowTimePos).asInstanceOf[Long]
 
-    aggregateBuffer.setField(intermediateRowWindowStartPos, start)
-    aggregateBuffer.setField(intermediateRowWindowEndPos, end)
+    //The window's end property value is max (row-time) + gap for all rows in the window
+    val windowEnd = lastRowTime + gap
+
+    //intermediate Row WindowStartPos is row-time pos
+    aggregateBuffer.setField(rowTimePos, windowStart)
+    //intermediate Row WindowEndPos is row-time pos + 1
+    aggregateBuffer.setField(rowTimePos + 1, windowEnd)
 
     out.collect(aggregateBuffer)
   }

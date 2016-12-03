@@ -649,11 +649,6 @@ class Table(
     * @return A windowed table.
     */
   def window(groupWindow: GroupWindow): GroupWindowedTable = {
-    if (tableEnv.isInstanceOf[BatchTableEnvironment]) {
-      throw new ValidationException(
-        s"Windows on non-grouped batch tables are currently not " +
-          s"supported.")
-    }
     new GroupWindowedTable(this, Seq(), groupWindow)
   }
 }
@@ -724,31 +719,6 @@ class GroupedTable(
     * @return A windowed table.
     */
   def window(groupWindow: GroupWindow): GroupWindowedTable = {
-    if (table.tableEnv.isInstanceOf[BatchTableEnvironment]) {
-      val (isSupportGroupWindowType, msg) = groupWindow match {
-        case _ if groupWindow.isInstanceOf[SessionEventTimeWindow] =>
-          (true, "")
-        case _ if groupWindow.isInstanceOf[TumblingEventTimeWindow] =>
-          (false, s"Windows on batch tables are currently not " +
-            s"supported TumblingEventTimeWindow.")
-        case _ if groupWindow.isInstanceOf[SlidingEventTimeWindow] =>
-          (false, s"Windows on batch tables are currently not " +
-            s"supported SlidingEventTimeWindow.")
-        case _ if groupWindow.isInstanceOf[TumblingWindow] =>
-          (false, s"Windows on batch tables are currently not " +
-            s"supported TumblingProcessingTimeWindow.")
-        case _ if groupWindow.isInstanceOf[SlidingWindow] =>
-          (false, s"Windows on batch tables are currently not " +
-            s"supported SlidingProcessingTimeWindow.")
-        case _ if groupWindow.isInstanceOf[SessionWindow] =>
-          (false, s"Windows on batch tables are currently not " +
-            s"supported SessionProcessingTimeWindow.")
-        case _ => (false, "Unknow window type.")
-      }
-      if (!isSupportGroupWindowType) {
-        throw new ValidationException(msg)
-      }
-    }
     new GroupWindowedTable(table, groupKey, groupWindow)
   }
 }
