@@ -748,7 +748,7 @@ object AggregateUtil {
     // get all field data types of all intermediate aggregates
     val aggTypes: Seq[TypeInformation[_]] = aggregates.flatMap(_.intermediateDataType)
 
-    // concat group key types and aggregation types and window key types
+    // concat group key types, aggregation types, and window key types
     val allFieldTypes:Seq[TypeInformation[_]] = windowKeyTypes match {
       case None => groupingTypes ++: aggTypes
       case _ => groupingTypes ++: aggTypes ++: windowKeyTypes.get

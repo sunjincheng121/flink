@@ -26,7 +26,7 @@ import org.apache.flink.configuration.Configuration
 import org.apache.flink.util.Preconditions
 
 /**
-  * Pre-processes the aggregations and adds row-time to the intermediate row.
+  * Pre-process the aggregations and add row-time to the intermediate row.
   * @param aggregates The aggregate functions.
   */
 class DataSetWindowAggregateMapFunction[IN, OUT](

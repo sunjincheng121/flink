@@ -36,13 +36,13 @@ class DataSetWindowAggregateRule
   override def matches(call: RelOptRuleCall): Boolean = {
     val agg: LogicalWindowAggregate = call.rel(0).asInstanceOf[LogicalWindowAggregate]
 
-    // check if we have distinct aggregates
+    // check if it have distinct aggregates
     val distinctAggs = agg.getAggCallList.exists(_.isDistinct)
     if (distinctAggs) {
       throw TableException("DISTINCT aggregates are currently not supported.")
     }
 
-    // check if we have grouping sets
+    // check if it have grouping sets
     val groupSets = agg.getGroupSets.size() != 1 || agg.getGroupSets.get(0) != agg.getGroupSet
     if (groupSets || agg.indicator) {
       throw TableException("GROUPING SETS are currently not supported.")

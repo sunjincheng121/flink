@@ -147,7 +147,7 @@ class DataSetWindowAggregate(
       grouping,
       inputType)
 
-    // create groupReduceFunction for calculate the aggregations
+    // create groupReduceFunction for calculating the aggregations
     val groupReduceFunction =
     AggregateUtil.createDataSetWindowAggregateReduceGroupFunction(
       window,
@@ -157,8 +157,8 @@ class DataSetWindowAggregate(
       rowRelDataType,
       grouping)
 
-    // Gets the position of the window start and end attributes in the intermediate result for
-    // Combine and reduce.
+    // gets the start and end position of the window in the intermediate result for
+    // combine and reduce.
     val (windowStartPos, windowEndPos) =
     AggregateUtil.computeWindowStartEndPropertyIntermediatePos(
       namedAggregates,
@@ -187,12 +187,12 @@ class DataSetWindowAggregate(
             mappedInput)
         case _ =>
           throw new UnsupportedOperationException(
-            s"windows are currently bot supported $window " +
+            s"windows are currently not supported $window " +
               s"on batch tables")
       }
 
     }
-    // if the expected type is not a Row, inject a mapper to convert to the expected type
+    // if the expected type is not a Row, inject a mapper to convert it to the expected type
     expectedType match {
       case Some(typeInfo) if typeInfo.getTypeClass != classOf[Row] =>
         val mapName = s"convert: (${getRowType.getFieldNames.asScala.toList.mkString(", ")})"

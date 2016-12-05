@@ -27,7 +27,7 @@ import org.apache.flink.util.{Collector, Preconditions}
 import scala.collection.JavaConversions._
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow
 /**
-  * It wraps the aggregate logic inside of
+  * this wraps the aggregate logic inside of
   * [[org.apache.flink.api.java.operators.GroupReduceOperator]].
   *
   * @param aggregates       The aggregate functions.
@@ -66,10 +66,10 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
   }
 
   /**
-    * For grouped intermediate aggregate Rows, dividing  window according to the window-start
-    * and window-end, merge data within a unified window into aggregate buffer,calculate
-    * aggregated values output by aggregate buffer, and set them into output
-    * Row based on the mapping relation between intermediate aggregate data and output data.
+    * For grouped intermediate aggregate Rows, divide window according to the window-start
+    * and window-end, merge data (within a unified window) into an aggregate buffer, calculate
+    * aggregated values output from aggregate buffer, and then set them into output
+    * Row based on the mapping relationship between intermediate aggregate data and output data.
     *
     * @param records Grouped intermediate aggregate Rows iterator.
     * @param out     The collector to hand results to.
@@ -86,17 +86,17 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
       (record) => {
         currentWindowStart =
           Some(record.productElement(intermediateRowWindowStartPos).asInstanceOf[Long])
-        // Initial traversal or new window open
+        // initial traversal or new window open
         if (lastWindowEnd == None ||
           (lastWindowEnd != None && currentWindowStart.get > lastWindowEnd.get)) {
 
-          // Calculate the current window and open a new window
+          // calculate the current window and open a new window
           if (lastWindowEnd != None) {
 
-            // Evaluate and emit the current window's result.
+            // evaluate and emit the current window's result.
             doEvaluateAndCollect(out, last, head)
           }
-          // Initiate intermediate aggregate value.
+          // initiate intermediate aggregate value.
           aggregates.foreach(_.initiate(aggregateBuffer))
           head = record
         }
@@ -114,19 +114,19 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
     out: Collector[Row],
     last: Row,
     head: Row): Unit = {
-    // Set group keys value to final output.
+    // set group keys value to final output.
     groupKeysMapping.foreach {
       case (after, previous) =>
         output.setField(after, last.productElement(previous))
     }
 
-    // Evaluate final aggregate value and set to output.
+    // evaluate final aggregate value and set to output.
     aggregateMapping.foreach {
       case (after, previous) =>
         output.setField(after, aggregates(previous).evaluate(aggregateBuffer))
     }
 
-    // Adds TimeWindow properties to output then emit output
+    // adds TimeWindow properties to output then emit output
     if (finalRowWindowStartPos != None || finalRowWindowEndPos != None) {
       val start =
         head.productElement(intermediateRowWindowStartPos).asInstanceOf[Long]
@@ -143,13 +143,13 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
 
   def getWindowEnd(record: Row): Long = {
 
-    // Not support partial aggregate, reduce the input data structure is
+    // when partial aggregate is not supported, the input data structure of reduce is
     // |groupKey1|groupKey2|sum1|count1|sum2|count2|rowTime|
     if (record.productArity == intermediateRowWindowEndPos) {
       //session window end is row-time + gap
       record.productElement(intermediateRowWindowStartPos).asInstanceOf[Long] + gap
     }
-    // Support partial aggregate, reduce the input data structure is
+    // when partial aggregate is supported, the input data structure of reduce is
     // |groupKey1|groupKey2|sum1|count1|sum2|count2|windowStart|windowEnd|
     else {
       record.productElement(intermediateRowWindowEndPos).asInstanceOf[Long]
