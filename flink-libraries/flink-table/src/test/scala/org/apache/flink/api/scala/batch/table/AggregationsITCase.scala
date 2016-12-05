@@ -429,12 +429,23 @@ class AggregationsITCase(
   }
 
   @Test(expected = classOf[UnsupportedOperationException])
-  def testNonGroupedEventTimeSessionGroupWindow(): Unit = {
+  def testAlldEventTimeSessionGroupWindow(): Unit = {
     val env = ExecutionEnvironment.getExecutionEnvironment
     val tEnv = TableEnvironment.getTableEnvironment(env, config)
     val table = env.fromCollection(data).toTable(tEnv, 'rowtime, 'string)
     val windowedTable =table
       .window(Session withGap 7.milli on 'rowtime as 'w)
+      .select('string.count).toDataSet[Row].collect()
+  }
+
+  @Test(expected = classOf[UnsupportedOperationException])
+  def testProcessingTimeSessionGroupWindow(): Unit = {
+    val env = ExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env, config)
+    val table = env.fromCollection(data).toTable(tEnv, 'rowtime, 'string)
+    val windowedTable =table
+      .groupBy('string)
+      .window(Session withGap 7.milli as 'w)
       .select('string.count).toDataSet[Row].collect()
   }
 

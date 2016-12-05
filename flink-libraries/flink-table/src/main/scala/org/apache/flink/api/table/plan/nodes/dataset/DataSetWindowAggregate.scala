@@ -179,8 +179,8 @@ class DataSetWindowAggregate(
             mappedInput)
         case _ =>
           throw new UnsupportedOperationException(
-            s"windows are currently not supported $window " +
-              s"on batch tables")
+            s" [ ${window.getClass.getCanonicalName.split("\\.").last} ] is currently not " +
+              s"supported on batch tables. ")
       }
 
     }

@@ -98,12 +98,12 @@ object AggregateUtil {
     *                   avg(x) aggOffsetInRow = 2          count(z) aggOffsetInRow = 5
     *                             |                          |
     *                             v                          v
-    *        +---------+---------+--------+--------+--------+--------+-------+
-    *        |groupKey1|groupKey2|  sum1  | count1 |  sum2  | count2 |rowTime|
-    *        +---------+---------+--------+--------+--------+--------+-------+
+    *        +---------+---------+--------+--------+--------+--------+--------+
+    *        |groupKey1|groupKey2|  sum1  | count1 |  sum2  | count2 |row-time|
+    *        +---------+---------+--------+--------+--------+--------+--------+
     *                                              ^                 ^
-    *                                              |                 |windowKeyOffsetInRow = 6
-    *                               sum(y) aggOffsetInRow = 4    windowKey(rowTime)
+    *                                              |                 |
+    *                               sum(y) aggOffsetInRow = 4    row-time
     *
     * }}}
     *
@@ -141,8 +141,8 @@ object AggregateUtil {
 
       case _ =>
         throw new UnsupportedOperationException(
-          s"windows are currently not supported $window " +
-            s"on batch tables")
+          s" [ ${window.getClass.getCanonicalName.split("\\.").last} ] is currently not " +
+            s"supported on batch tables. ")
     }
   }
 
@@ -248,8 +248,8 @@ object AggregateUtil {
           combineReturnType)
       case _ =>
         throw new UnsupportedOperationException(
-          s"windows are currently only supported $window " +
-            s"on batch tables")
+          s" [ ${window.getClass.getCanonicalName.split("\\.").last} ] is currently not " +
+            s"supported on batch tables. ")
     }
   }
 
@@ -301,8 +301,8 @@ object AggregateUtil {
             asLong(gap))
       case _ =>
         throw new UnsupportedOperationException(
-          s"windows are currently only supported $window " +
-            "on batch tables")
+          s" [ ${window.getClass.getCanonicalName.split("\\.").last} ] is currently not " +
+            s"supported on batch tables. ")
     }
   }
 
