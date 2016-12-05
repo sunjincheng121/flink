@@ -34,7 +34,6 @@ class DataSetWindowAggregateMapFunction[IN, OUT](
     aggFields: Array[Int],
     groupingKeys: Array[Int],
     rowTimeFieldPos: Int,
-    @transient rowTimeFieldType:TypeInformation[_],
     @transient returnType: TypeInformation[OUT])
   extends RichMapFunction[IN, OUT]
   with ResultTypeQueryable[OUT] {
@@ -45,10 +44,9 @@ class DataSetWindowAggregateMapFunction[IN, OUT](
     Preconditions.checkNotNull(aggregates)
     Preconditions.checkNotNull(aggFields)
     Preconditions.checkArgument(aggregates.size == aggFields.size)
-    //The arity used to store row-time
-    val ROW_TIME_FIELD_ARITY = 1
+    // add one arity used to store row-time.
     val intermediateRowArity = groupingKeys.length +
-      aggregates.map(_.intermediateDataType.length).sum + ROW_TIME_FIELD_ARITY
+      aggregates.map(_.intermediateDataType.length).sum + 1
     output = new Row(intermediateRowArity)
   }
 
@@ -65,7 +63,7 @@ class DataSetWindowAggregateMapFunction[IN, OUT](
       output.setField(i, input.productElement(groupingKeys(i)))
     }
 
-    val rowTime = getTimestamp(input.productElement(rowTimeFieldPos), rowTimeFieldType)
+    val rowTime = getTimestamp(input.productElement(rowTimeFieldPos))
     output.setField(output.productArity-1, rowTime)
 
     output.asInstanceOf[OUT]

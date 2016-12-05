@@ -33,16 +33,7 @@ import scala.util.Random
  */
 object CollectionDataSets {
 
-  def get2TupleDataSet(env:ExecutionEnvironment): DataSet[(Long, String)] = {
-    val data = new mutable.MutableList[(Long, String)]
-    data.+=((1L,"Hi"))
-    data.+=((4L, "Hello"))
-    data.+=((2L, "Hello"))
-    data.+=((17L,"Hello world"))
-    data.+=((8L,"Hello world"))
-    Random.shuffle(data)
-    env.fromCollection(Random.shuffle(data))
-  }
+
 
   def get3TupleDataSet(env: ExecutionEnvironment): DataSet[(Int, Long, String)] = {
     val data = new mutable.MutableList[(Int, Long, String)]

@@ -27,7 +27,7 @@ import org.apache.flink.util.{Collector, Preconditions}
 import scala.collection.JavaConversions._
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow
 /**
-  * this wraps the aggregate logic inside of
+  * This wraps the aggregate logic inside of
   * [[org.apache.flink.api.java.operators.GroupReduceOperator]].
   *
   * @param aggregates       The aggregate functions.
@@ -60,7 +60,7 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
     intermediateRowWindowStartPos = intermediateRowArity - 2
     intermediateRowWindowEndPos = intermediateRowArity - 1
     output = new Row(finalRowArity)
-    if (finalRowWindowStartPos != None || finalRowWindowEndPos != None) {
+    if (finalRowWindowStartPos.isDefined  || finalRowWindowEndPos.isDefined) {
       collector = new TimeWindowPropertyCollector(finalRowWindowStartPos, finalRowWindowEndPos)
     }
   }
@@ -87,11 +87,11 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
         currentWindowStart =
           Some(record.productElement(intermediateRowWindowStartPos).asInstanceOf[Long])
         // initial traversal or new window open
-        if (lastWindowEnd == None ||
-          (lastWindowEnd != None && currentWindowStart.get > lastWindowEnd.get)) {
+        if (lastWindowEnd.isEmpty ||
+          (lastWindowEnd.isDefined && currentWindowStart.get > lastWindowEnd.get)) {
 
           // calculate the current window and open a new window
-          if (lastWindowEnd != None) {
+          if (lastWindowEnd.isDefined) {
 
             // evaluate and emit the current window's result.
             doEvaluateAndCollect(out, last, head)
@@ -127,7 +127,7 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
     }
 
     // adds TimeWindow properties to output then emit output
-    if (finalRowWindowStartPos != None || finalRowWindowEndPos != None) {
+    if (finalRowWindowStartPos.isDefined || finalRowWindowEndPos.isDefined) {
       val start =
         head.productElement(intermediateRowWindowStartPos).asInstanceOf[Long]
       val end = getWindowEnd(last)

@@ -31,14 +31,12 @@ import scala.collection.JavaConversions._
 /**
   * This wraps the aggregate logic inside of
   * [[org.apache.flink.api.java.operators.GroupCombineOperator]].
-  *
-  * @param aggregates       The aggregate functions.
   */
 class DataSetSessionWindowAggregateCombineGroupFunction(
     aggregates: Array[Aggregate[_ <: Any]],
     groupingKeys: Array[Int],
     intermediateRowArity: Int,
-    gap:Long,
+    gap: Long,
     @transient returnType: TypeInformation[Row])
   extends RichGroupCombineFunction[Row,Row]
   with ResultTypeQueryable[Row] {
@@ -76,13 +74,18 @@ class DataSetSessionWindowAggregateCombineGroupFunction(
 
         // initial traversal or new window open.
         // the session window end is equal to last row-time + gap .
-        if (lastRowTime == None ||
-          (lastRowTime != None && (currentRowTime.get > (lastRowTime.get + gap)))) {
+        if (lastRowTime.isEmpty ||
+          (lastRowTime.isDefined && (currentRowTime.get > (lastRowTime.get + gap)))) {
 
           // calculate the current window and open a new window.
-          if (lastRowTime != None) {
+          if (lastRowTime.isDefined) {
             // emit the current window's merged data
             doCollect(out, head, lastRowTime.get)
+          }else{
+            // set group keys to aggregateBuffer.
+            for (i <- 0 until groupingKeys.length) {
+              aggregateBuffer.setField(i, record.productElement(i))
+            }
           }
 
           // initiate intermediate aggregate value.
@@ -104,11 +107,6 @@ class DataSetSessionWindowAggregateCombineGroupFunction(
     out: Collector[Row],
     head: Row,
     lastRowTime: Long): Unit = {
-
-    // set group keys to aggregateBuffer.
-    for (i <- 0 until groupingKeys.length) {
-      aggregateBuffer.setField(i, head.productElement(i))
-    }
 
     // the window's start attribute value is the min (row-time) of all rows in the window.
     val windowStart = head.productElement(rowTimePos).asInstanceOf[Long]

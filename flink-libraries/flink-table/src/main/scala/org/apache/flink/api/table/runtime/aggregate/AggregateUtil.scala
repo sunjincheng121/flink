@@ -29,15 +29,17 @@ import org.apache.flink.api.common.functions.{MapFunction, RichGroupCombineFunct
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
 import org.apache.flink.api.java.tuple.Tuple
 import org.apache.flink.api.table.FlinkRelBuilder.NamedWindowProperty
-import org.apache.flink.api.table.expressions.{ResolvedFieldReference, WindowEnd, WindowStart}
+import org.apache.flink.api.table.expressions.{Expression, _}
 import org.apache.flink.api.table.plan.logical.{EventTimeGroupWindow, _}
-import org.apache.flink.api.table.typeutils.RowTypeInfo
+import org.apache.flink.api.table.typeutils.{RowTypeInfo, TimeIntervalTypeInfo}
 import org.apache.flink.api.table.typeutils.TypeCheckUtils._
 import org.apache.flink.api.table.{FlinkTypeFactory, Row, TableException}
 import org.apache.flink.streaming.api.functions.windowing.{AllWindowFunction, WindowFunction}
 import org.apache.flink.streaming.api.windowing.windows.{Window => DataStreamWindow}
 import org.apache.flink.api.common.typeinfo.SqlTimeTypeInfo
 import java.sql.Timestamp
+
+import org.apache.flink.streaming.api.windowing.time.Time
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.ArrayBuffer
@@ -120,7 +122,7 @@ object AggregateUtil {
       groupings.length)
 
     window match {
-      case w@EventTimeSessionGroupWindow(_, _, _) =>
+      case EventTimeSessionGroupWindow(_, timeField, gap) =>
         val mapReturnType: RowTypeInfo =
           createAggregateBufferDataType(
             groupings,
@@ -128,14 +130,13 @@ object AggregateUtil {
             inputType,
             Option(Array(BasicTypeInfo.LONG_TYPE_INFO)))
 
-        val (rowTimeFieldPos, rowTimeFieldType) = getTimeFieldInfo(w, inputType)
+        val rowTimeFieldPos = getTimeFieldPos(timeField,inputType)
 
         new DataSetWindowAggregateMapFunction[Row, Row](
           aggregates,
           aggFieldIndexes,
           groupings,
           rowTimeFieldPos,
-          rowTimeFieldType,
           mapReturnType.asInstanceOf[RowTypeInfo]).asInstanceOf[MapFunction[Any, Row]]
 
       case _ =>
@@ -203,14 +204,15 @@ object AggregateUtil {
     *
     * {{{
     *                   avg(x) aggOffsetInRow = 2          count(z) aggOffsetInRow = 5
-    *                             |                          |
-    *                             v                          v
+    *                             |                          |          windowEnd(max(row-time)
+    *                             |                          |                   |
+    *                             v                          v                   v
     *        +---------+---------+--------+--------+--------+--------+-----------+---------+
     *        |groupKey1|groupKey2|  sum1  | count1 |  sum2  | count2 |windowStart|windowEnd|
     *        +---------+---------+--------+--------+--------+--------+-----------+---------+
     *                                              ^                 ^
-    *                                              |                 |windowKeyOffsetInRow = 6
-    *                               sum(y) aggOffsetInRow = 4    windowKey(windowStart,windowEnd)
+    *                                              |                 |
+    *                               sum(y) aggOffsetInRow = 4    windowStart(min(row-time))
     *
     * }}}
     *
@@ -225,13 +227,12 @@ object AggregateUtil {
       namedAggregates.map(_.getKey),
       inputType,
       groupings.length)._2
-    //The arity used to store window start and properties
-    val WINDOW_START_END_ARITY = 2
+    //The two arity used to store window start and properties
     val intermediateRowArity = groupings.length +
-      aggregates.map(_.intermediateDataType.length).sum + WINDOW_START_END_ARITY
+      aggregates.map(_.intermediateDataType.length).sum + 2
 
     window match {
-      case w@EventTimeSessionGroupWindow(_, _, _) =>
+      case EventTimeSessionGroupWindow(_, _, gap) =>
         val combineReturnType: RowTypeInfo =
           createAggregateBufferDataType(
             groupings,
@@ -239,13 +240,11 @@ object AggregateUtil {
             inputType,
             Option(Array(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO)))
 
-        val gap = w.gap.productElement(0).asInstanceOf[Long]
-
         new DataSetSessionWindowAggregateCombineGroupFunction(
           aggregates,
           groupings,
           intermediateRowArity,
-          gap,
+          asLong(gap),
           combineReturnType)
       case _ =>
         throw new UnsupportedOperationException(
@@ -290,10 +289,7 @@ object AggregateUtil {
       }
 
     window match {
-      case EventTimeSessionGroupWindow(_, _, _) =>
-          val gap = window.asInstanceOf[EventTimeSessionGroupWindow]
-                  .gap.productElement(0)
-                  .asInstanceOf[Long]
+      case EventTimeSessionGroupWindow(_, _, gap) =>
           new DataSetSessionWindowAggregateReduceGroupFunction(
             aggregates,
             groupingOffsetMapping,
@@ -302,8 +298,8 @@ object AggregateUtil {
             outputType.getFieldCount,
             startPos,
             endPos,
-            gap)
-      case w@_ =>
+            asLong(gap))
+      case _ =>
         throw new UnsupportedOperationException(
           s"windows are currently only supported $window " +
             "on batch tables")
@@ -481,20 +477,26 @@ object AggregateUtil {
     }
   }
 
-  private[flink] def getTimestamp(timeField: Any, typeInfo: TypeInformation[_]): Long = {
-    typeInfo match {
-      case BasicTypeInfo.CHAR_TYPE_INFO => timeField.asInstanceOf[Character].toLong
-      case BasicTypeInfo.FLOAT_TYPE_INFO => timeField.asInstanceOf[Float].toLong
-      case BasicTypeInfo.SHORT_TYPE_INFO => timeField.asInstanceOf[Short].toLong
-      case BasicTypeInfo.BYTE_TYPE_INFO => timeField.asInstanceOf[Byte].toLong
-      case BasicTypeInfo.DOUBLE_TYPE_INFO => timeField.asInstanceOf[Double].toLong
-      case BasicTypeInfo.LONG_TYPE_INFO => timeField.asInstanceOf[Long]
-      case BasicTypeInfo.INT_TYPE_INFO => timeField.asInstanceOf[Int].toLong
-      case BasicTypeInfo.STRING_TYPE_INFO => timeField.asInstanceOf[String].toLong
-      case SqlTimeTypeInfo.TIMESTAMP => timeField.asInstanceOf[Timestamp].getTime
+  private[flink] def getTimestamp(timeField: Any): Long = {
+    timeField match {
+      case b: Byte => b.toLong
+      case t: Character => t.toLong
+      case s: Short => s.toLong
+      case i: Int => i.toLong
+      case l: Long => l
+      case f: Float => f.toLong
+      case d: Double => d.toLong
+      case s: String => s.toLong
+      case t: Timestamp => t.getTime
       case other@_ =>
         throw new RuntimeException(s"Window time field doesn't support $other type currently")
     }
+  }
+
+  private[flink] def asLong(expr: Expression): Long = expr match {
+    case Literal(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
+      Time.milliseconds(value).toMilliseconds
+    case _ => throw new IllegalArgumentException()
   }
 
   /**
@@ -510,14 +512,14 @@ object AggregateUtil {
       groupKeysCount)._2.forall(_.supportPartial)
   }
 
-  private def getTimeFieldInfo(
-    groupWindow: EventTimeGroupWindow,
-    inputType: RelDataType): (Int, TypeInformation[_]) = {
-    groupWindow.time match {
+  private def getTimeFieldPos(
+    timeField: Expression,
+    inputType: RelDataType): Int = {
+    timeField match {
       case ResolvedFieldReference(name, resultType) =>
         val relDataType = inputType.getFieldList.filter(r => name.equals(r.getName))
         if (relDataType.length == 1) {
-          (relDataType.head.getIndex, FlinkTypeFactory.toTypeInfo(relDataType.head.getType))
+          relDataType.head.getIndex
         } else {
           throw new IllegalArgumentException()
         }

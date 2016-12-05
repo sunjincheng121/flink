@@ -23,13 +23,13 @@ import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rel.core.AggregateCall
 import org.apache.calcite.rel.metadata.RelMetadataQuery
 import org.apache.calcite.rel.{RelNode, RelWriter, SingleRel}
-import org.apache.flink.api.common.functions.{MapFunction, RichGroupReduceFunction}
+import org.apache.flink.api.common.functions.RichGroupReduceFunction
 import org.apache.flink.api.common.operators.Order
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.DataSet
-import org.apache.flink.api.java.operators.{MapOperator, UnsortedGrouping}
+import org.apache.flink.api.java.operators.MapOperator
 import org.apache.flink.api.table.FlinkRelBuilder.NamedWindowProperty
-import org.apache.flink.api.table.plan.logical.{EventTimeSessionGroupWindow, LogicalWindow}
+import org.apache.flink.api.table.plan.logical.{EventTimeSessionGroupWindow,LogicalWindow}
 import org.apache.flink.api.table.plan.nodes.FlinkAggregate
 import org.apache.flink.api.table.runtime.aggregate.AggregateUtil
 import org.apache.flink.api.table.runtime.aggregate.AggregateUtil.CalcitePair
@@ -39,7 +39,7 @@ import org.apache.flink.api.table.{BatchTableEnvironment, FlinkTypeFactory, Row}
 import scala.collection.JavaConverters._
 
 /**
-  * Flink RelNode which matches along with a LogicalWindow.
+  * Flink RelNode which matches along with a LogicalWindowAggregate.
   */
 class DataSetWindowAggregate(
     window: LogicalWindow,
@@ -136,9 +136,13 @@ class DataSetWindowAggregate(
       namedAggregates,
       namedProperties)
 
-    val prepareOpName = s"prepare select: ($aggString)"
-    val aggOpName = s"groupBy: (${groupingToString(inputType, grouping)}), " +
-      s"window: ($window), select: ($aggString)"
+    val aggOpName =
+      if (grouping.length > 0) {
+        s"groupBy: (${groupingToString(inputType, grouping)}), " +
+          s"window: ($window), select: ($aggString)"
+      } else {
+        s"window: ($window), select: ($aggString)"
+      }
 
     //create mapFunction for initializing the aggregations
     val mapFunction = AggregateUtil.createDataSetWindowPrepareMapFunction(
@@ -157,33 +161,21 @@ class DataSetWindowAggregate(
       rowRelDataType,
       grouping)
 
-    // gets the start and end position of the window in the intermediate result for
-    // combine and reduce.
-    val (windowStartPos, windowEndPos) =
-    AggregateUtil.computeWindowStartEndPropertyIntermediatePos(
-      namedAggregates,
-      inputType,
-      grouping)
 
-    // the position of the rowtime field in the intermediate result for map output
-    val rowtimeFilePos = windowStartPos
+    val prepareOpName = s"prepare select: ($aggString)"
 
-    val mappedInput = inputDS
-                      .map(mapFunction)
-                      .name(prepareOpName)
+    val mappedInput =
+      inputDS
+      .map(mapFunction)
+      .name(prepareOpName)
 
     // check whether all aggregates support partial aggregate
     val result: DataSet[Any] = {
       window match {
         case EventTimeSessionGroupWindow(_, _, _) =>
-          doEventTimeSessionGroupWindow(
-            groupingKeys,
-            rowTypeInfo,
+           createEventTimeSessionGroupWindowDataSet(
             aggOpName,
             groupReduceFunction,
-            windowStartPos,
-            windowEndPos,
-            rowtimeFilePos,
             mappedInput)
         case _ =>
           throw new UnsupportedOperationException(
@@ -209,17 +201,26 @@ class DataSetWindowAggregate(
       case _ => result
     }
   }
-
-  private def doEventTimeSessionGroupWindow(
-    groupingKeys: Array[Int],
-    rowTypeInfo: RowTypeInfo,
+  private[this] def createEventTimeSessionGroupWindowDataSet(
     aggOpName: String,
     groupReduceFunction: RichGroupReduceFunction[Row, Row],
-    windowStartPos: Int,
-    windowEndPos: Int,
-    rowtimeFilePos: Int,
     mappedInput: MapOperator[Any, Row]): DataSet[Any] = {
+    val groupingKeys = grouping.indices.toArray
+    val rowTypeInfo = resultRowTypeInfo
+
+    // gets the start and end position of the window in the intermediate result for
+    // combine and reduce.
+    val (windowStartPos, windowEndPos) =
+    AggregateUtil.computeWindowStartEndPropertyIntermediatePos(
+      namedAggregates,
+      inputType,
+      grouping)
+
+    // the position of the rowtime field in the intermediate result for map output
+    val rowTimeFilePos = windowStartPos
+    // grouping window
     if (groupingKeys.length > 0) {
+      // do incremental aggregation
       if (AggregateUtil.doAllSupportPartialAggregation(
         namedAggregates.map(_.getKey),
         inputType,
@@ -232,7 +233,7 @@ class DataSetWindowAggregate(
             grouping)
 
         mappedInput.groupBy(groupingKeys: _*)
-        .sortGroup(rowtimeFilePos, Order.ASCENDING)
+        .sortGroup(rowTimeFilePos, Order.ASCENDING)
         .combineGroup(combineGroupFunction)
         .groupBy(groupingKeys: _*)
         .sortGroup(windowStartPos, Order.ASCENDING)
@@ -242,17 +243,30 @@ class DataSetWindowAggregate(
         .name(aggOpName)
         .asInstanceOf[DataSet[Any]]
       }
+      // do incremental aggregation
       else {
         mappedInput.groupBy(groupingKeys: _*)
-        .sortGroup(rowtimeFilePos, Order.ASCENDING)
+        .sortGroup(rowTimeFilePos, Order.ASCENDING)
         .reduceGroup(groupReduceFunction)
         .returns(rowTypeInfo)
         .name(aggOpName)
         .asInstanceOf[DataSet[Any]]
       }
-    } else {
+    }
+    // non-grouping window
+    else {
       throw new UnsupportedOperationException(
         "Session non-grouping window on event-time are currently not supported.")
     }
   }
+
+  private[this] def resultRowTypeInfo: RowTypeInfo = {
+    // get the output types
+    val fieldTypes: Array[TypeInformation[_]] =
+    getRowType.getFieldList.asScala
+    .map(field => FlinkTypeFactory.toTypeInfo(field.getType))
+    .toArray
+    new RowTypeInfo(fieldTypes)
+  }
+
 }

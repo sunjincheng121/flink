@@ -26,7 +26,7 @@ import org.apache.flink.api.table.validate.{ValidationFailure, ValidationResult,
 
 abstract class EventTimeGroupWindow(
     name: Option[Expression],
-    private[flink] val time: Expression)
+    time: Expression)
   extends LogicalWindow(name) {
 
   override def validate(tableEnv: TableEnvironment): ValidationResult = {
