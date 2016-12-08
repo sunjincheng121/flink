@@ -17,7 +17,7 @@
  */
 package org.apache.flink.api.scala.stream.table
 
-import org.apache.flink.api.scala.stream.utils.{StreamTestData}
+import org.apache.flink.api.scala.stream.utils.StreamTestData
 import org.apache.flink.api.table.{Row, TableEnvironment}
 import org.apache.flink.api.table.utils.TableTestBase
 
@@ -26,6 +26,7 @@ import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.stream.utils.StreamITCase
 import org.apache.flink.api.scala.table._
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
+import org.junit.Assert._
 import org.junit.Test
 
 class JoinITCase extends TableTestBase {
@@ -37,15 +38,30 @@ class JoinITCase extends TableTestBase {
     val ds1 = StreamTestData.getSmall3TupleDataStream(env).toTable(tEnv, 'a, 'b, 'c)
     val ds2 = StreamTestData.get5TupleDataStream(env).toTable(tEnv, 'd, 'e, 'f, 'g, 'h)
 
-    val joinT = ds1.join(ds2).where('b === 'e).select('a, 'b, 'c, 'd, 'e, 'f, 'g, 'h)
+    val joinT = ds1.join(ds2).where('b === 'e).select('b, 'c,'e,'g)
+    val results = joinT.toDataStream[Row]
+    results.addSink(new StreamITCase.StringSink)
+    env.execute()
+    val expected = Seq("1,Hi,1,Hallo", "2,Hello world,2,Hallo Welt", "2,Hello,2,Hallo Welt")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testStreamJoinWithWindow(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.testResults = mutable.MutableList()
+    val ds1 = StreamTestData.getSmall3TupleDataStream(env).toTable(tEnv, 'a, 'b, 'c)
+    val ds2 = StreamTestData.get5TupleDataStream(env).toTable(tEnv, 'd, 'e, 'f, 'g, 'h)
+
+    val joinT = ds1.join(ds2).where('b === 'e).groupBy('b).window(Slide over 2.rows every 1.rows)
+                .select('b, 'e.count)
     val results = joinT.toDataStream[Row]
     results.addSink(new StreamITCase.StringSink)
     env.execute()
 
-    println("================result[START]==================")
-    for (data <- StreamITCase.testResults.sorted) {
-      println(data)
-    }
-    println("================result[END]==================")
+
+    val expected = Seq("1,1", "2,1", "2,2")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 }
