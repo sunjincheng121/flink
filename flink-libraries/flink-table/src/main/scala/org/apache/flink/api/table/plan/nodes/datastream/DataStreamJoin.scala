@@ -24,7 +24,7 @@ import org.apache.calcite.rel.core.{JoinInfo, JoinRelType}
 import org.apache.calcite.rel.metadata.RelMetadataQuery
 import org.apache.calcite.rex.RexNode
 import org.apache.calcite.util.mapping.IntPair
-import org.apache.flink.api.common.functions.RichFlatJoinFunction
+import org.apache.flink.api.common.functions.{FlatJoinFunction, RichFlatJoinFunction}
 import org.apache.flink.api.common.operators.base.JoinOperatorBase.JoinHint
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.table.codegen.CodeGenerator
@@ -33,7 +33,7 @@ import org.apache.flink.api.common.typeutils.CompositeType
 import org.apache.flink.api.table.{StreamTableEnvironment, TableException}
 import org.apache.flink.api.table.typeutils.TypeConverter._
 import org.apache.flink.streaming.api.datastream.DataStream
-import org.apache.flink.api.table.functions.{StreamConnectCoMapFunction, StreamConnectRichFlatJoinFunction}
+import org.apache.flink.api.table.functions.{StreamConnectCoMapFunction}
 import org.apache.flink.api.table.Row
 import org.apache.flink.api.table.typeutils.RowTypeInfo
 import org.apache.flink.api.table.expressions.ResolvedFieldReference
@@ -170,17 +170,51 @@ class DataStreamJoin (
       throw TableException("Null check in TableConfig must be enabled for outer joins.")
     }
 
-    val joinOpName = s"where: ($joinConditionToString), join: ($joinSelectionToString)"
+    val generator = new CodeGenerator(
+      config,
+      nullCheck,
+      leftDataStream.getType,
+      Some(rightDataStream.getType))
+    val conversion = generator.generateConverterResultExpression(
+      returnType,
+      joinRowType.getFieldNames)
 
-    val joinFunction = new StreamConnectRichFlatJoinFunction[Any,Any,Any]()
+    var body = ""
+
+    if (joinInfo.isEqui) {
+      // only equality condition
+      body = s"""
+                |${conversion.code}
+                |${generator.collectorTerm}.collect(${conversion.resultTerm});
+                |""".stripMargin
+    }
+    else {
+      val condition = generator.generateExpression(joinCondition)
+      body = s"""
+                |${condition.code}
+                |if (${condition.resultTerm}) {
+                |  ${conversion.code}
+                |  ${generator.collectorTerm}.collect(${conversion.resultTerm});
+                |}
+                |""".stripMargin
+    }
+    val genFunction = generator.generateFunction(
+      ruleDescription,
+      classOf[FlatJoinFunction[Any, Any, Any]],
+      body,
+      returnType)
+
+    val joinFun = new FlatJoinRunner[Any, Any, Any](
+      genFunction.name,
+      genFunction.code,
+      genFunction.returnType)
+    val joinOpName = s"where: ($joinConditionToString), join: ($joinSelectionToString)"
 
     val coMapFun =
       new StreamConnectCoMapFunction[Any,Any, Any](
-        joinFunction,
+        joinFun,
         leftKeys.toArray,
         rightKeys.toArray,
-        leftDataStream.getType.asInstanceOf[CompositeType[Any]],
-        rightDataStream.getType.asInstanceOf[CompositeType[Any]],
         returnType.asInstanceOf[CompositeType[Any]])
 
     connectOperator

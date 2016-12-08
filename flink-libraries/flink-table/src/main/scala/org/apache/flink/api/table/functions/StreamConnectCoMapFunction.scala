@@ -37,8 +37,6 @@ class StreamConnectCoMapFunction[L, R, O](
   joiner: RichFlatJoinFunction[L, R, O],
   leftKeys: Array[Int],
   rightKeys: Array[Int],
-  leftType: TypeInformation[L],
-  rightType: TypeInformation[R],
   resultType: TypeInformation[O]) extends
   RichCoFlatMapFunction[L,
     R, O] with ResultTypeQueryable[O] {
