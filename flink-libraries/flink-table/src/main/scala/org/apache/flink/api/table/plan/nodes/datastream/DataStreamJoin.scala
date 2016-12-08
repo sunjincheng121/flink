@@ -24,7 +24,7 @@ import org.apache.calcite.rel.core.{JoinInfo, JoinRelType}
 import org.apache.calcite.rel.metadata.RelMetadataQuery
 import org.apache.calcite.rex.RexNode
 import org.apache.calcite.util.mapping.IntPair
-import org.apache.flink.api.common.functions.{FlatJoinFunction, RichFlatJoinFunction}
+import org.apache.flink.api.common.functions.{FlatJoinFunction}
 import org.apache.flink.api.common.operators.base.JoinOperatorBase.JoinHint
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.table.codegen.CodeGenerator
@@ -34,9 +34,6 @@ import org.apache.flink.api.table.{StreamTableEnvironment, TableException}
 import org.apache.flink.api.table.typeutils.TypeConverter._
 import org.apache.flink.streaming.api.datastream.DataStream
 import org.apache.flink.api.table.functions.{StreamConnectCoMapFunction}
-import org.apache.flink.api.table.Row
-import org.apache.flink.api.table.typeutils.RowTypeInfo
-import org.apache.flink.api.table.expressions.ResolvedFieldReference
 
 import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
