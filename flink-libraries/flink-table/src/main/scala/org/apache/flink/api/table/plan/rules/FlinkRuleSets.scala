@@ -119,6 +119,22 @@ object FlinkRuleSets {
       TableScanRule.INSTANCE,
       EnumerableToLogicalTableScan.INSTANCE,
 
+      // push a filter into a join
+      FilterJoinRule.FILTER_ON_JOIN,
+      // push filter into the children of a join
+      FilterJoinRule.JOIN,
+      // push a projection to the children of a join
+      ProjectJoinTransposeRule.INSTANCE,
+
+      // join rules
+      JoinPushExpressionsRule.INSTANCE,
+
+      // remove aggregation if it does not aggregate and input is already distinct
+      AggregateRemoveRule.INSTANCE,
+      // push aggregate through join
+      AggregateJoinTransposeRule.EXTENDED,
+
+
       // calc rules
       FilterToCalcRule.INSTANCE,
       ProjectToCalcRule.INSTANCE,
@@ -149,6 +165,7 @@ object FlinkRuleSets {
       DataStreamCalcRule.INSTANCE,
       DataStreamScanRule.INSTANCE,
       DataStreamUnionRule.INSTANCE,
+      DataStreamJoinRule.INSTANCE,
       DataStreamValuesRule.INSTANCE,
       StreamTableSourceScanRule.INSTANCE
   )
