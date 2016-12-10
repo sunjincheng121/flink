@@ -19,7 +19,7 @@ package org.apache.flink.api.table.functions
 
 import org.apache.flink.api.common.functions.RichFlatJoinFunction
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.api.common.typeutils.CompositeType
+import org.apache.flink.api.common.typeutils.{CompositeType, TypeSerializer}
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable
 import org.apache.flink.api.table.Row
 import org.apache.flink.configuration.Configuration
@@ -28,20 +28,23 @@ import org.apache.flink.util.Collector
 import org.apache.flink.api.scala._
 import org.apache.flink.api.table.functions.utils.TempStore
 
-import scala.collection.mutable.ArrayBuffer
-
-/**
-  * Created by jincheng.sunjc on 16/12/8.
-  */
 class StreamConnectCoMapFunction[L, R, O](
   joiner: RichFlatJoinFunction[L, R, O],
   leftKeys: Array[Int],
   rightKeys: Array[Int],
+  leftType: CompositeType[L],
+  rightType: CompositeType[R],
   resultType: TypeInformation[O]) extends
   RichCoFlatMapFunction[L,
     R, O] with ResultTypeQueryable[O] {
 
+  protected var leftSerializer : TypeSerializer[L] = null;
+  protected var rightSerializer: TypeSerializer[R] = null;
+
   override def open(parameters: Configuration): Unit = {
+    leftSerializer = leftType.createSerializer(getRuntimeContext.getExecutionConfig)
+    rightSerializer = rightType.createSerializer(getRuntimeContext.getExecutionConfig)
+
     joiner.setRuntimeContext(getRuntimeContext)
     joiner.open(parameters)
   }

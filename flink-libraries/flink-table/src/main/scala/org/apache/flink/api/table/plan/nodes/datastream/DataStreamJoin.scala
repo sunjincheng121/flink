@@ -212,6 +212,8 @@ class DataStreamJoin (
         joinFun,
         leftKeys.toArray,
         rightKeys.toArray,
+        leftDataStream.getType.asInstanceOf[CompositeType[Any]],
+        rightDataStream.getType.asInstanceOf[CompositeType[Any]],
         returnType.asInstanceOf[CompositeType[Any]])
 
     connectOperator
