@@ -29,6 +29,8 @@ import org.apache.flink.api.common.accumulators.LongCounter;
 import org.apache.flink.api.common.cache.DistributedCache;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.state.MapState;
+import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.ReducingState;
 import org.apache.flink.api.common.state.ReducingStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
@@ -305,6 +307,9 @@ public interface RuntimeContext {
 	 */
 	@PublicEvolving
 	<T> ListState<T> getListState(ListStateDescriptor<T> stateProperties);
+
+	@PublicEvolving
+	<K, V> MapState<K, V> getMapState(MapStateDescriptor<K, V> stateProperties);
 
 	/**
 	 * Gets a handle to the system's key/value list state. This state is similar to the state

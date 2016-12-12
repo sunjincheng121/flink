@@ -17,9 +17,6 @@
  */
 package org.apache.flink.api.table.functions
 
-import java.io.ByteArrayOutputStream
-import java.util
-
 import org.apache.flink.api.common.functions.RichFlatJoinFunction
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.common.typeutils.{CompositeType, TypeSerializer}
@@ -28,34 +25,9 @@ import org.apache.flink.api.table.Row
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.streaming.api.functions.co.RichCoFlatMapFunction
 import org.apache.flink.util.Collector
-import org.apache.flink.api.scala._
 import org.apache.flink.api.common.state.{ListState, ListStateDescriptor}
-import org.apache.flink.core.memory.DataOutputViewStreamWrapper
-import org.apache.flink.api.table.typeutils.RowSerializer
 
-class HashWrapper[T](raw: T, serializer: TypeSerializer[T]) extends Serializable {
-  val rawBytes = raw match {
-    case row: Row =>
-      val baos: ByteArrayOutputStream = new ByteArrayOutputStream
-      val out: DataOutputViewStreamWrapper = new DataOutputViewStreamWrapper(baos)
-      serializer.asInstanceOf[RowSerializer].serializeField(row, out)
-      baos.toByteArray
-    case _ =>
-      val baos: ByteArrayOutputStream = new ByteArrayOutputStream
-      val out: DataOutputViewStreamWrapper = new DataOutputViewStreamWrapper(baos)
-      serializer.serialize(raw, out)
-      baos.toByteArray
-  }
-  override def hashCode():Int = util.Arrays.hashCode(rawBytes)
-
-  def canEqual(other : Any) = other.isInstanceOf[HashWrapper[T]]
-
-  override def equals(other: Any) = other match {
-    case that: HashWrapper[T] =>
-      that.canEqual(this) && util.Arrays.equals(this.rawBytes, that.rawBytes)
-    case _ => false
-  }
-}
+import scala.collection.JavaConverters._
 
 class StreamConnectCoMapFunction[L, R, O](
   joiner: RichFlatJoinFunction[L, R, O],
@@ -66,7 +38,7 @@ class StreamConnectCoMapFunction[L, R, O](
   resultType: TypeInformation[O]) extends
   RichCoFlatMapFunction[L, R, O] with ResultTypeQueryable[O] {
 
-
+  protected val STATE_VALUE: Byte = 'v';
   protected var leftSerializer: TypeSerializer[L] = null;
   protected var rightSerializer: TypeSerializer[R] = null;
   protected var leftStateDescriptor: ListStateDescriptor[L] = null
@@ -77,6 +49,7 @@ class StreamConnectCoMapFunction[L, R, O](
     rightSerializer = rightType.createSerializer(getRuntimeContext.getExecutionConfig)
     leftStateDescriptor = new ListStateDescriptor[L]("left", leftSerializer)
     rightStateDescriptor = new ListStateDescriptor[R]("right", rightSerializer)
+
     joiner.setRuntimeContext(getRuntimeContext)
     joiner.open(parameters)
   }
@@ -86,8 +59,10 @@ class StreamConnectCoMapFunction[L, R, O](
     val rightState: ListState[R] = getRuntimeContext.getListState(rightStateDescriptor)
     val left = value.asInstanceOf[Row]
     val rowKey = new StringBuilder
+
     for (i <- leftKeys)
       rowKey.append(left.productElement(i))
+
     leftState.add(value)
     val right = rightState.get().iterator()
     while (right.hasNext) {
@@ -98,6 +73,8 @@ class StreamConnectCoMapFunction[L, R, O](
   override def flatMap2(value: R, out: Collector[O]): Unit = {
     val leftState: ListState[L] = getRuntimeContext.getListState(leftStateDescriptor)
     val rightState: ListState[R] = getRuntimeContext.getListState(rightStateDescriptor)
+
+    val serializedValue = new HashWrapper[R](value, rightSerializer)
 
     val right = value.asInstanceOf[Row]
     val rowKey = new StringBuilder
