@@ -19,7 +19,7 @@ package org.apache.flink.api.table.typeutils
 
 import org.apache.flink.api.common.typeutils.TypeSerializer
 import org.apache.flink.api.table.Row
-import org.apache.flink.api.table.typeutils.NullMaskUtils.{writeNullMask, readIntoNullMask, readIntoAndCopyNullMask}
+import org.apache.flink.api.table.typeutils.NullMaskUtils.{readIntoAndCopyNullMask, readIntoNullMask, writeNullMask}
 import org.apache.flink.core.memory.{DataInputView, DataOutputView}
 
 /**
@@ -205,5 +205,50 @@ class RowSerializer(val fieldSerializers: Array[TypeSerializer[Any]])
 
   override def hashCode(): Int = {
     java.util.Arrays.hashCode(fieldSerializers.asInstanceOf[Array[AnyRef]])
+  }
+
+  def serializeField(value: Row, target: DataOutputView) {
+    val len = fieldSerializers.length
+
+    if (value.productArity != len) {
+      throw new RuntimeException("Row arity of value does not match serializers.")
+    }
+
+    // write a null mask
+    writeNullMask(len, value, target)
+
+    // serialize non-null fields
+    var i = 0
+    while (i < len) {
+      val o = value.productElement(i).asInstanceOf[AnyRef]
+      if (o != null) {
+        val serializer = fieldSerializers(i)
+        serializer.serialize(value.productElement(i), target)
+      }
+      i += 1
+    }
+  }
+
+  def deserializeField(source: DataInputView): Row = {
+    val len = fieldSerializers.length
+
+    val result = new Row(len)
+
+    // read null mask
+    readIntoNullMask(len, source, nullMask)
+
+    // read non-null fields
+    var i = 0
+    while (i < len) {
+      if (nullMask(i)) {
+        result.setField(i, null)
+      }
+      else {
+        result.setField(i, fieldSerializers(i).deserialize(source))
+      }
+      i += 1
+    }
+
+    result
   }
 }

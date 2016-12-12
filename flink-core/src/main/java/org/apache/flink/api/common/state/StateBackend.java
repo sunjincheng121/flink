@@ -59,4 +59,13 @@ public interface StateBackend {
 	 * @param <ACC> Type of the value in the state
 	 */
 	<T, ACC> FoldingState<T, ACC> createFoldingState(FoldingStateDescriptor<T, ACC> stateDesc) throws Exception;
+
+	/**
+	 * Creates and returns a new MapState.
+	 *
+	 * @param stateDesc The StateDescriptor that contains the name of the state.
+	 * @param <K>       Type of the keys in the state.
+	 * @param <V>       Type of the values in the state.
+	 */
+	<K, V> MapState<K, V> createMapState(MapStateDescriptor<K, V> stateDesc) throws Exception;
 }

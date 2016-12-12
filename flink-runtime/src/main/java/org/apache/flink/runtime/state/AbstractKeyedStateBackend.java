@@ -24,6 +24,8 @@ import org.apache.flink.api.common.state.FoldingState;
 import org.apache.flink.api.common.state.FoldingStateDescriptor;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.state.MapState;
+import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.MergingState;
 import org.apache.flink.api.common.state.ReducingState;
 import org.apache.flink.api.common.state.ReducingStateDescriptor;
@@ -37,6 +39,7 @@ import org.apache.flink.core.fs.CloseableRegistry;
 import org.apache.flink.runtime.query.TaskKvStateRegistry;
 import org.apache.flink.util.Preconditions;
 
+import javax.jnlp.UnavailableServiceException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -137,6 +140,16 @@ public abstract class AbstractKeyedStateBackend<K>
 	 * @param <T> The type of the values that the {@code ListState} can store.
 	 */
 	protected abstract <N, T> ListState<T> createListState(TypeSerializer<N> namespaceSerializer, ListStateDescriptor<T> stateDesc) throws Exception;
+
+
+	/**
+	 * Creates and returns a new MapState.
+	 *
+	 * @param stateDesc The StateDescriptor that contains the name of the state.
+	 * @param <K>       Type of the keys in the state.
+	 * @param <V>       Type of the values in the state.
+	 */
+	protected abstract <K, V> MapState<K, V> createMapState(MapStateDescriptor<K, V> stateDesc) throws Exception;
 
 	/**
 	 * Creates and returns a new {@link ReducingState}.
@@ -264,6 +277,11 @@ public abstract class AbstractKeyedStateBackend<K>
 			@Override
 			public <T, ACC> FoldingState<T, ACC> createFoldingState(FoldingStateDescriptor<T, ACC> stateDesc) throws Exception {
 				return AbstractKeyedStateBackend.this.createFoldingState(namespaceSerializer, stateDesc);
+			}
+
+			@Override
+			public <K, V> MapState<K, V> createMapState(MapStateDescriptor<K, V> stateDesc) throws Exception {
+				throw new UnavailableServiceException("MapState not support...");
 			}
 
 		});
