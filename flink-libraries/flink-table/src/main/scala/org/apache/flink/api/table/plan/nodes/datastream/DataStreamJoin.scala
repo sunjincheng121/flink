@@ -86,15 +86,6 @@ class DataStreamJoin (
     .item("join", joinSelectionToString)
     .item("joinType", joinTypeToString)
   }
-  override def computeSelfCost (planner: RelOptPlanner, metadata: RelMetadataQuery): RelOptCost = {
-
-    val children = this.getInputs
-    children.foldLeft(planner.getCostFactory.makeCost(0, 0, 0)) { (cost, child) =>
-      val rowCnt = metadata.getRowCount(child)
-      val rowSize = 2
-      cost.plus(planner.getCostFactory.makeCost(rowCnt, rowCnt, rowCnt * rowSize))
-    }
-  }
   /**
     * Translates the FlinkRelNode into a Flink operator.
     *
@@ -155,8 +146,10 @@ class DataStreamJoin (
       })
     }
 
-    val leftDataStream = left.asInstanceOf[DataStreamRel].translateToPlan(tableEnv)
-    val rightDataStream = right.asInstanceOf[DataStreamRel].translateToPlan(tableEnv)
+    val leftDataStream =
+      left.asInstanceOf[DataStreamRel].translateToPlan(tableEnv, Some(DEFAULT_ROW_TYPE))
+    val rightDataStream =
+      right.asInstanceOf[DataStreamRel].translateToPlan(tableEnv, Some(DEFAULT_ROW_TYPE))
 
     val (connectOperator, nullCheck) = joinType match {
       case JoinRelType.INNER => (leftDataStream.connect(rightDataStream), false)
