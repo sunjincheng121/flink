@@ -215,7 +215,7 @@ class GroupWindowTest extends TableTestBase {
     util.verifyTable(windowedTable, expected)
   }
 
-  @Test // TODO
+  @Test
   @Ignore // see comments in DataStreamAggregate
   def testEventTimeTumblingGroupWindowOverCount(): Unit = {
     val util = streamTestUtil()
@@ -300,7 +300,7 @@ class GroupWindowTest extends TableTestBase {
     util.verifyTable(windowedTable, expected)
   }
 
-  @Test // TODO
+  @Test
   @Ignore // see comments in DataStreamAggregate
   def testEventTimeSlidingGroupWindowOverCount(): Unit = {
     val util = streamTestUtil()
@@ -404,7 +404,7 @@ class GroupWindowTest extends TableTestBase {
     util.verifyTable(windowedTable, expected)
   }
 
-  @Test // TODO
+  @Test
   @Ignore // see comments in DataStreamAggregate
   def testAllEventTimeTumblingGroupWindowOverCount(): Unit = {
     val util = streamTestUtil()
@@ -486,7 +486,7 @@ class GroupWindowTest extends TableTestBase {
     util.verifyTable(windowedTable, expected)
   }
 
-  @Test // TODO
+  @Test
   @Ignore // see comments in DataStreamAggregate
   def testAllEventTimeSlidingGroupWindowOverCount(): Unit = {
     val util = streamTestUtil()

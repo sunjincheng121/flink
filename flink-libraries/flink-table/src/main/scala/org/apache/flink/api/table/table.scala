@@ -789,6 +789,9 @@ class Table(
     if(None == groupWindow.name){
       throw new ValidationException("An alias must be specified for the window.")
     }
+    if(windowPool.contains(groupWindow.name.get)){
+      throw new ValidationException("The window alias can not be duplicated.")
+    }
     windowPool.+=(groupWindow.name.get -> groupWindow)
     this
   }
@@ -813,41 +816,37 @@ class GroupedTable(
     */
   def select(fields: Expression*): Table = {
 
-    var newGroupKey:Seq[Expression] = Seq()
+    var newGroupKey: Seq[Expression] = Seq()
     var window: GroupWindow = null
     for (i <- 0 until groupKey.length) {
       if (table.windowPool.contains(groupKey(i))) {
-        if (null == window) {
-          window = table.windowPool.get(groupKey(i)).get
-        } else {
-          throw new UnsupportedOperationException("Can not contain multiple window definitions.")
-        }
-      }else{
+        window = table.windowPool.get(groupKey(i)).get
+      } else {
         newGroupKey = newGroupKey.+:(groupKey(i))
       }
     }
 
-    if (null == window){
     val (projection, aggs, props) = extractAggregationsAndProperties(fields, table.tableEnv)
 
-    if (props.nonEmpty) {
-      throw ValidationException("Window properties can only be used on windowed tables.")
-    }
+    if (null == window) {
 
-    val logical =
-      Project(
-        projection,
-        Aggregate(
-          groupKey,
-          aggs,
-          table.logicalPlan
+      if (props.nonEmpty) {
+        throw ValidationException("Window properties can only be used on windowed tables.")
+      }
+
+      val logical =
+        Project(
+          projection,
+          Aggregate(
+            groupKey,
+            aggs,
+            table.logicalPlan
+          ).validate(table.tableEnv)
         ).validate(table.tableEnv)
-      ).validate(table.tableEnv)
 
-    new Table(table.tableEnv, logical)
-    }else{
-      val (projection, aggs, props) = extractAggregationsAndProperties(fields, table.tableEnv)
+      new Table(table.tableEnv, logical)
 
+    } else {
       val groupWindow = window.toLogicalWindow
 
       val logical =
@@ -863,6 +862,7 @@ class GroupedTable(
         ).validate(table.tableEnv)
 
       new Table(table.tableEnv, logical)
+
     }
   }
 
