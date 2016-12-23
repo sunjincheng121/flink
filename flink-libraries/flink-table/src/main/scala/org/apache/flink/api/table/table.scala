@@ -62,6 +62,7 @@ class Table(
     private[flink] val tableEnv: TableEnvironment,
     private[flink] val logicalPlan: LogicalNode) {
 
+  // save the all windows information which registered in the table
   private[flink] var windowPool: Map[Expression, GroupWindow] = Map()
 
   def relBuilder = tableEnv.getRelBuilder
@@ -816,20 +817,16 @@ class GroupedTable(
     */
   def select(fields: Expression*): Table = {
 
-    var newGroupKey: Seq[Expression] = Seq()
-    var window: GroupWindow = null
-    for (i <- 0 until groupKey.length) {
-      if (table.windowPool.contains(groupKey(i))) {
-        window = table.windowPool.get(groupKey(i)).get
-      } else {
-        newGroupKey = newGroupKey.+:(groupKey(i))
-      }
-    }
+    // gets the window definition information
+    val window: GroupWindow  = table.windowPool
+      .get(groupKey.find(table.windowPool.contains(_)).getOrElse(null)).getOrElse(null)
+
+    // removes the window column
+    val newGroupKey = groupKey.filterNot(table.windowPool.contains(_))
 
     val (projection, aggs, props) = extractAggregationsAndProperties(fields, table.tableEnv)
 
     if (null == window) {
-
       if (props.nonEmpty) {
         throw ValidationException("Window properties can only be used on windowed tables.")
       }
