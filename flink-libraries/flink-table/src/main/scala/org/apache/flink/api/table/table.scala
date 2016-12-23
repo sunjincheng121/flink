@@ -210,6 +210,11 @@ class Table(
     * }}}
     */
   def groupBy(fields: Expression*): GroupedTable = {
+    if (fields.filter(windowPool.contains(_)).length > 1) {
+      throw new ValidationException(
+        "multiple window columns are found in groupkey, group by can only contain one window " +
+          "column.")
+    }
     new GroupedTable(this, fields)
   }
 

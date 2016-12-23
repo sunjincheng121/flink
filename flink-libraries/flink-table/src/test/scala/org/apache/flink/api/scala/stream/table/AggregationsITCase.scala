@@ -58,7 +58,8 @@ class AggregationsITCase extends StreamingMultipleProgramsTestBase {
 
     val windowedTable = table
       .window(Slide over 2.rows every 1.rows as 'w)
-      .groupBy('w, 'string)
+      .window(Slide over 2.rows every 2.rows as 'w1)
+      .groupBy('w, 'w1, 'string)
       .select('string, 'int.count, 'int.avg)
 
     val results = windowedTable.toDataStream[Row]
