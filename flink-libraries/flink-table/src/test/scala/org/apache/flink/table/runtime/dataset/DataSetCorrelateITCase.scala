@@ -23,6 +23,7 @@ import org.apache.flink.table.api.scala.batch.utils.TableProgramsTestBase
 import org.apache.flink.table.api.scala.batch.utils.TableProgramsTestBase.TableConfigMode
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.TableEnvironment
+import org.apache.flink.table.functions.utils.Udtf2Table
 import org.apache.flink.table.utils._
 import org.apache.flink.test.util.MultipleProgramsTestBase.TestExecutionMode
 import org.apache.flink.test.util.TestBaseUtils
@@ -32,7 +33,8 @@ import org.junit.runners.Parameterized
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-
+import org.apache.flink.table.functions.utils.{MyUdtfTable, Udtf2Table}
+import org.apache.flink.table.functions.utils.Udtf2Table._
 @RunWith(classOf[Parameterized])
 class DataSetCorrelateITCase(
   mode: TestExecutionMode,
@@ -46,14 +48,14 @@ class DataSetCorrelateITCase(
     val in = testData(env).toTable(tableEnv).as('a, 'b, 'c)
 
     val func1 = new TableFunc1
-    val result = in.join(func1('c) as 's).select('c, 's).toDataSet[Row]
+    val result = in.join(apply(func1('c) as 's)).select('c, 's).toDataSet[Row]
     val results = result.collect()
     val expected = "Jack#22,Jack\n" + "Jack#22,22\n" + "John#19,John\n" + "John#19,19\n" +
       "Anna#44,Anna\n" + "Anna#44,44\n"
     TestBaseUtils.compareResultAsText(results.asJava, expected)
 
     // with overloading
-    val result2 = in.join(func1('c, "$") as 's).select('c, 's).toDataSet[Row]
+    val result2 = in.join(apply(func1('c, "$") as 's)).select('c, 's).toDataSet[Row]
     val results2 = result2.collect()
     val expected2 = "Jack#22,$Jack\n" + "Jack#22,$22\n" + "John#19,$John\n" +
       "John#19,$19\n" + "Anna#44,$Anna\n" + "Anna#44,$44\n"
@@ -82,7 +84,7 @@ class DataSetCorrelateITCase(
     val func0 = new TableFunc0
 
     val result = in
-      .join(func0('c) as ('name, 'age))
+      .join(apply(func0('c) as ('name, 'age)))
       .select('c, 'name, 'age)
       .filter('age > 20)
       .toDataSet[Row]
@@ -100,7 +102,7 @@ class DataSetCorrelateITCase(
     val func2 = new TableFunc2
 
     val result = in
-      .join(func2('c) as ('name, 'len))
+      .join(apply(func2('c) as ('name, 'len)))
       .select('c, 'name, 'len)
       .toDataSet[Row]
 
@@ -118,7 +120,7 @@ class DataSetCorrelateITCase(
 
     val hierarchy = new HierarchyTableFunction
     val result = in
-      .join(hierarchy('c) as ('name, 'adult, 'len))
+      .join(apply(hierarchy('c) as ('name, 'adult, 'len)))
       .select('c, 'name, 'adult, 'len)
       .toDataSet[Row]
 
@@ -136,7 +138,7 @@ class DataSetCorrelateITCase(
 
     val pojo = new PojoTableFunc()
     val result = in
-      .join(pojo('c))
+      .join(apply(pojo('c)))
       .select('c, 'name, 'age)
       .toDataSet[Row]
 
@@ -153,7 +155,7 @@ class DataSetCorrelateITCase(
     val func1 = new TableFunc1
 
     val result = in
-      .join(func1('c.substring(2)) as 's)
+      .join(apply(func1('c.substring(2)) as 's))
       .select('c, 's)
       .toDataSet[Row]
 

@@ -23,6 +23,7 @@ import org.apache.flink.api.java.operators.join.JoinType
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.plan.logical.Minus
 import org.apache.flink.table.expressions.{Alias, Asc, Call, Expression, ExpressionParser, Ordering, TableFunctionCall, UnresolvedAlias}
+import org.apache.flink.table.functions.utils.UdtfTable
 import org.apache.flink.table.plan.ProjectionTranslator._
 import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.sinks.TableSink
@@ -259,7 +260,11 @@ class Table(
     * }}}
     */
   def join(right: Table): Table = {
-    join(right, None, JoinType.INNER)
+    if (right.isInstanceOf[UdtfTable]) {
+      joinUdtfInternal(right.asInstanceOf[UdtfTable].udtf, JoinType.INNER)
+    } else {
+      join(right, None, JoinType.INNER)
+    }
   }
 
   /**
@@ -325,7 +330,11 @@ class Table(
     * }}}
     */
   def leftOuterJoin(right: Table, joinPredicate: Expression): Table = {
-    join(right, Some(joinPredicate), JoinType.LEFT_OUTER)
+    if (right.isInstanceOf[UdtfTable]) {
+      joinUdtfInternal(right.asInstanceOf[UdtfTable].udtf, JoinType.LEFT_OUTER)
+    } else {
+      join(right, Some(joinPredicate), JoinType.LEFT_OUTER)
+    }
   }
 
   /**
@@ -617,53 +626,7 @@ class Table(
     new Table(tableEnv, Limit(offset, fetch, logicalPlan).validate(tableEnv))
   }
 
-  /**
-    * Joins this [[Table]] to a user-defined [[org.apache.calcite.schema.TableFunction]]. Similar
-    * to an SQL cross join, but it works with a table function. It returns rows from the outer
-    * table (table on the left of the operator) that produces matching values from the table
-    * function (which is defined in the expression on the right side of the operator).
-    *
-    * Example:
-    *
-    * {{{
-    *   class MySplitUDTF extends TableFunction[String] {
-    *     def eval(str: String): Unit = {
-    *       str.split("#").foreach(collect)
-    *     }
-    *   }
-    *
-    *   val split = new MySplitUDTF()
-    *   table.join(split('c) as ('s)).select('a,'b,'c,'s)
-    * }}}
-    */
-  def join(udtf: Expression): Table = {
-    joinUdtfInternal(udtf, JoinType.INNER)
-  }
 
-  /**
-    * Joins this [[Table]] to a user-defined [[org.apache.calcite.schema.TableFunction]]. Similar
-    * to an SQL cross join, but it works with a table function. It returns rows from the outer
-    * table (table on the left of the operator) that produces matching values from the table
-    * function (which is defined in the expression on the right side of the operator).
-    *
-    * Example:
-    *
-    * {{{
-    *   class MySplitUDTF extends TableFunction<String> {
-    *     public void eval(String str) {
-    *       str.split("#").forEach(this::collect);
-    *     }
-    *   }
-    *
-    *   TableFunction<String> split = new MySplitUDTF();
-    *   tableEnv.registerFunction("split", split);
-    *
-    *   table.join("split(c) as (s)").select("a, b, c, s");
-    * }}}
-    */
-  def join(udtf: String): Table = {
-    joinUdtfInternal(udtf, JoinType.INNER)
-  }
 
   /**
     * Joins this [[Table]] to a user-defined [[org.apache.calcite.schema.TableFunction]]. Similar
@@ -687,37 +650,6 @@ class Table(
     */
   def leftOuterJoin(udtf: Expression): Table = {
     joinUdtfInternal(udtf, JoinType.LEFT_OUTER)
-  }
-
-  /**
-    * Joins this [[Table]] to a user-defined [[org.apache.calcite.schema.TableFunction]]. Similar
-    * to an SQL left outer join with ON TRUE, but it works with a table function. It returns all
-    * the rows from the outer table (table on the left of the operator), and rows that do not match
-    * the condition from the table function (which is defined in the expression on the right
-    * side of the operator). Rows with no matching condition are filled with null values.
-    *
-    * Example:
-    *
-    * {{{
-    *   class MySplitUDTF extends TableFunction<String> {
-    *     public void eval(String str) {
-    *       str.split("#").forEach(this::collect);
-    *     }
-    *   }
-    *
-    *   TableFunction<String> split = new MySplitUDTF();
-    *   tableEnv.registerFunction("split", split);
-    *
-    *   table.leftOuterJoin("split(c) as (s)").select("a, b, c, s");
-    * }}}
-    */
-  def leftOuterJoin(udtf: String): Table = {
-    joinUdtfInternal(udtf, JoinType.LEFT_OUTER)
-  }
-
-  private def joinUdtfInternal(udtfString: String, joinType: JoinType): Table = {
-    val udtf = ExpressionParser.parseExpression(udtfString)
-    joinUdtfInternal(udtf, joinType)
   }
 
   private def joinUdtfInternal(udtf: Expression, joinType: JoinType): Table = {

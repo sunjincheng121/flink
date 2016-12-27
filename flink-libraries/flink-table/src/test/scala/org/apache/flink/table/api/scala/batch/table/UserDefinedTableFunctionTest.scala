@@ -27,6 +27,8 @@ import org.apache.flink.table.utils.{PojoTableFunc, TableFunc2, _}
 import org.apache.flink.table.api.{TableEnvironment, Types}
 import org.junit.Test
 import org.mockito.Mockito._
+import org.apache.flink.table.functions.utils.{MyUdtfTable, Udtf2Table}
+import org.apache.flink.table.functions.utils.Udtf2Table._
 
 class UserDefinedTableFunctionTest extends TableTestBase {
 
@@ -53,8 +55,8 @@ class UserDefinedTableFunctionTest extends TableTestBase {
     // test cross join
     val func1 = new TableFunc1
     javaTableEnv.registerFunction("func1", func1)
-    var scalaTable = in1.join(func1('c) as 's).select('c, 's)
-    var javaTable = in2.join("func1(c).as(s)").select("c, s")
+    var scalaTable = in1.join(apply(func1('c) as 's)).select('c, 's)
+    var javaTable = in2.join(apply("func1(c).as(s)")).select("c, s")
     verifyTableEquals(scalaTable, javaTable)
 
     // test left outer join
@@ -63,46 +65,46 @@ class UserDefinedTableFunctionTest extends TableTestBase {
     verifyTableEquals(scalaTable, javaTable)
 
     // test overloading
-    scalaTable = in1.join(func1('c, "$") as 's).select('c, 's)
-    javaTable = in2.join("func1(c, '$') as (s)").select("c, s")
+    scalaTable = in1.join(apply(func1('c, "$") as 's)).select('c, 's)
+    javaTable = in2.join(apply("func1(c, '$') as (s)")).select("c, s")
     verifyTableEquals(scalaTable, javaTable)
 
     // test custom result type
     val func2 = new TableFunc2
     javaTableEnv.registerFunction("func2", func2)
-    scalaTable = in1.join(func2('c) as ('name, 'len)).select('c, 'name, 'len)
-    javaTable = in2.join("func2(c).as(name, len)").select("c, name, len")
+    scalaTable = in1.join(apply(func2('c) as ('name, 'len))).select('c, 'name, 'len)
+    javaTable = in2.join(apply("func2(c).as(name, len)")).select("c, name, len")
     verifyTableEquals(scalaTable, javaTable)
 
     // test hierarchy generic type
     val hierarchy = new HierarchyTableFunction
     javaTableEnv.registerFunction("hierarchy", hierarchy)
-    scalaTable = in1.join(hierarchy('c) as ('name, 'adult, 'len))
+    scalaTable = in1.join(apply(hierarchy('c) as ('name, 'adult, 'len)))
       .select('c, 'name, 'len, 'adult)
-    javaTable = in2.join("AS(hierarchy(c), name, adult, len)")
+    javaTable = in2.join(apply("AS(hierarchy(c), name, adult, len)"))
       .select("c, name, len, adult")
     verifyTableEquals(scalaTable, javaTable)
 
     // test pojo type
     val pojo = new PojoTableFunc
     javaTableEnv.registerFunction("pojo", pojo)
-    scalaTable = in1.join(pojo('c))
+    scalaTable = in1.join(apply(pojo('c)))
       .select('c, 'name, 'age)
-    javaTable = in2.join("pojo(c)")
+    javaTable = in2.join(apply("pojo(c)"))
       .select("c, name, age")
     verifyTableEquals(scalaTable, javaTable)
 
     // test with filter
-    scalaTable = in1.join(func2('c) as ('name, 'len))
+    scalaTable = in1.join(apply(func2('c) as ('name, 'len)))
       .select('c, 'name, 'len).filter('len > 2)
-    javaTable = in2.join("func2(c) as (name, len)")
+    javaTable = in2.join(apply("func2(c) as (name, len)"))
       .select("c, name, len").filter("len > 2")
     verifyTableEquals(scalaTable, javaTable)
 
     // test with scalar function
-    scalaTable = in1.join(func1('c.substring(2)) as 's)
+    scalaTable = in1.join(apply(func1('c.substring(2)) as 's))
       .select('a, 'c, 's)
-    javaTable = in2.join("func1(substring(c, 2)) as (s)")
+    javaTable = in2.join(apply("func1(substring(c, 2)) as (s)"))
       .select("a, c, s")
     verifyTableEquals(scalaTable, javaTable)
   }
@@ -113,7 +115,7 @@ class UserDefinedTableFunctionTest extends TableTestBase {
     val table = util.addTable[(Int, Long, String)]("MyTable", 'a, 'b, 'c)
     val function = util.addFunction("func1", new TableFunc1)
 
-    val result1 = table.join(function('c) as 's).select('c, 's)
+    val result1 = table.join(apply(function('c) as 's).select('c, 's))
 
     val expected1 = unaryNode(
       "DataSetCalc",
@@ -133,7 +135,7 @@ class UserDefinedTableFunctionTest extends TableTestBase {
 
     // test overloading
 
-    val result2 = table.join(function('c, "$") as 's).select('c, 's)
+    val result2 = table.join(apply(function('c, "$") as 's)).select('c, 's)
 
     val expected2 = unaryNode(
       "DataSetCalc",

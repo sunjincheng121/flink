@@ -25,10 +25,13 @@ import org.apache.flink.table.utils.TableFunc0
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
 import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
 import org.apache.flink.table.api.TableEnvironment
+import org.apache.flink.table.functions.utils.Udtf2Table
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.mutable
+import org.apache.flink.table.functions.utils.{MyUdtfTable, Udtf2Table}
+import org.apache.flink.table.functions.utils.Udtf2Table._
 
 class DataStreamCorrelateITCase extends StreamingMultipleProgramsTestBase {
 
@@ -42,7 +45,7 @@ class DataStreamCorrelateITCase extends StreamingMultipleProgramsTestBase {
     val func0 = new TableFunc0
 
     val result = t
-      .join(func0('c) as('d, 'e))
+      .join(apply(func0('c) as('d, 'e)))
       .select('c, 'd, 'e)
       .toDataStream[Row]
 

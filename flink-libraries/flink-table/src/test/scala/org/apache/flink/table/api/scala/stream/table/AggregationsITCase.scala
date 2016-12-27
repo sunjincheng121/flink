@@ -29,8 +29,11 @@ import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
 import org.apache.flink.table.api.TableEnvironment
+import org.apache.flink.table.utils.TableFunc1
 import org.junit.Assert._
 import org.junit.Test
+import org.apache.flink.table.functions.utils.MyUdtfTable
+import org.apache.flink.table.functions.utils.Udtf2Table._
 
 import scala.collection.mutable
 
