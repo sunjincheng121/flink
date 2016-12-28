@@ -28,7 +28,6 @@ import org.apache.flink.table.utils._
 import org.apache.flink.streaming.api.datastream.{DataStream => JDataStream}
 import org.apache.flink.streaming.api.environment.{StreamExecutionEnvironment => JavaExecutionEnv}
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment => ScalaExecutionEnv}
-import org.apache.flink.table.functions.utils.Udtf2Table
 import org.junit.Assert.{assertTrue, fail}
 import org.junit.Test
 import org.mockito.Mockito._

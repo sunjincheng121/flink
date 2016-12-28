@@ -21,7 +21,7 @@ import org.apache.flink.table.api.Table
 import org.apache.flink.table.expressions.Expression
 
 
-class UdtfTable(private[flink] val udtf: Expression) extends Table(null, null)
+class UdtfTable(private[flink] val udtf: Expression) extends Table
 
 object Udtf2Table {
   def apply(udtf: String): Table = {

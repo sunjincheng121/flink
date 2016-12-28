@@ -27,7 +27,7 @@ import org.apache.flink.table.utils.{PojoTableFunc, TableFunc2, _}
 import org.apache.flink.table.api.{TableEnvironment, Types}
 import org.junit.Test
 import org.mockito.Mockito._
-import org.apache.flink.table.functions.utils.{MyUdtfTable, Udtf2Table}
+import org.apache.flink.table.functions.utils.{UdtfTable, Udtf2Table}
 import org.apache.flink.table.functions.utils.Udtf2Table._
 
 class UserDefinedTableFunctionTest extends TableTestBase {
