@@ -30,7 +30,7 @@ import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.mutable
-import org.apache.flink.table.functions.utils.{MyUdtfTable, Udtf2Table}
+import org.apache.flink.table.functions.utils.{UdtfTable, Udtf2Table}
 import org.apache.flink.table.functions.utils.Udtf2Table._
 
 class DataStreamCorrelateITCase extends StreamingMultipleProgramsTestBase {

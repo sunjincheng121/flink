@@ -33,7 +33,7 @@ import org.junit.runners.Parameterized
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import org.apache.flink.table.functions.utils.{MyUdtfTable, Udtf2Table}
+import org.apache.flink.table.functions.utils.{UdtfTable, Udtf2Table}
 import org.apache.flink.table.functions.utils.Udtf2Table._
 @RunWith(classOf[Parameterized])
 class DataSetCorrelateITCase(

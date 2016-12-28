@@ -18,18 +18,21 @@
 package org.apache.flink.table.functions.utils
 
 import org.apache.flink.table.api.Table
-import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.expressions.{Expression, ExpressionParser}
 
 
 class UdtfTable(private[flink] val udtf: Expression) extends Table
 
 object Udtf2Table {
   def apply(udtf: String): Table = {
-    apply(udtf)
+    apply(ExpressionParser.parseExpression(udtf))
   }
 
   def apply(udtf: Expression): Table = {
     new UdtfTable(udtf)
   }
 
+  def main(args: Array[String]): Unit = {
+    apply("xxxxx")
+  }
 }
