@@ -31,8 +31,4 @@ object Udtf2Table {
   def apply(udtf: Expression): Table = {
     new UdtfTable(udtf)
   }
-
-  def main(args: Array[String]): Unit = {
-    apply("xxxxx")
-  }
 }
