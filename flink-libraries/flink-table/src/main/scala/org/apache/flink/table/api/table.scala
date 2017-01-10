@@ -70,6 +70,12 @@ class Table(
   // map to save the all windows information registered in the table
   private[flink] var windowPool: Map[Expression, GroupWindow] = Map()
 
+  // get the windowPool from the existing table
+  def withWindowPool(table: Table) :Table = {
+    this.windowPool = table.windowPool
+    this
+  }
+
   def relBuilder = tableEnv.getRelBuilder
 
   def getRelNode: RelNode = logicalPlan.toRelNode(relBuilder)
@@ -112,10 +118,11 @@ class Table(
             Project(projectFields, logicalPlan).validate(tableEnv)
           ).validate(tableEnv)
         ).validate(tableEnv)
-      )
+      ).withWindowPool(this)
     } else {
       new Table(tableEnv,
         Project(expandedFields.map(UnresolvedAlias), logicalPlan).validate(tableEnv))
+      .withWindowPool(this)
     }
   }
 
@@ -145,7 +152,7 @@ class Table(
     * }}}
     */
   def as(fields: Expression*): Table = {
-    new Table(tableEnv, AliasNode(fields, logicalPlan).validate(tableEnv))
+    new Table(tableEnv, AliasNode(fields, logicalPlan).validate(tableEnv)).withWindowPool(this)
   }
 
   /**
@@ -174,7 +181,7 @@ class Table(
     * }}}
     */
   def filter(predicate: Expression): Table = {
-    new Table(tableEnv, Filter(predicate, logicalPlan).validate(tableEnv))
+    new Table(tableEnv, Filter(predicate, logicalPlan).validate(tableEnv)).withWindowPool(this)
   }
 
   /**
@@ -264,7 +271,7 @@ class Table(
     * }}}
     */
   def distinct(): Table = {
-    new Table(tableEnv, Distinct(logicalPlan).validate(tableEnv))
+    new Table(tableEnv, Distinct(logicalPlan).validate(tableEnv)).withWindowPool(this)
   }
 
   /**
@@ -431,7 +438,7 @@ class Table(
     new Table(
       tableEnv,
       Join(this.logicalPlan, right.logicalPlan, joinType, joinPredicate, correlated = false)
-        .validate(tableEnv))
+        .validate(tableEnv)).withWindowPool(this)
   }
 
   /**
@@ -455,7 +462,7 @@ class Table(
         "subtracted.")
     }
     new Table(tableEnv, Minus(logicalPlan, right.logicalPlan, all = false)
-      .validate(tableEnv))
+      .validate(tableEnv)).withWindowPool(this)
   }
 
   /**
@@ -480,7 +487,7 @@ class Table(
         "subtracted.")
     }
     new Table(tableEnv, Minus(logicalPlan, right.logicalPlan, all = true)
-      .validate(tableEnv))
+      .validate(tableEnv)).withWindowPool(this)
   }
 
   /**
@@ -501,6 +508,7 @@ class Table(
       throw new ValidationException("Only tables from the same TableEnvironment can be unioned.")
     }
     new Table(tableEnv, Union(logicalPlan, right.logicalPlan, all = false).validate(tableEnv))
+    .withWindowPool(this)
   }
 
   /**
@@ -521,6 +529,7 @@ class Table(
       throw new ValidationException("Only tables from the same TableEnvironment can be unioned.")
     }
     new Table(tableEnv, Union(logicalPlan, right.logicalPlan, all = true).validate(tableEnv))
+    .withWindowPool(this)
   }
 
   /**
@@ -544,6 +553,7 @@ class Table(
         "Only tables from the same TableEnvironment can be intersected.")
     }
     new Table(tableEnv, Intersect(logicalPlan, right.logicalPlan, all = false).validate(tableEnv))
+    .withWindowPool(this)
   }
 
   /**
@@ -567,6 +577,7 @@ class Table(
         "Only tables from the same TableEnvironment can be intersected.")
     }
     new Table(tableEnv, Intersect(logicalPlan, right.logicalPlan, all = true).validate(tableEnv))
+    .withWindowPool(this)
   }
 
   /**
@@ -584,7 +595,7 @@ class Table(
       case o: Ordering => o
       case e => Asc(e)
     }
-    new Table(tableEnv, Sort(order, logicalPlan).validate(tableEnv))
+    new Table(tableEnv, Sort(order, logicalPlan).validate(tableEnv)).withWindowPool(this)
   }
 
   /**
@@ -618,6 +629,7 @@ class Table(
     */
   def limit(offset: Int): Table = {
     new Table(tableEnv, Limit(offset = offset, child = logicalPlan).validate(tableEnv))
+    .withWindowPool(this)
   }
 
   /**
@@ -636,7 +648,7 @@ class Table(
     * @param fetch number of records to be returned
     */
   def limit(offset: Int, fetch: Int): Table = {
-    new Table(tableEnv, Limit(offset, fetch, logicalPlan).validate(tableEnv))
+    new Table(tableEnv, Limit(offset, fetch, logicalPlan).validate(tableEnv)).withWindowPool(this)
   }
 
   /**
@@ -767,6 +779,7 @@ class Table(
     new Table(
       tableEnv,
       Join(this.logicalPlan, call, joinType, None, correlated = true).validate(tableEnv))
+    .withWindowPool(this)
   }
 
   /**
@@ -812,13 +825,13 @@ class Table(
     if (tableEnv.isInstanceOf[BatchTableEnvironment]) {
       throw new ValidationException(s"Windows on batch tables are currently not supported.")
     }
-    if (None == groupWindow.name) {
+    if (None == groupWindow.alias) {
       throw new ValidationException("An alias must be specified for the window.")
     }
-    if (windowPool.contains(groupWindow.name.get)) {
+    if (windowPool.contains(groupWindow.alias.get)) {
       throw new ValidationException("The window alias can not be duplicated.")
     }
-    windowPool += (groupWindow.name.get -> groupWindow)
+    windowPool += (groupWindow.alias.get -> groupWindow)
     this
   }
 }
@@ -870,7 +883,7 @@ class GroupedTable(
             groupKey, aggNames.map(a => Alias(a._1, a._2)).toSeq,
             Project(projectFields, table.logicalPlan).validate(table.tableEnv)
           ).validate(table.tableEnv)
-        ).validate(table.tableEnv))
+        ).validate(table.tableEnv)).withWindowPool(table)
 
     } else {
 
@@ -896,7 +909,7 @@ class GroupedTable(
             aggNames.map(a => Alias(a._1, a._2)).toSeq,
             Project(projectFields, table.logicalPlan).validate(table.tableEnv)
           ).validate(table.tableEnv)
-        ).validate(table.tableEnv))
+        ).validate(table.tableEnv)).withWindowPool(table)
     }
   }
 
@@ -932,60 +945,4 @@ class GroupedTable(
   }
 }
 
-class GroupWindowedTable(
-    private[flink] val table: Table,
-    private[flink] val groupKey: Seq[Expression],
-    private[flink] val window: GroupWindow) {
 
-  /**
-    * Performs a selection operation on a windowed table. Similar to an SQL SELECT statement.
-    * The field expressions can contain complex expressions and aggregations.
-    *
-    * Example:
-    *
-    * {{{
-    *   groupWindowTable.select('key, 'window.start, 'value.avg + " The average" as 'average)
-    * }}}
-    */
-  def select(fields: Expression*): Table = {
-    val (aggNames, propNames) = extractAggregationsAndProperties(fields, table.tableEnv)
-    val projectsOnAgg = replaceAggregationsAndProperties(
-      fields, table.tableEnv, aggNames, propNames)
-
-    val projectFields = (table.tableEnv, window) match {
-      // event time can be arbitrary field in batch environment
-      case (_: BatchTableEnvironment, w: EventTimeWindow) =>
-        extractFieldReferences(fields ++ groupKey ++ Seq(w.timeField))
-      case (_, _) =>
-        extractFieldReferences(fields ++ groupKey)
-    }
-
-    new Table(table.tableEnv,
-      Project(
-        projectsOnAgg,
-        WindowAggregate(
-          groupKey,
-          window.toLogicalWindow,
-          propNames.map(a => Alias(a._1, a._2)).toSeq,
-          aggNames.map(a => Alias(a._1, a._2)).toSeq,
-          Project(projectFields, table.logicalPlan).validate(table.tableEnv)
-        ).validate(table.tableEnv)
-      ).validate(table.tableEnv))
-  }
-
-  /**
-    * Performs a selection operation on a group-windows table. Similar to an SQL SELECT statement.
-    * The field expressions can contain complex expressions and aggregations.
-    *
-    * Example:
-    *
-    * {{{
-    *   groupWindowTable.select("key, window.start, value.avg + ' The average' as average")
-    * }}}
-    */
-  def select(fields: String): Table = {
-    val fieldExprs = ExpressionParser.parseExpressionList(fields)
-    select(fieldExprs: _*)
-  }
-
-}
