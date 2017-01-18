@@ -799,6 +799,7 @@ class Table(
     * will be processed by a single operator.
     *
     * @param groupWindow group-window that specifies how elements are grouped.
+    * @return A windowed table.
     */
   def window(groupWindow: GroupWindow): WindowedTable = {
     if (None == groupWindow.alias) {
@@ -836,11 +837,11 @@ class GroupedTable(
     val projectFields = extractFieldReferences(fields ++ groupKey)
 
     new Table(table.tableEnv,
-              Project(projectsOnAgg,
-                      Aggregate(groupKey, aggNames.map(a => Alias(a._1, a._2)).toSeq,
-                                Project(projectFields, table.logicalPlan).validate(table.tableEnv)
-                      ).validate(table.tableEnv)
-              ).validate(table.tableEnv))
+      Project(projectsOnAgg,
+        Aggregate(groupKey, aggNames.map(a => Alias(a._1, a._2)).toSeq,
+          Project(projectFields, table.logicalPlan).validate(table.tableEnv)
+        ).validate(table.tableEnv)
+      ).validate(table.tableEnv))
   }
 
   /**
@@ -929,16 +930,16 @@ class WindowGroupedTable(
     }
 
     new Table(table.tableEnv,
-              Project(
-                projectsOnAgg,
-                WindowAggregate(
-                  groupKey,
-                  window.toLogicalWindow,
-                  propNames.map(a => Alias(a._1, a._2)).toSeq,
-                  aggNames.map(a => Alias(a._1, a._2)).toSeq,
-                  Project(projectFields, table.logicalPlan).validate(table.tableEnv)
-                ).validate(table.tableEnv)
-              ).validate(table.tableEnv))
+      Project(
+        projectsOnAgg,
+        WindowAggregate(
+          groupKey,
+          window.toLogicalWindow,
+          propNames.map(a => Alias(a._1, a._2)).toSeq,
+          aggNames.map(a => Alias(a._1, a._2)).toSeq,
+          Project(projectFields, table.logicalPlan).validate(table.tableEnv)
+        ).validate(table.tableEnv)
+      ).validate(table.tableEnv))
   }
 
   /**
@@ -955,7 +956,6 @@ class WindowGroupedTable(
     val fieldExprs = ExpressionParser.parseExpressionList(fields)
     select(fieldExprs: _*)
   }
-
 }
 
 
