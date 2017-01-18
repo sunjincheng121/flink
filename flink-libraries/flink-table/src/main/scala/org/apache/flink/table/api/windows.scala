@@ -36,6 +36,7 @@ import org.apache.flink.table.plan.logical._
   */
 abstract class GroupWindow {
 
+  // The expression of alias for this GroupWindow
   private[flink] var alias: Option[Expression] = None
   /**
     * Converts an API class to a logical window for planning.
