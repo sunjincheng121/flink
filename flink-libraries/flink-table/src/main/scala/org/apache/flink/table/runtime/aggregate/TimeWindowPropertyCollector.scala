@@ -31,7 +31,8 @@ class TimeWindowPropertyCollector(windowStartOffset: Option[Int], windowEndOffse
     extends Collector[Row] {
 
   var wrappedCollector: Collector[Row] = _
-  var timeWindow: TimeWindow = _
+  var windowStart:Long = _
+  var windowEnd:Long = _
 
   override def collect(record: Row): Unit = {
 
@@ -40,12 +41,12 @@ class TimeWindowPropertyCollector(windowStartOffset: Option[Int], windowEndOffse
     if (windowStartOffset.isDefined) {
       record.setField(
         lastFieldPos + windowStartOffset.get,
-        SqlFunctions.internalToTimestamp(timeWindow.getStart))
+        SqlFunctions.internalToTimestamp(windowStart))
     }
     if (windowEndOffset.isDefined) {
       record.setField(
         lastFieldPos + windowEndOffset.get,
-        SqlFunctions.internalToTimestamp(timeWindow.getEnd))
+        SqlFunctions.internalToTimestamp(windowEnd))
     }
     wrappedCollector.collect(record)
   }
