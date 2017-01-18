@@ -66,7 +66,7 @@ class Table(
   private val tableSchema: TableSchema = new TableSchema(
     logicalPlan.output.map(_.name).toArray,
     logicalPlan.output.map(_.resultType).toArray)
-  
+
   def relBuilder = tableEnv.getRelBuilder
 
   def getRelNode: RelNode = logicalPlan.toRelNode(relBuilder)
@@ -493,7 +493,6 @@ class Table(
       throw new ValidationException("Only tables from the same TableEnvironment can be unioned.")
     }
     new Table(tableEnv, Union(logicalPlan, right.logicalPlan, all = false).validate(tableEnv))
-    
   }
 
   /**
@@ -514,7 +513,6 @@ class Table(
       throw new ValidationException("Only tables from the same TableEnvironment can be unioned.")
     }
     new Table(tableEnv, Union(logicalPlan, right.logicalPlan, all = true).validate(tableEnv))
-    
   }
 
   /**
@@ -538,7 +536,6 @@ class Table(
         "Only tables from the same TableEnvironment can be intersected.")
     }
     new Table(tableEnv, Intersect(logicalPlan, right.logicalPlan, all = false).validate(tableEnv))
-    
   }
 
   /**
@@ -562,7 +559,6 @@ class Table(
         "Only tables from the same TableEnvironment can be intersected.")
     }
     new Table(tableEnv, Intersect(logicalPlan, right.logicalPlan, all = true).validate(tableEnv))
-    
   }
 
   /**
@@ -614,7 +610,6 @@ class Table(
     */
   def limit(offset: Int): Table = {
     new Table(tableEnv, Limit(offset = offset, child = logicalPlan).validate(tableEnv))
-    
   }
 
   /**
@@ -764,7 +759,6 @@ class Table(
     new Table(
       tableEnv,
       Join(this.logicalPlan, call, joinType, None, correlated = true).validate(tableEnv))
-    
   }
 
   /**
@@ -904,7 +898,6 @@ class WindowedTable(
     val fieldsExpr = ExpressionParser.parseExpressionList(fields)
     groupBy(fieldsExpr: _*)
   }
-
 }
 
 class WindowGroupedTable(
