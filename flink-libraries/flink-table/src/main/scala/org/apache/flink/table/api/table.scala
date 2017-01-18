@@ -824,7 +824,7 @@ class Table(
       throw new ValidationException("The window alias can not be duplicated.")
     }
     windowPool += (groupWindow.alias.get -> groupWindow)
-    new WindowedTable(this, Seq(), groupWindow)
+    new WindowedTable(this, groupWindow)
   }
 }
 
@@ -923,7 +923,6 @@ class GroupedTable(
 
 class WindowedTable(
     private[flink] val table: Table,
-    private[flink] val groupKey: Seq[Expression],
     private[flink] val window: GroupWindow) {
 
   /**
