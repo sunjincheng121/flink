@@ -304,46 +304,6 @@ class FieldProjectionTest extends TableTestBase {
     util.verifyTable(resultTable, expected)
   }
 
-  @Test(expected = classOf[ValidationException])
-  def testSelectFromBatchWindow1(): Unit = {
-    val sourceTable = util.addTable[(Int, Long, String, Double)]("MyTable", 'a, 'b, 'c, 'd)
-
-    // time field is selected
-    val resultTable = sourceTable
-        .window(Tumble over 5.millis on 'a as 'w)
-        .groupBy('w)
-        .select('a.sum, 'c.count)
-
-    val expected = "TODO"
-
-    util.verifyTable(resultTable, expected)
-  }
-
-  @Test(expected = classOf[ValidationException])
-  def testSelectFromBatchWindow2(): Unit = {
-    val sourceTable = util.addTable[(Int, Long, String, Double)]("MyTable", 'a, 'b, 'c, 'd)
-
-    // time field is not selected
-    val resultTable = sourceTable
-        .window(Tumble over 5.millis on 'a as 'w)
-        .groupBy('w)
-        .select('c.count)
-
-    val expected =
-      unaryNode(
-        "DataSetCalc",
-        unaryNode(
-          "DataSetAggregate",
-          batchTableNode(0),
-          term("groupBy", "word"),
-          term("select", "word", "SUM(frequency) AS TMP_0")
-        ),
-        term("select", "word, frequency"),
-        term("where", "=(frequency, 2)")
-      )
-
-    util.verifyTable(resultTable, expected)
-  }
 }
 
 object FieldProjectionTest {

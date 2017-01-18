@@ -238,11 +238,6 @@ class Table(
     * }}}
     */
   def groupBy(fields: Expression*): GroupedTable = {
-    if (fields.filter(windowPool.contains(_)).length > 1) {
-      throw new ValidationException(
-        "Multiple window columns are found in groupkey, group by can only contain one window " +
-          "column.")
-    }
     new GroupedTable(this, fields)
   }
 
@@ -821,10 +816,7 @@ class Table(
     *
     * @param groupWindow group-window that specifies how elements are grouped.
     */
-  def window(groupWindow: GroupWindow): Table = {
-    if (tableEnv.isInstanceOf[BatchTableEnvironment]) {
-      throw new ValidationException(s"Windows on batch tables are currently not supported.")
-    }
+  def window(groupWindow: GroupWindow): WindowedTable = {
     if (None == groupWindow.alias) {
       throw new ValidationException("An alias must be specified for the window.")
     }
@@ -832,7 +824,7 @@ class Table(
       throw new ValidationException("The window alias can not be duplicated.")
     }
     windowPool += (groupWindow.alias.get -> groupWindow)
-    this
+    new WindowedTable(this, Seq(), groupWindow)
   }
 }
 
@@ -927,22 +919,47 @@ class GroupedTable(
     val fieldExprs = ExpressionParser.parseExpressionList(fields)
     select(fieldExprs: _*)
   }
+}
+
+class WindowedTable(
+    private[flink] val table: Table,
+    private[flink] val groupKey: Seq[Expression],
+    private[flink] val window: GroupWindow) {
 
   /**
-    * Groups the records of a table by assigning them to windows defined by a time or row interval.
+    * Groups the elements on some grouping keys. Use this before a selection with aggregations
+    * to perform the aggregation on a per-group basis. Similar to a SQL GROUP BY statement.
     *
-    * For streaming tables of infinite size, grouping into windows is required to define finite
-    * groups on which group-based aggregates can be computed.
+    * Example:
     *
-    * For batch tables of finite size, windowing essentially provides shortcuts for time-based
-    * groupBy.
-    *
-    * @param groupWindow group-window that specifies how elements are grouped.
-    * @return A windowed table.
+    * {{{
+    *   tab.groupBy('key).select('key, 'value.avg)
+    * }}}
     */
-  def window(groupWindow: GroupWindow): GroupWindowedTable = {
-    new GroupWindowedTable(table, groupKey, groupWindow)
+  def groupBy(fields: Expression*): GroupedTable = {
+    if (fields.filter(table.windowPool.contains(_)).length > 1) {
+      throw new ValidationException(
+        "Multiple window columns are found in groupkey, group by can only contain one window " +
+          "column.")
+    }
+    new GroupedTable(table, fields)
   }
+
+  /**
+    * Groups the elements on some grouping keys. Use this before a selection with aggregations
+    * to perform the aggregation on a per-group basis. Similar to a SQL GROUP BY statement.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab.groupBy("key").select("key, value.avg")
+    * }}}
+    */
+  def groupBy(fields: String): GroupedTable = {
+    val fieldsExpr = ExpressionParser.parseExpressionList(fields)
+    groupBy(fieldsExpr: _*)
+  }
+
 }
 
 
