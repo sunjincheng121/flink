@@ -798,14 +798,14 @@ class Table(
     * __Note__: window on non-grouped streaming table is a non-parallel operation, i.e., all data
     * will be processed by a single operator.
     *
-    * @param groupWindow group-window that specifies how elements are grouped.
+    * @param window window that specifies how elements are grouped.
     * @return A windowed table.
     */
-  def window(groupWindow: Window): WindowedTable = {
-    if (groupWindow.alias.isEmpty) {
+  def window(window: Window): WindowedTable = {
+    if (window.alias.isEmpty) {
       throw new ValidationException("An alias must be specified for the window.")
     }
-    new WindowedTable(this, groupWindow)
+    new WindowedTable(this, window)
   }
 }
 
@@ -860,6 +860,69 @@ class GroupedTable(
   }
 }
 
+class WindowGroupedTable(
+    private[flink] val table: Table,
+    private[flink] val groupKey: Seq[Expression],
+    private[flink] val window: Window) {
+
+  /**
+    * Performs a selection operation on a window grouped table. Similar to an SQL SELECT statement.
+    * The field expressions can contain complex expressions and aggregations.
+    *
+    * Example:
+    *
+    * {{{
+    *   windowGroupedTable.select('key, 'window.start, 'value.avg + " The average" as 'average)
+    * }}}
+    */
+  def select(fields: Expression*): Table = {
+    // get group keys by removing window column
+    val groupKeyWithoutWindow = groupKey.filterNot(window.alias.get.equals(_))
+
+    val (aggNames, propNames) = extractAggregationsAndProperties(fields, table.tableEnv)
+
+    val projectsOnAgg = replaceAggregationsAndProperties(
+      fields, table.tableEnv, aggNames, propNames)
+
+    val projectFields = (table.tableEnv, window) match {
+      // event time can be arbitrary field in batch environment
+      case (_: BatchTableEnvironment, w: EventTimeWindow) =>
+        extractFieldReferences(fields ++ groupKeyWithoutWindow ++ Seq(w.timeField))
+      case (_, _) =>
+        extractFieldReferences(fields ++ groupKeyWithoutWindow)
+    }
+
+    new Table(table.tableEnv,
+      Project(
+        projectsOnAgg,
+        WindowAggregate(
+          groupKeyWithoutWindow,
+          window.toLogicalWindow,
+          propNames.map(a => Alias(a._1, a._2)).toSeq,
+          aggNames.map(a => Alias(a._1, a._2)).toSeq,
+          Project(projectFields, table.logicalPlan).validate(table.tableEnv)
+        ).validate(table.tableEnv)
+      ).validate(table.tableEnv))
+  }
+
+  /**
+    * Performs a selection operation on a window grouped  table. Similar to an SQL SELECT statement.
+    * The field expressions can contain complex expressions and aggregations.
+    *
+    * Example:
+    *
+    * {{{
+    *   windowGroupedTable.select("key, window.start, value.avg + 'The average' as 'average")
+    * }}}
+    */
+  def select(fields: String): Table = {
+    val fieldExprs = ExpressionParser.parseExpressionList(fields)
+    select(fieldExprs: _*)
+  }
+
+}
+
+
 class WindowedTable(
     private[flink] val table: Table,
     private[flink] val window: Window) {
@@ -899,67 +962,5 @@ class WindowedTable(
     val fieldsExpr = ExpressionParser.parseExpressionList(fields)
     groupBy(fieldsExpr: _*)
   }
-}
 
-class WindowGroupedTable(
-    private[flink] val table: Table,
-    private[flink] val groupKey: Seq[Expression],
-    private[flink] val window: Window) {
-
-  /**
-    * Performs a selection operation on a window grouped table. Similar to an SQL SELECT statement.
-    * The field expressions can contain complex expressions and aggregations.
-    *
-    * Example:
-    *
-    * {{{
-    *   windowGroupedTable.select('key, 'window.start, 'value.avg + " The average" as 'average)
-    * }}}
-    */
-  def select(fields: Expression*): Table = {
-
-    // get group keys by removing window column
-    val groupKeyWithoutWindow = groupKey.filterNot(window.alias.get.equals(_))
-
-    val (aggNames, propNames) = extractAggregationsAndProperties(fields, table.tableEnv)
-
-      val projectsOnAgg = replaceAggregationsAndProperties(
-        fields, table.tableEnv, aggNames, propNames)
-
-      val projectFields = (table.tableEnv, window) match {
-        // event time can be arbitrary field in batch environment
-        case (_: BatchTableEnvironment, w: EventTimeWindow) =>
-          extractFieldReferences(fields ++ groupKeyWithoutWindow ++ Seq(w.timeField))
-        case (_, _) =>
-          extractFieldReferences(fields ++ groupKeyWithoutWindow)
-      }
-
-      new Table(
-        table.tableEnv,
-        Project(
-          projectsOnAgg,
-          WindowAggregate(
-            groupKeyWithoutWindow,
-            window.toLogicalWindow,
-            propNames.map(a => Alias(a._1, a._2)).toSeq,
-            aggNames.map(a => Alias(a._1, a._2)).toSeq,
-            Project(projectFields, table.logicalPlan).validate(table.tableEnv)
-          ).validate(table.tableEnv)
-        ).validate(table.tableEnv))
-  }
-
-  /**
-    * Performs a selection operation on a window grouped  table. Similar to an SQL SELECT statement.
-    * The field expressions can contain complex expressions and aggregations.
-    *
-    * Example:
-    *
-    * {{{
-    *   windowGroupedTable.select("key, window.start, value.avg + 'The average' as 'average")
-    * }}}
-    */
-  def select(fields: String): Table = {
-    val fieldExprs = ExpressionParser.parseExpressionList(fields)
-    select(fieldExprs: _*)
-  }
 }
