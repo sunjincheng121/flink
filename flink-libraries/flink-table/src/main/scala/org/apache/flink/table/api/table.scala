@@ -795,9 +795,6 @@ class Table(
     * For batch tables of finite size, windowing essentially provides shortcuts for time-based
     * groupBy.
     *
-    * __Note__: window on non-grouped streaming table is a non-parallel operation, i.e., all data
-    * will be processed by a single operator.
-    *
     * @param window window that specifies how elements are grouped.
     * @return A windowed table.
     */
@@ -876,7 +873,7 @@ class WindowGroupedTable(
     * }}}
     */
   def select(fields: Expression*): Table = {
-    // get group keys by removing window column
+    // get group keys by removing window alias
     val groupKeyWithoutWindow = groupKey.filterNot(window.alias.get.equals(_))
 
     val (aggNames, propNames) = extractAggregationsAndProperties(fields, table.tableEnv)
@@ -936,12 +933,12 @@ class WindowedTable(
     * Example:
     *
     * {{{
-    *   tab.groupBy('windowAlias, 'key).select('key, 'value.avg)
+    *   tab.window(XXX as 'myWin)).groupBy('myWin, 'key).select('key, 'value.avg)
     * }}}
     */
   def groupBy(fields: Expression*): WindowGroupedTable = {
     if (fields.filter(window.alias.get.equals(_)).length != 1) {
-      throw new ValidationException("Group by must contain only one window column.")
+      throw new ValidationException("GroupBy must contain exactly one window alias.")
     }
     new WindowGroupedTable(table, fields, window)
   }
@@ -955,7 +952,7 @@ class WindowedTable(
     * Example:
     *
     * {{{
-    *   tab.groupBy("windowAlias, key").select("key, value.avg")
+    *   tab.window(XXX.as("myWin")).groupBy("myWin, key").select("key, value.avg")
     * }}}
     */
   def groupBy(fields: String): WindowGroupedTable = {

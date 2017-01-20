@@ -42,15 +42,6 @@ abstract class Window {
     * Converts an API class to a logical window for planning.
     */
   private[flink] def toLogicalWindow: LogicalWindow
-}
-
-/**
-  * A window operating on event-time.
-  *
-  * @param timeField defines the time mode for streaming tables. For batch table it defines the
-  *                  time attribute on which is grouped.
-  */
-abstract class EventTimeWindow(val timeField: Expression) extends Window {
 
   /**
     * Assigns an alias for this window that the following `select()` clause can refer to in order
@@ -59,7 +50,7 @@ abstract class EventTimeWindow(val timeField: Expression) extends Window {
     * @param alias alias for this window
     * @return this window
     */
-  def as(alias: Expression): EventTimeWindow = {
+  def as(alias: Expression): Window = {
     this.alias = Some(alias)
     this
   }
@@ -71,8 +62,16 @@ abstract class EventTimeWindow(val timeField: Expression) extends Window {
     * @param alias alias for this window
     * @return this window
     */
-  def as(alias: String): EventTimeWindow = as(ExpressionParser.parseExpression(alias))
+  def as(alias: String): Window = as(ExpressionParser.parseExpression(alias))
 }
+
+/**
+  * A window operating on event-time.
+  *
+  * @param timeField defines the time mode for streaming tables. For batch table it defines the
+  *                  time attribute on which is grouped.
+  */
+abstract class EventTimeWindow(val timeField: Expression) extends Window
 
 // ------------------------------------------------------------------------------------------------
 // Tumbling windows
@@ -125,27 +124,6 @@ class TumblingWindow(size: Expression) extends Window {
     */
   def on(timeField: String): TumblingEventTimeWindow =
     on(ExpressionParser.parseExpression(timeField))
-
-  /**
-    * Assigns an alias for this window that the following `select()` clause can refer to in order
-    * to access window properties such as window start or end time.
-    *
-    * @param alias alias for this window
-    * @return this window
-    */
-  def as(alias: Expression): TumblingWindow = {
-    this.alias = Some(alias)
-    this
-  }
-
-  /**
-    * Assigns an alias for this window that the following `select()` clause can refer to in order
-    * to access window properties such as window start or end time.
-    *
-    * @param alias alias for this window
-    * @return this window
-    */
-  def as(alias: String): TumblingWindow = as(ExpressionParser.parseExpression(alias))
 
   override private[flink] def toLogicalWindow: LogicalWindow =
     ProcessingTimeTumblingGroupWindow(alias, size)
@@ -253,27 +231,6 @@ class SlidingWindow(
   def on(timeField: String): SlidingEventTimeWindow =
     on(ExpressionParser.parseExpression(timeField))
 
-  /**
-    * Assigns an alias for this window that the following `select()` clause can refer to in order
-    * to access window properties such as window start or end time.
-    *
-    * @param alias alias for this window
-    * @return this window
-    */
-  def as(alias: Expression): SlidingWindow = {
-    this.alias = Some(alias)
-    this
-  }
-
-  /**
-    * Assigns an alias for this window that the following `select()` clause can refer to in order
-    * to access window properties such as window start or end time.
-    *
-    * @param alias alias for this window
-    * @return this window
-    */
-  def as(alias: String): SlidingWindow = as(ExpressionParser.parseExpression(alias))
-
   override private[flink] def toLogicalWindow: LogicalWindow =
     ProcessingTimeSlidingGroupWindow(alias, size, slide)
 }
@@ -342,27 +299,6 @@ class SessionWindow(gap: Expression) extends Window {
     */
   def on(timeField: String): SessionEventTimeWindow =
     on(ExpressionParser.parseExpression(timeField))
-
-  /**
-    * Assigns an alias for this window that the following `select()` clause can refer to in order
-    * to access window properties such as window start or end time.
-    *
-    * @param alias alias for this window
-    * @return this window
-    */
-  def as(alias: Expression): SessionWindow = {
-    this.alias = Some(alias)
-    this
-  }
-
-  /**
-    * Assigns an alias for this window that the following `select()` clause can refer to in order
-    * to access window properties such as window start or end time.
-    *
-    * @param alias alias for this window
-    * @return this window
-    */
-  def as(alias: String): SessionWindow = as(ExpressionParser.parseExpression(alias))
 
   override private[flink] def toLogicalWindow: LogicalWindow =
     ProcessingTimeSessionGroupWindow(alias, gap)
