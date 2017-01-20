@@ -164,7 +164,9 @@ object AggregateUtil {
     inputType: RelDataType,
     outputType: RelDataType,
     groupings: Array[Int],
-    properties: Seq[NamedWindowProperty]): RichGroupReduceFunction[Row, Row] = {
+    properties: Seq[NamedWindowProperty],
+    isInputCombined: Boolean): RichGroupReduceFunction[Row,
+    Row] = {
 
     val aggregates = transformToAggregateFunctions(
       namedAggregates.map(_.getKey),
@@ -229,11 +231,8 @@ object AggregateUtil {
           outputType.getFieldCount)
 
       case EventTimeSessionGroupWindow(_, _, gap) =>
-        val (startPos, endPos) = if (isTimeWindow(window)) {
-            computeWindowStartEndPropertyPos(properties)
-          } else {
-            (None, None)
-          }
+        val (startPos, endPos) = computeWindowStartEndPropertyPos(properties)
+
         new DataSetSessionWindowAggregateReduceGroupFunction(
           aggregates,
           groupingOffsetMapping,
@@ -243,7 +242,8 @@ object AggregateUtil {
           outputType.getFieldCount,
           startPos,
           endPos,
-          asLong(gap))
+          asLong(gap),
+          isInputCombined)
       case _ =>
         throw new UnsupportedOperationException(s"$window is currently not supported on batch")
     }

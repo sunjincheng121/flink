@@ -69,7 +69,7 @@ class DataSetSessionWindowAggregateCombineGroupFunction(
     records: Iterable[Row],
     out: Collector[Row]): Unit = {
 
-    var head:Row = null
+    var headRowTime: java.lang.Long = null
     var lastRowTime: java.lang.Long = null
     var currentRowTime: java.lang.Long = null
 
@@ -77,49 +77,50 @@ class DataSetSessionWindowAggregateCombineGroupFunction(
 
     while (iterator.hasNext) {
       val record = iterator.next()
-        currentRowTime = record.getField(rowTimePos).asInstanceOf[Long]
+      currentRowTime = record.getField(rowTimePos).asInstanceOf[Long]
 
-        // initial traversal or opening a new window
-        // the session window end is equal to last row-time + gap .
-        if (null == lastRowTime ||
-          (null != lastRowTime && (currentRowTime > (lastRowTime + gap)))) {
+      // initial traversal or opening a new window
+      // the session window end is equal to last row-time + gap .
+      if (null == lastRowTime ||
+        (null != lastRowTime && (currentRowTime > (lastRowTime + gap)))) {
 
-          // calculate the current window and open a new window.
-          if (null != lastRowTime) {
-            // emit the current window's merged data
-            doCollect(out, head, lastRowTime)
-          } else {
-            // set group keys to aggregateBuffer.
-            for (i <- 0 until groupingKeys.length) {
-              aggregateBuffer.setField(i, record.getField(i))
-            }
+        // calculate the current window and open a new window.
+        if (null != lastRowTime) {
+          // emit the current window's merged data
+          doCollect(out, headRowTime, lastRowTime + gap)
+        } else {
+          // set group keys to aggregateBuffer.
+          for (i <- 0 until groupingKeys.length) {
+            aggregateBuffer.setField(i, record.getField(i))
           }
-
-          // initiate intermediate aggregate value.
-          aggregates.foreach(_.initiate(aggregateBuffer))
-          head = record
         }
 
-        // merge intermediate aggregate value to the buffered value.
-        aggregates.foreach(_.merge(record, aggregateBuffer))
-
-        // the current row-time is the last row-time of the next calculation.
-        lastRowTime = currentRowTime
+        // initiate intermediate aggregate value.
+        aggregates.foreach(_.initiate(aggregateBuffer))
+        headRowTime = record.getField(rowTimePos).asInstanceOf[Long]
       }
+
+      // merge intermediate aggregate value to the buffered value.
+      aggregates.foreach(_.merge(record, aggregateBuffer))
+
+      // the current row-time is the last row-time of the next calculation.
+      lastRowTime = currentRowTime
+    }
     // emit the merged data of the current window.
-    doCollect(out, head, lastRowTime)
+    doCollect(out, headRowTime, lastRowTime + gap)
   }
 
+  /**
+    * Emit the merged data of the current window.
+    * @param windowStart the window's start attribute value is the min (row-time)
+    *                    of all rows in the window.
+    * @param windowEnd the window's end property value is max (row-time) + gap
+    *                  for all rows in the window.
+    */
   def doCollect(
     out: Collector[Row],
-    head: Row,
-    lastRowTime: Long): Unit = {
-
-    // the window's start attribute value is the min (row-time) of all rows in the window.
-    val windowStart = head.getField(rowTimePos).asInstanceOf[Long]
-
-    // the window's end property value is max (row-time) + gap for all rows in the window.
-    val windowEnd = lastRowTime + gap
+    windowStart: Long,
+    windowEnd: Long): Unit = {
 
     // intermediate Row WindowStartPos is row-time pos .
     aggregateBuffer.setField(rowTimePos, windowStart)

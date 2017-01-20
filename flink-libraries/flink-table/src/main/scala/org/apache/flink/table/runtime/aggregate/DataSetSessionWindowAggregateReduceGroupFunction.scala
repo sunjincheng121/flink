@@ -57,7 +57,8 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
     finalRowArity: Int,
     finalRowWindowStartPos: Option[Int],
     finalRowWindowEndPos: Option[Int],
-    gap:Long)
+    gap:Long,
+    isInputCombined: Boolean)
   extends RichGroupReduceFunction[Row, Row] {
 
   private var aggregateBuffer: Row = _
@@ -88,48 +89,53 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
     */
   override def reduce(records: Iterable[Row], out: Collector[Row]): Unit = {
 
-    var last: Row = null
-    var head: Row = null
+    var headWindowStart: java.lang.Long = null
     var lastWindowEnd: java.lang.Long = null
     var currentWindowStart:java.lang.Long  = null
+    var isGroupKeyInit:Boolean = false
 
     val iterator = records.iterator()
-
     while (iterator.hasNext) {
       val record = iterator.next()
-        currentWindowStart = record.getField(intermediateRowWindowStartPos).asInstanceOf[Long]
-        // initial traversal or opening a new window
-        if (null == lastWindowEnd ||
-          (null != lastWindowEnd && currentWindowStart > lastWindowEnd)) {
-
-          // calculate the current window and open a new window
-          if (null != lastWindowEnd) {
-            // evaluate and emit the current window's result.
-            doEvaluateAndCollect(out, last, head)
-          }
-          // initiate intermediate aggregate value.
-          aggregates.foreach(_.initiate(aggregateBuffer))
-          head = record
+      if (!isGroupKeyInit) {
+        // set group keys value to final output.
+        groupKeysMapping.foreach {
+          case (after, previous) =>
+            output.setField(after, record.getField(previous))
         }
+        isGroupKeyInit = true
+      }
+      currentWindowStart = record.getField(intermediateRowWindowStartPos).asInstanceOf[Long]
+      // initial traversal or opening a new window
+      if (null == lastWindowEnd ||
+        (null != lastWindowEnd && currentWindowStart > lastWindowEnd)) {
 
-        aggregates.foreach(_.merge(record, aggregateBuffer))
-        last = record
-        lastWindowEnd = getWindowEnd(last)
+        // calculate the current window and open a new window
+        if (null != lastWindowEnd) {
+          // evaluate and emit the current window's result.
+          doEvaluateAndCollect(out, headWindowStart, lastWindowEnd)
+        }
+        // initiate intermediate aggregate value.
+        aggregates.foreach(_.initiate(aggregateBuffer))
+        headWindowStart = record.getField(intermediateRowWindowStartPos).asInstanceOf[Long]
       }
 
-    doEvaluateAndCollect(out, last, head)
+      aggregates.foreach(_.merge(record, aggregateBuffer))
+      lastWindowEnd = if(isInputCombined){
+        record.getField(intermediateRowWindowStartPos).asInstanceOf[Long] + gap
+      }else{
+        record.getField(intermediateRowWindowEndPos).asInstanceOf[Long]
+      }
+    }
+
+    doEvaluateAndCollect(out, headWindowStart, lastWindowEnd)
 
   }
 
   def doEvaluateAndCollect(
     out: Collector[Row],
-    last: Row,
-    head: Row): Unit = {
-    // set group keys value to final output.
-    groupKeysMapping.foreach {
-      case (after, previous) =>
-        output.setField(after, last.getField(previous))
-    }
+    windowStart: Long,
+    windowEnd: Long): Unit = {
 
     // evaluate final aggregate value and set to output.
     aggregateMapping.foreach {
@@ -139,40 +145,13 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
 
     // adds TimeWindow properties to output then emit output
     if (finalRowWindowStartPos.isDefined || finalRowWindowEndPos.isDefined) {
-      val start =
-        head.getField(intermediateRowWindowStartPos).asInstanceOf[Long]
-      val end = getWindowEnd(last)
-
       collector.wrappedCollector = out
-      collector.windowStart = start
-      collector.windowEnd = end
+      collector.windowStart = windowStart
+      collector.windowEnd = windowEnd
 
       collector.collect(output)
     } else {
       out.collect(output)
-    }
-  }
-
-  /**
-    * when partial aggregate is not supported, the input data structure of reduce is
-    * |groupKey1|groupKey2|sum1|count1|sum2|count2|rowTime|
-    *  when partial aggregate is supported, the input data structure of reduce is
-    * |groupKey1|groupKey2|sum1|count1|sum2|count2|windowStart|windowEnd|
-    *
-    * @param record The last record in the window
-    * @return window-end time.
-    */
-  def getWindowEnd(record: Row): Long = {
-    // when partial aggregate is not supported, the input data structure of reduce is
-    // |groupKey1|groupKey2|sum1|count1|sum2|count2|rowTime|
-    if (record.getArity == intermediateRowWindowEndPos) {
-      //session window end is row-time + gap
-      record.getField(intermediateRowWindowStartPos).asInstanceOf[Long] + gap
-    }
-    // when partial aggregate is supported, the input data structure of reduce is
-    // |groupKey1|groupKey2|sum1|count1|sum2|count2|windowStart|windowEnd|
-    else {
-      record.getField(intermediateRowWindowEndPos).asInstanceOf[Long]
     }
   }
 
