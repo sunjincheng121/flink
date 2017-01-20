@@ -176,7 +176,8 @@ class DataSetWindowAggregate(
       inputType,
       getRowType,
       grouping,
-      namedProperties)
+      namedProperties,
+      false)
 
     val mappedInput = inputDS
       .map(mapFunction)
@@ -232,8 +233,6 @@ class DataSetWindowAggregate(
         grouping,
         inputType,
         isParserCaseSensitive)
-
-
 
       val mappedInput =
         inputDS

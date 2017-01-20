@@ -232,7 +232,6 @@ object AggregateUtil {
 
       case EventTimeSessionGroupWindow(_, _, gap) =>
         val (startPos, endPos) = computeWindowStartEndPropertyPos(properties)
-
         new DataSetSessionWindowAggregateReduceGroupFunction(
           aggregates,
           groupingOffsetMapping,
