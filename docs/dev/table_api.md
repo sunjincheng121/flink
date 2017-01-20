@@ -1024,7 +1024,7 @@ Temporal intervals can be represented as number of months (`Types.INTERVAL_MONTH
 
 The Table API is a declarative API to define queries on batch and streaming tables. Projection, selection, and union operations can be applied both on streaming and batch tables without additional semantics. Aggregations on (possibly) infinite streaming tables, however, can only be computed on finite groups of records. Window aggregates group rows into finite groups based on time or row-count intervals and evaluate aggregation functions once per group. For batch tables, windows are a convenient shortcut to group records by time intervals.
 
-Windows are defined using the `window(w: Window)` clause, when define a window it must be assigned the window an alias using `as`. Window aggregates must with additional `groupBy` attribute, it should be noted that the window alias must be included in `groupBy` statement.
+Windows are defined using the window(w: Window) clause. When defining the window, it must assign an alias to the window, using as. It should be noted that in window aggregation, the window alias must be referenced in an additional groupBy attribute. The following example shows how to define a window aggregation on a table.
 
 <div class="codetabs" markdown="1">
 <div data-lang="java" markdown="1">
@@ -1046,7 +1046,7 @@ val table = input
 </div>
 </div>
 
-In streaming environments, window aggregates can only be computed in parallel, if they are *keyed*, i.e., such as in the example above, can only be evaluated in a single, non-parallel task. The following example shows how to define a keyed window aggregation on a table. 
+In streaming environments, window aggregates can only be computed in parallel, if they are keyed, i.e., besides the window alias there are additional grouping keys in groupBy. Window aggregates only with window alias, such as in the example above, can only be evaluated in a single, non-parallel task. The following example shows how to define a keyed grouped window aggregation on a table.
 
 <div class="codetabs" markdown="1">
 <div data-lang="java" markdown="1">
@@ -1068,7 +1068,7 @@ val table = input
 </div>
 </div>
 
-The `Window` parameter defines how rows are mapped to windows. `Window` is not an interface that users can implement. Instead, the Table API provides a set of predefined `Window` classes with specific semantics, which are translated into underlying `DataStream` or `DataSet` operations. The supported window definitions are listed below. Window properties such as the start and end timestamp of a time window can be accessed in the `select` statement.
+The `Window` parameter defines how rows are mapped to windows. `Window` is not an interface that users can implement. Instead, the Table API provides a set of predefined `Window` classes with specific semantics, which are translated into underlying `DataStream` or `DataSet` operations. The supported window definitions are listed below. Window properties such as the start and end timestamp of a time window can be accessed in the select statement via window alias.
 
 <div class="codetabs" markdown="1">
 <div data-lang="java" markdown="1">
