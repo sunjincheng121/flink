@@ -795,6 +795,9 @@ class Table(
     * For batch tables of finite size, windowing essentially provides shortcuts for time-based
     * groupBy.
     *
+    * __Note__: streaming table only grouped by window alias is a non-parallel operation, i.e.,
+    * all data will be processed by a single operator.
+    *
     * @param window window that specifies how elements are grouped.
     * @return A windowed table.
     */
@@ -918,7 +921,6 @@ class WindowGroupedTable(
   }
 
 }
-
 
 class WindowedTable(
     private[flink] val table: Table,
