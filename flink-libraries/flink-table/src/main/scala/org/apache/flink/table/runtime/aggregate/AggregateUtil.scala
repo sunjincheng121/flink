@@ -165,7 +165,7 @@ object AggregateUtil {
     outputType: RelDataType,
     groupings: Array[Int],
     properties: Seq[NamedWindowProperty],
-    isInputCombined: Boolean): RichGroupReduceFunction[Row, Row] = {
+    isInputCombined: Boolean = false): RichGroupReduceFunction[Row, Row] = {
 
     val aggregates = transformToAggregateFunctions(
       namedAggregates.map(_.getKey),

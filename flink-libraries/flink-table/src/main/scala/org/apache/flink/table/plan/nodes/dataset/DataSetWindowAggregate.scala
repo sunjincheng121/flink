@@ -176,8 +176,7 @@ class DataSetWindowAggregate(
       inputType,
       getRowType,
       grouping,
-      namedProperties,
-      false)
+      namedProperties)
 
     val mappedInput = inputDS
       .map(mapFunction)
@@ -291,8 +290,8 @@ class DataSetWindowAggregate(
           inputType,
           rowRelDataType,
           grouping,
-          namedProperties,
-          false)
+          namedProperties)
+
         mappedInput.groupBy(groupingKeys: _*)
         .sortGroup(rowTimeFieldPos, Order.ASCENDING)
         .reduceGroup(groupReduceFunction)
