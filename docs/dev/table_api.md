@@ -1022,10 +1022,9 @@ Temporal intervals can be represented as number of months (`Types.INTERVAL_MONTH
 
 ### Windows
 
-The Table API is a declarative API to define queries on batch and streaming tables. Projection, 
-selection, and union operations can be applied both on streaming and batch tables without additional semantics. Aggregations on (possibly) infinite streaming tables, however, can only be computed on finite groups of records. Window aggregates group rows into finite groups based on time or row-count intervals and evaluate aggregation functions once per group. For batch tables, windows are a convenient shortcut to group records by time intervals.
+The Table API is a declarative API to define queries on batch and streaming tables. Projection, selection, and union operations can be applied both on streaming and batch tables without additional semantics. Aggregations on (possibly) infinite streaming tables, however, can only be computed on finite groups of records. Window aggregates group rows into finite groups based on time or row-count intervals and evaluate aggregation functions once per group. For batch tables, windows are a convenient shortcut to group records by time intervals.
 
-Windows are defined using the `window(w: Window)` clause, and must assigning the window an alias using `as`, the alias can be accessed in the `groupBy` statement.
+Windows are defined using the `window(w: Window)` clause, when define a window it must assigning the window an alias using `as`, the alias can be accessed in the `groupBy` statement.
 
 <div class="codetabs" markdown="1">
 <div data-lang="java" markdown="1">
