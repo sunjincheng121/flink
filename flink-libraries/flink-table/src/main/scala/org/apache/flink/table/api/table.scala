@@ -933,7 +933,7 @@ class WindowedTable(
     * Example:
     *
     * {{{
-    *   tab.window(XXX as 'myWin)).groupBy('myWin, 'key).select('key, 'value.avg)
+    *   tab.window([window] as 'w)).groupBy('w, 'key).select('key, 'value.avg)
     * }}}
     */
   def groupBy(fields: Expression*): WindowGroupedTable = {
@@ -952,7 +952,7 @@ class WindowedTable(
     * Example:
     *
     * {{{
-    *   tab.window(XXX.as("myWin")).groupBy("myWin, key").select("key, value.avg")
+    *   tab.window([window].as("w")).groupBy("w, key").select("key, value.avg")
     * }}}
     */
   def groupBy(fields: String): WindowGroupedTable = {

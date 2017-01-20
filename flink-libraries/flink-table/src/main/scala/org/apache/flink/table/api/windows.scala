@@ -44,8 +44,8 @@ abstract class Window {
   private[flink] def toLogicalWindow: LogicalWindow
 
   /**
-    * Assigns an alias for this window that the following `select()` clause can refer to in order
-    * to access window properties such as window start or end time.
+    * Assigns an alias for this window that the following `groupBy()` and `select()` clause can
+    * refer to. `select()` statement can access window properties such as window start or end time.
     *
     * @param alias alias for this window
     * @return this window
@@ -56,8 +56,8 @@ abstract class Window {
   }
 
   /**
-    * Assigns an alias for this window that the following `select()` clause can refer to in order
-    * to access window properties such as window start or end time.
+    * Assigns an alias for this window that the following `groupBy()` and `select()` clause can
+    * refer to. `select()` statement can access window properties such as window start or end time.
     *
     * @param alias alias for this window
     * @return this window
