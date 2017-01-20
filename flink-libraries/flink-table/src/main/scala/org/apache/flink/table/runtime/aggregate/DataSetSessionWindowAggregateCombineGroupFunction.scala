@@ -26,8 +26,6 @@ import org.apache.flink.types.Row
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.util.{Collector, Preconditions}
 
-import scala.collection.JavaConversions._
-
 /**
   * This wraps the aggregate logic inside of
   * [[org.apache.flink.api.java.operators.GroupCombineOperator]].
@@ -47,13 +45,13 @@ class DataSetSessionWindowAggregateCombineGroupFunction(
   extends RichGroupCombineFunction[Row,Row] with ResultTypeQueryable[Row] {
 
   private var aggregateBuffer: Row = _
-  private var rowTimePos = 0
+  private var rowTimeFieldPos = 0
 
   override def open(config: Configuration) {
     Preconditions.checkNotNull(aggregates)
     Preconditions.checkNotNull(groupingKeys)
     aggregateBuffer = new Row(intermediateRowArity)
-    rowTimePos = intermediateRowArity - 2
+    rowTimeFieldPos = intermediateRowArity - 2
   }
 
   /**
@@ -65,49 +63,44 @@ class DataSetSessionWindowAggregateCombineGroupFunction(
     * @return Combined intermediate aggregate Row.
     *
     */
-  override def combine(
-    records: Iterable[Row],
-    out: Collector[Row]): Unit = {
+  override def combine(records: Iterable[Row], out: Collector[Row]): Unit = {
 
-    var headRowTime: java.lang.Long = null
-    var lastRowTime: java.lang.Long = null
+    var windowStart: java.lang.Long = null
+    var windowEnd: java.lang.Long = null
     var currentRowTime: java.lang.Long = null
 
     val iterator = records.iterator()
-
     while (iterator.hasNext) {
       val record = iterator.next()
-      currentRowTime = record.getField(rowTimePos).asInstanceOf[Long]
-
+      currentRowTime = record.getField(rowTimeFieldPos).asInstanceOf[Long]
       // initial traversal or opening a new window
-      // the session window end is equal to last row-time + gap .
-      if (null == lastRowTime ||
-        (null != lastRowTime && (currentRowTime > (lastRowTime + gap)))) {
+      if (null == windowEnd ||
+        (null != windowEnd && (currentRowTime > windowEnd))) {
 
         // calculate the current window and open a new window.
-        if (null != lastRowTime) {
+        if (null != windowEnd) {
           // emit the current window's merged data
-          doCollect(out, headRowTime, lastRowTime + gap)
+          doCollect(out, windowStart, windowEnd)
         } else {
           // set group keys to aggregateBuffer.
-          for (i <- 0 until groupingKeys.length) {
+          for (i <- groupingKeys.indices) {
             aggregateBuffer.setField(i, record.getField(i))
           }
         }
 
         // initiate intermediate aggregate value.
         aggregates.foreach(_.initiate(aggregateBuffer))
-        headRowTime = record.getField(rowTimePos).asInstanceOf[Long]
+        windowStart = record.getField(rowTimeFieldPos).asInstanceOf[Long]
       }
 
       // merge intermediate aggregate value to the buffered value.
       aggregates.foreach(_.merge(record, aggregateBuffer))
 
       // the current row-time is the last row-time of the next calculation.
-      lastRowTime = currentRowTime
+      windowEnd = currentRowTime + gap
     }
     // emit the merged data of the current window.
-    doCollect(out, headRowTime, lastRowTime + gap)
+    doCollect(out, windowStart, windowEnd)
   }
 
   /**
@@ -123,9 +116,9 @@ class DataSetSessionWindowAggregateCombineGroupFunction(
     windowEnd: Long): Unit = {
 
     // intermediate Row WindowStartPos is row-time pos .
-    aggregateBuffer.setField(rowTimePos, windowStart)
+    aggregateBuffer.setField(rowTimeFieldPos, windowStart)
     // intermediate Row WindowEndPos is row-time pos + 1 .
-    aggregateBuffer.setField(rowTimePos + 1, windowEnd)
+    aggregateBuffer.setField(rowTimeFieldPos + 1, windowEnd)
 
     out.collect(aggregateBuffer)
   }

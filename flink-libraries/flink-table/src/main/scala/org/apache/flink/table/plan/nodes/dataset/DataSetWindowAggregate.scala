@@ -254,6 +254,7 @@ class DataSetWindowAggregate(
         val windowStartPos = rowTimeFieldPos
         val windowEndPos = windowStartPos + 1
 
+        // create groupCombineFunction for combine the aggregations
         val combineGroupFunction = createDataSetWindowAggregationCombineFunction(
           window,
           namedAggregates,

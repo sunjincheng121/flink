@@ -24,9 +24,6 @@ import org.apache.flink.types.Row
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.util.{Collector, Preconditions}
 
-import scala.collection.JavaConversions._
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow
-
 /**
   * It wraps the aggregate logic inside of
   * [[org.apache.flink.api.java.operators.GroupReduceOperator]]. It is used for Session time-window
@@ -62,10 +59,10 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
   extends RichGroupReduceFunction[Row, Row] {
 
   private var aggregateBuffer: Row = _
-  private var output: Row = _
-  private var collector: TimeWindowPropertyCollector = _
   private var intermediateRowWindowStartPos = 0
   private var intermediateRowWindowEndPos = 0
+  private var output: Row = _
+  private var collector: TimeWindowPropertyCollector = _
 
   override def open(config: Configuration) {
     Preconditions.checkNotNull(aggregates)
@@ -89,49 +86,56 @@ class DataSetSessionWindowAggregateReduceGroupFunction(
     */
   override def reduce(records: Iterable[Row], out: Collector[Row]): Unit = {
 
-    var headWindowStart: java.lang.Long = null
-    var lastWindowEnd: java.lang.Long = null
-    var currentWindowStart:java.lang.Long  = null
-    var isGroupKeyInit:Boolean = false
+    var windowStart: java.lang.Long = null
+    var windowEnd: java.lang.Long = null
+    var currentRowTime:java.lang.Long  = null
 
     val iterator = records.iterator()
     while (iterator.hasNext) {
       val record = iterator.next()
-      if (!isGroupKeyInit) {
-        // set group keys value to final output.
-        groupKeysMapping.foreach {
-          case (after, previous) =>
-            output.setField(after, record.getField(previous))
-        }
-        isGroupKeyInit = true
-      }
-      currentWindowStart = record.getField(intermediateRowWindowStartPos).asInstanceOf[Long]
+      currentRowTime = record.getField(intermediateRowWindowStartPos).asInstanceOf[Long]
       // initial traversal or opening a new window
-      if (null == lastWindowEnd ||
-        (null != lastWindowEnd && currentWindowStart > lastWindowEnd)) {
+      if (null == windowEnd ||
+        (null != windowEnd && currentRowTime > windowEnd)) {
 
         // calculate the current window and open a new window
-        if (null != lastWindowEnd) {
+        if (null != windowEnd) {
           // evaluate and emit the current window's result.
-          doEvaluateAndCollect(out, headWindowStart, lastWindowEnd)
+          doEvaluateAndCollect(out, windowStart, windowEnd)
+        } else {
+          // set group keys value to final output.
+          groupKeysMapping.foreach {
+            case (after, previous) =>
+              output.setField(after, record.getField(previous))
+          }
         }
         // initiate intermediate aggregate value.
         aggregates.foreach(_.initiate(aggregateBuffer))
-        headWindowStart = record.getField(intermediateRowWindowStartPos).asInstanceOf[Long]
+        windowStart = record.getField(intermediateRowWindowStartPos).asInstanceOf[Long]
       }
 
+      // merge intermediate aggregate value to the buffered value.
       aggregates.foreach(_.merge(record, aggregateBuffer))
-      lastWindowEnd = if(isInputCombined){
-        record.getField(intermediateRowWindowStartPos).asInstanceOf[Long] + gap
-      }else{
+
+      windowEnd = if (isInputCombined) {
+        // partial aggregate is supported
         record.getField(intermediateRowWindowEndPos).asInstanceOf[Long]
+      } else {
+        // partial aggregate is not supported, window-start equal row-time + gap
+        currentRowTime + gap
       }
     }
-
-    doEvaluateAndCollect(out, headWindowStart, lastWindowEnd)
-
+    // evaluate and emit the current window's result.
+    doEvaluateAndCollect(out, windowStart, windowEnd)
   }
 
+  /**
+    * Evaluate and emit the data of the current window.
+    * @param windowStart the window's start attribute value is the min (row-time)
+    *                    of all rows in the window.
+    * @param windowEnd the window's end property value is max (row-time) + gap
+    *                  for all rows in the window.
+    */
   def doEvaluateAndCollect(
     out: Collector[Row],
     windowStart: Long,
