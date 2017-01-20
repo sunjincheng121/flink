@@ -1030,7 +1030,7 @@ Windows are defined using the `window(w: Window)` clause, when define a window i
 <div data-lang="java" markdown="1">
 {% highlight java %}
 Table table = input
-  .window(window.as("w"))  // define window with alias
+  .window([Window w].as("w"))  // define window with alias
   .groupBy("w") 
   .select("b.sum")        // aggregate
 {% endhighlight %}
@@ -1039,7 +1039,7 @@ Table table = input
 <div data-lang="scala" markdown="1">
 {% highlight scala %}
 val table = input
-  .window(window as 'w) // define window with alias
+  .window([w: Window] as 'w) // define window with alias
   .groupBy('w) 
   .select('b.sum)         // aggregate
 {% endhighlight %}
@@ -1052,7 +1052,7 @@ In streaming environments, window aggregates can only be computed in parallel, i
 <div data-lang="java" markdown="1">
 {% highlight java %}
 Table table = input
-  .window(window.as("w"))  // define window with alias
+  .window([Window w].as("w"))  // define window with alias
   .groupBy("w, a") 
   .select("a, b.sum")     // aggregate
 {% endhighlight %}
@@ -1061,7 +1061,7 @@ Table table = input
 <div data-lang="scala" markdown="1">
 {% highlight scala %}
 val table = input
-  .window(window as 'w) // define window with alias
+  .window([w: Window] as 'w) // define window with alias
   .groupBy('w, 'a)
   .select('a, 'b.sum)     // aggregate
 {% endhighlight %}
@@ -1074,7 +1074,7 @@ The `Window` parameter defines how rows are mapped to windows. `Window` is not a
 <div data-lang="java" markdown="1">
 {% highlight java %}
 Table table = input
-  .window(window.as("w"))                      // define window with alias
+  .window([Window w].as("w"))                      // define window with alias
   .groupBy("w, a")
   .select("a, w.start, w.end, b.count") // aggregate
 {% endhighlight %}
@@ -1083,7 +1083,7 @@ Table table = input
 <div data-lang="scala" markdown="1">
 {% highlight scala %}
 val table = input
-  .window(window as 'w)                          // define window with alias
+  .window([w: Window] as 'w)                          // define window with alias
   .groupBy('w, 'a)
   .select('a, 'w.start, 'w.end, 'b.count) // aggregate
 {% endhighlight %}
