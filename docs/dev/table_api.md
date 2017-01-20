@@ -1024,14 +1024,14 @@ Temporal intervals can be represented as number of months (`Types.INTERVAL_MONTH
 
 The Table API is a declarative API to define queries on batch and streaming tables. Projection, selection, and union operations can be applied both on streaming and batch tables without additional semantics. Aggregations on (possibly) infinite streaming tables, however, can only be computed on finite groups of records. Window aggregates group rows into finite groups based on time or row-count intervals and evaluate aggregation functions once per group. For batch tables, windows are a convenient shortcut to group records by time intervals.
 
-Windows are defined using the `window(w: Window)` clause, when define a window it must assigning the window an alias using `as`, the alias can be accessed in the `groupBy` statement.
+Windows are defined using the `window(w: Window)` clause, when define a window it must be assigned the window an alias using `as`. Window aggregates must with additional `groupBy` attribute, it should be noted that the window alias must be included in `groupBy` statement.
 
 <div class="codetabs" markdown="1">
 <div data-lang="java" markdown="1">
 {% highlight java %}
 Table table = input
   .window(window.as("w"))  // define window with alias
-  .groupBy(w) 
+  .groupBy("w") 
   .select("b.sum")        // aggregate
 {% endhighlight %}
 </div>
@@ -1046,7 +1046,7 @@ val table = input
 </div>
 </div>
 
-In streaming environments, window aggregates can only be computed in parallel, if they are *keyed*, i.e., there is an additional `groupBy` attribute. Window aggregates without additional `groupBy`, such as in the example above, can only be evaluated in a single, non-parallel task. The following example shows how to define a keyed window aggregation on a table. 
+In streaming environments, window aggregates can only be computed in parallel, if they are *keyed*, i.e., such as in the example above, can only be evaluated in a single, non-parallel task. The following example shows how to define a keyed window aggregation on a table. 
 
 <div class="codetabs" markdown="1">
 <div data-lang="java" markdown="1">
@@ -1068,14 +1068,13 @@ val table = input
 </div>
 </div>
 
-The `Window` parameter defines how rows are mapped to windows. `Window` is not an interface that users can implement. Instead, the Table API provides a set of predefined `Window` classes with specific semantics, which are translated into underlying `DataStream` or `DataSet` operations. The supported window definitions are listed below. 
-Window properties such as the start and end timestamp of a time window can be accessed in the `select` statement.
+The `Window` parameter defines how rows are mapped to windows. `Window` is not an interface that users can implement. Instead, the Table API provides a set of predefined `Window` classes with specific semantics, which are translated into underlying `DataStream` or `DataSet` operations. The supported window definitions are listed below. Window properties such as the start and end timestamp of a time window can be accessed in the `select` statement.
 
 <div class="codetabs" markdown="1">
 <div data-lang="java" markdown="1">
 {% highlight java %}
 Table table = input
-  .window(window.as("w"))                      // define window alias
+  .window(window.as("w"))                      // define window with alias
   .groupBy("w, a")
   .select("a, w.start, w.end, b.count") // aggregate
 {% endhighlight %}
@@ -1084,7 +1083,7 @@ Table table = input
 <div data-lang="scala" markdown="1">
 {% highlight scala %}
 val table = input
-  .window(window as 'w)                          // define window alias
+  .window(window as 'w)                          // define window with alias
   .groupBy('w, 'a)
   .select('a, 'w.start, 'w.end, 'b.count) // aggregate
 {% endhighlight %}
