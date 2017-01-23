@@ -141,16 +141,18 @@ class DataSetWindowAggregateITCase(configMode: TableConfigMode)
     TestBaseUtils.compareResultAsText(results.asJava, expected)
   }
 
-  @Test(expected = classOf[UnsupportedOperationException])
+  @Test
   def testAlldEventTimeSessionGroupWindow(): Unit = {
-    // Non-grouping Session window on event-time are currently not supported
     val env = ExecutionEnvironment.getExecutionEnvironment
     val tEnv = TableEnvironment.getTableEnvironment(env, config)
     val table = env.fromCollection(data).toTable(tEnv, 'long, 'int, 'string)
     val windowedTable =table
       .window(Session withGap 7.milli on 'long as 'w)
       .groupBy('w)
-      .select('string.count).toDataSet[Row].collect()
+      .select('string.count)
+    val results = windowedTable.toDataSet[Row].collect()
+    val expected = "6\n1";
+    TestBaseUtils.compareResultAsText(results.asJava, expected)
   }
 
   @Test(expected = classOf[ValidationException])

@@ -223,36 +223,35 @@ class DataSetWindowAggregate(
     val groupingKeys = grouping.indices.toArray
     val rowTypeInfo = resultRowTypeInfo
 
-    // grouping window
-    if (groupingKeys.length > 0) {
-      // create mapFunction for initializing the aggregations
-      val mapFunction = createDataSetWindowPrepareMapFunction(
-        window,
-        namedAggregates,
-        grouping,
-        inputType,
-        isParserCaseSensitive)
+    // create mapFunction for initializing the aggregations
+    val mapFunction = createDataSetWindowPrepareMapFunction(
+      window,
+      namedAggregates,
+      grouping,
+      inputType,
+      isParserCaseSensitive)
 
-      val mappedInput =
-        inputDS
-        .map(mapFunction)
-        .name(prepareOperatorName)
+    val mappedInput =
+      inputDS
+      .map(mapFunction)
+      .name(prepareOperatorName)
 
-      val mapReturnType = mapFunction.asInstanceOf[ResultTypeQueryable[Row]].getProducedType
+    val mapReturnType = mapFunction.asInstanceOf[ResultTypeQueryable[Row]].getProducedType
 
-      // the position of the rowtime field in the intermediate result for map output
-      val rowTimeFieldPos = mapReturnType.getArity - 1
+    // the position of the rowtime field in the intermediate result for map output
+    val rowTimeFieldPos = mapReturnType.getArity - 1
 
-      // do incremental aggregation
-      if (doAllSupportPartialAggregation(
-        namedAggregates.map(_.getKey),
-        inputType,
-        grouping.length)) {
+    // do incremental aggregation
+    if (doAllSupportPartialAggregation(
+      namedAggregates.map(_.getKey),
+      inputType,
+      grouping.length)) {
+      // gets the window-start and window-end position  in the intermediate result.
+      val windowStartPos = rowTimeFieldPos
+      val windowEndPos = windowStartPos + 1
 
-        // gets the window-start and window-end position  in the intermediate result.
-        val windowStartPos = rowTimeFieldPos
-        val windowEndPos = windowStartPos + 1
-
+      // grouping window
+      if (groupingKeys.length > 0) {
         // create groupCombineFunction for combine the aggregations
         val combineGroupFunction = createDataSetWindowAggregationCombineFunction(
           window,
@@ -271,19 +270,46 @@ class DataSetWindowAggregate(
           isInputCombined = true)
 
         mappedInput
-          .groupBy(groupingKeys: _*)
-          .sortGroup(rowTimeFieldPos, Order.ASCENDING)
-          .combineGroup(combineGroupFunction)
-          .groupBy(groupingKeys: _*)
-          .sortGroup(windowStartPos, Order.ASCENDING)
-          .sortGroup(windowEndPos, Order.ASCENDING)
-          .reduceGroup(groupReduceFunction)
-          .returns(rowTypeInfo)
-          .name(aggregateOperatorName)
-          .asInstanceOf[DataSet[Any]]
+        .groupBy(groupingKeys: _*)
+        .sortGroup(rowTimeFieldPos, Order.ASCENDING)
+        .combineGroup(combineGroupFunction)
+        .groupBy(groupingKeys: _*)
+        .sortGroup(windowStartPos, Order.ASCENDING)
+        .sortGroup(windowEndPos, Order.ASCENDING)
+        .reduceGroup(groupReduceFunction)
+        .returns(rowTypeInfo)
+        .name(aggregateOperatorName)
+        .asInstanceOf[DataSet[Any]]
+
+      } else {
+        // non-grouping window
+        val preMapPartitionFunction = createDataSetWindowAggregationMapPartitionFunction(
+          window,
+          namedAggregates,
+          inputType)
+
+        val mapPartitionFunction = createDataSetWindowAggregationMapPartitionFunction(
+          window,
+          namedAggregates,
+          inputType,
+          rowRelDataType,
+          namedProperties,
+          isPreMapPartition = false,
+          isInputCombined = true)
+
+        mappedInput.sortPartition(rowTimeFieldPos, Order.ASCENDING).setParallelism(1)
+        .mapPartition(preMapPartitionFunction).setParallelism(1)
+        .sortPartition(windowStartPos, Order.ASCENDING).setParallelism(1)
+        .sortPartition(windowEndPos, Order.ASCENDING).setParallelism(1)
+        .mapPartition(mapPartitionFunction).setParallelism(1)
+        .returns(rowTypeInfo)
+        .name(aggregateOperatorName)
+        .asInstanceOf[DataSet[Any]]
       }
+    } else {
       // do non-incremental aggregation
-      else {
+      // grouping window
+      if (groupingKeys.length > 0) {
         // create groupReduceFunction for calculating the aggregations
         val groupReduceFunction = createDataSetWindowAggregationGroupReduceFunction(
           window,
@@ -299,12 +325,23 @@ class DataSetWindowAggregate(
         .returns(rowTypeInfo)
         .name(aggregateOperatorName)
         .asInstanceOf[DataSet[Any]]
+
+      } else {
+        // non-grouping window
+        val mapPartitionFunction = createDataSetWindowAggregationMapPartitionFunction(
+          window,
+          namedAggregates,
+          inputType,
+          rowRelDataType,
+          namedProperties,
+          isPreMapPartition = false)
+
+        mappedInput.sortPartition(rowTimeFieldPos, Order.ASCENDING).setParallelism(1)
+        .mapPartition(mapPartitionFunction).setParallelism(1)
+        .returns(rowTypeInfo)
+        .name(aggregateOperatorName)
+        .asInstanceOf[DataSet[Any]]
       }
-    }
-    // non-grouping window
-    else {
-      throw new UnsupportedOperationException(
-        "Session non-grouping windows on event-time are currently not supported.")
     }
   }
 

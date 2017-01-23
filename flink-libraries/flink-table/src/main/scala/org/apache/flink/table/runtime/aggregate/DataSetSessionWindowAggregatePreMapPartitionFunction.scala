@@ -19,31 +19,19 @@ package org.apache.flink.table.runtime.aggregate
 
 import java.lang.Iterable
 
-import org.apache.flink.api.common.functions.RichGroupCombineFunction
+import org.apache.flink.api.common.functions.RichMapPartitionFunction
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable
-import org.apache.flink.types.Row
 import org.apache.flink.configuration.Configuration
+import org.apache.flink.types.Row
 import org.apache.flink.util.{Collector, Preconditions}
 
-
-/**
-  * This wraps the aggregate logic inside of
-  * [[org.apache.flink.api.java.operators.GroupCombineOperator]].
-  *
-  * @param aggregates The aggregate functions.
-  * @param groupingKeys The indexes of the grouping fields.
-  * @param intermediateRowArity The intermediate row field count.
-  * @param gap  Session time window gap.
-  * @param intermediateRowType Intermediate row data type.
-  */
-class DataSetSessionWindowAggregateCombineGroupFunction(
+class DataSetSessionWindowAggregatePreMapPartitionFunction(
     aggregates: Array[Aggregate[_ <: Any]],
-    groupingKeys: Array[Int],
     intermediateRowArity: Int,
     gap: Long,
     @transient intermediateRowType: TypeInformation[Row])
-  extends RichGroupCombineFunction[Row,Row]
+  extends RichMapPartitionFunction[Row, Row]
     with ResultTypeQueryable[Row] {
 
   private var aggregateBuffer: Row = _
@@ -51,30 +39,32 @@ class DataSetSessionWindowAggregateCombineGroupFunction(
 
   override def open(config: Configuration) {
     Preconditions.checkNotNull(aggregates)
-    Preconditions.checkNotNull(groupingKeys)
     aggregateBuffer = new Row(intermediateRowArity)
     rowTimeFieldPos = intermediateRowArity - 2
   }
 
   /**
-    * For sub-grouped intermediate aggregate Rows, divide window based on the rowtime
+    * Divide window based on the rowtime
     * (current'rowtime - previous’rowtime > gap), and then merge data (within a unified window)
     * into an aggregate buffer.
     *
-    * @param records  Sub-grouped intermediate aggregate Rows.
-    * @return Combined intermediate aggregate Row.
+    * @param records  Intermediate aggregate Rows.
+    * @return Pre partition intermediate aggregate Row.
     *
     */
-  override def combine(records: Iterable[Row], out: Collector[Row]): Unit = {
+  override def mapPartition(
+    records: Iterable[Row],
+    out: Collector[Row]): Unit = {
     DataSetSessionWindowAggregateUtil.preProcessing(
       aggregates,
-      groupingKeys,
+      Array(),
       rowTimeFieldPos,
       gap,
       aggregateBuffer,
       records,
       out)
   }
+
   override def getProducedType: TypeInformation[Row] = {
     intermediateRowType
   }

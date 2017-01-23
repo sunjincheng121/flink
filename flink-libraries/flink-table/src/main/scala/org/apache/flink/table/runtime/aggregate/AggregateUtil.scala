@@ -25,7 +25,7 @@ import org.apache.calcite.sql.{SqlAggFunction, SqlKind}
 import org.apache.calcite.sql.`type`.SqlTypeName._
 import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.fun._
-import org.apache.flink.api.common.functions.{MapFunction, RichGroupReduceFunction,RichGroupCombineFunction}
+import org.apache.flink.api.common.functions.{MapFunction, RichGroupCombineFunction, RichGroupReduceFunction, RichMapPartitionFunction}
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
 import org.apache.flink.api.java.tuple.Tuple
 import org.apache.flink.api.java.typeutils.RowTypeInfo
@@ -302,6 +302,83 @@ object AggregateUtil {
         throw new UnsupportedOperationException(
           s" [ ${window.getClass.getCanonicalName.split("\\.").last} ] is currently not " +
             s"supported on batch")
+    }
+  }
+
+  /**
+    * Create a [[org.apache.flink.api.common.functions.MapPartitionFunction]] that aggregation
+    * for aggregates.
+    * The function returns aggregate values of all aggregate function which are
+    * organized by the following format:
+    *
+    * {{{
+    *       avg(x) aggOffsetInRow = 2  count(z) aggOffsetInRow = 5
+    *           |                          |          windowEnd(max(rowtime)
+    *           |                          |                   |
+    *           v                          v                   v
+    *        +--------+--------+--------+--------+-----------+---------+
+    *        |  sum1  | count1 |  sum2  | count2 |windowStart|windowEnd|
+    *        +--------+--------+--------+--------+-----------+---------+
+    *                               ^                 ^
+    *                               |                 |
+    *             sum(y) aggOffsetInRow = 4    windowStart(min(rowtime))
+    *
+    * }}}
+    *
+    */
+  def createDataSetWindowAggregationMapPartitionFunction(
+    window: LogicalWindow,
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    inputType: RelDataType,
+    outputType: RelDataType = null,
+    properties: Seq[NamedWindowProperty] = null,
+    isPreMapPartition: Boolean = true,
+    isInputCombined: Boolean = false): RichMapPartitionFunction[Row, Row] = {
+
+    val aggregates = transformToAggregateFunctions(
+      namedAggregates.map(_.getKey),
+      inputType,
+      0)._2
+
+    val intermediateRowArity = aggregates.map(_.intermediateDataType.length).sum
+
+    window match {
+      case EventTimeSessionGroupWindow(_, _, gap) =>
+        if (isPreMapPartition) {
+          val preMapReturnType: RowTypeInfo =
+            createAggregateBufferDataType(
+              Array(),
+              aggregates,
+              inputType,
+              Option(Array(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO)))
+
+          new DataSetSessionWindowAggregatePreMapPartitionFunction(
+            aggregates,
+            // the addition two fields are used to store window-start and window-end attributes
+            intermediateRowArity + 2,
+            asLong(gap),
+            preMapReturnType)
+
+        } else {
+          val (startPos, endPos) = computeWindowStartEndPropertyPos(properties)
+
+          // the mapping relation between aggregate function index in list and its corresponding
+          // field index in output Row.
+          val aggOffsetMapping = getAggregateMapping(namedAggregates, outputType)
+
+          new DataSetSessionWindowAggregateMapPartitionFunction(
+            aggregates,
+            aggOffsetMapping,
+            // the additional two fields are used to store window-start and window-end attributes
+            intermediateRowArity + 2,
+            outputType.getFieldCount,
+            startPos,
+            endPos,
+            asLong(gap),
+            isInputCombined)
+        }
+      case _ =>
+        throw new UnsupportedOperationException(s"$window is currently not supported on batch")
     }
   }
 
