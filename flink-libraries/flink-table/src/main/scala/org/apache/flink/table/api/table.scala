@@ -837,9 +837,10 @@ class GroupedTable(
     */
   def select(fields: Expression*): Table = {
 
+    val (aggNames, propNames) = extractAggregationsAndProperties(fields, table.tableEnv)
+
     if (null == window) {
       // grouped general table
-      val (aggNames, propNames) = extractAggregationsAndProperties(fields, table.tableEnv)
       if (propNames.nonEmpty) {
         throw ValidationException("Window properties can only be used on windowed tables.")
       }
@@ -860,12 +861,8 @@ class GroupedTable(
 
     } else {
       // grouped window table
-      // get group keys by removing window alias
-      val (aggNames, propNames) = extractAggregationsAndProperties(fields, table.tableEnv)
-
       val projectsOnAgg = replaceAggregationsAndProperties(
         fields, table.tableEnv, aggNames, propNames)
-
       val projectFields = (table.tableEnv, window) match {
         // event time can be arbitrary field in batch environment
         case (_: BatchTableEnvironment, w: EventTimeWindow) =>
@@ -888,7 +885,6 @@ class GroupedTable(
         ).validate(table.tableEnv))
     }
   }
-
 
   /**
     * Performs a selection operation on a grouped table. Similar to an SQL SELECT statement.
