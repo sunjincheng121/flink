@@ -836,7 +836,6 @@ class GroupedTable(
     * }}}
     */
   def select(fields: Expression*): Table = {
-
     val (aggNames, propNames) = extractAggregationsAndProperties(fields, table.tableEnv)
 
     if (null == window) {
