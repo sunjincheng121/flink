@@ -25,7 +25,9 @@ import org.apache.calcite.sql.{SqlAggFunction, SqlKind}
 import org.apache.calcite.sql.`type`.SqlTypeName._
 import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.fun._
-import org.apache.flink.api.common.functions.{MapFunction, RichGroupCombineFunction, RichGroupReduceFunction, RichMapPartitionFunction}
+import org.apache.flink.api.common.functions.{MapFunction,GroupCombineFunction,
+RichGroupCombineFunction,GroupReduceFunction, RichGroupReduceFunction,MapPartitionFunction,
+RichMapPartitionFunction}
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
 import org.apache.flink.api.java.tuple.Tuple
 import org.apache.flink.api.java.typeutils.RowTypeInfo
@@ -165,7 +167,7 @@ object AggregateUtil {
     outputType: RelDataType,
     groupings: Array[Int],
     properties: Seq[NamedWindowProperty],
-    isInputCombined: Boolean = false): RichGroupReduceFunction[Row, Row] = {
+    isInputCombined: Boolean = false): GroupReduceFunction[Row, Row] = {
 
     val aggregates = transformToAggregateFunctions(
       namedAggregates.map(_.getKey),
@@ -231,7 +233,7 @@ object AggregateUtil {
 
       case EventTimeSessionGroupWindow(_, _, gap) =>
         val (startPos, endPos) = computeWindowStartEndPropertyPos(properties)
-        new DataSetSessionWindowAggregateReduceGroupFunction(
+        new DataSetSessionWindowAggregateProcessor(
           aggregates,
           groupingOffsetMapping,
           aggOffsetMapping,
@@ -241,7 +243,7 @@ object AggregateUtil {
           startPos,
           endPos,
           asLong(gap),
-          isInputCombined)
+          isInputCombined).asInstanceOf[GroupReduceFunction[Row, Row]]
       case _ =>
         throw new UnsupportedOperationException(s"$window is currently not supported on batch")
     }
@@ -272,7 +274,7 @@ object AggregateUtil {
     window: LogicalWindow,
     namedAggregates: Seq[CalcitePair[AggregateCall, String]],
     inputType: RelDataType,
-    groupings: Array[Int]): RichGroupCombineFunction[Row,Row] = {
+    groupings: Array[Int]): GroupCombineFunction[Row,Row] = {
 
     val aggregates = transformToAggregateFunctions(
       namedAggregates.map(_.getKey),
@@ -291,13 +293,13 @@ object AggregateUtil {
             inputType,
             Option(Array(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO)))
 
-        new DataSetSessionWindowAggregateCombineGroupFunction(
+        new DataSetSessionWindowAggregatePreProcessor(
           aggregates,
           groupings,
           // the addition two fields are used to store window-start and window-end attributes
           intermediateRowArity + 2,
           asLong(gap),
-          combineReturnType)
+          combineReturnType).asInstanceOf[GroupCombineFunction[Row,Row]]
       case _ =>
         throw new UnsupportedOperationException(
           s" [ ${window.getClass.getCanonicalName.split("\\.").last} ] is currently not " +
@@ -333,7 +335,7 @@ object AggregateUtil {
     outputType: RelDataType = null,
     properties: Seq[NamedWindowProperty] = null,
     isPreMapPartition: Boolean = true,
-    isInputCombined: Boolean = false): RichMapPartitionFunction[Row, Row] = {
+    isInputCombined: Boolean = false): MapPartitionFunction[Row, Row] = {
 
     val aggregates = transformToAggregateFunctions(
       namedAggregates.map(_.getKey),
@@ -352,12 +354,13 @@ object AggregateUtil {
               inputType,
               Option(Array(BasicTypeInfo.LONG_TYPE_INFO, BasicTypeInfo.LONG_TYPE_INFO)))
 
-          new DataSetSessionWindowAggregatePreMapPartitionFunction(
+          new DataSetSessionWindowAggregatePreProcessor(
             aggregates,
+            Array(),
             // the addition two fields are used to store window-start and window-end attributes
             intermediateRowArity + 2,
             asLong(gap),
-            preMapReturnType)
+            preMapReturnType).asInstanceOf[MapPartitionFunction[Row, Row]]
 
         } else {
           val (startPos, endPos) = computeWindowStartEndPropertyPos(properties)
@@ -366,8 +369,9 @@ object AggregateUtil {
           // field index in output Row.
           val aggOffsetMapping = getAggregateMapping(namedAggregates, outputType)
 
-          new DataSetSessionWindowAggregateMapPartitionFunction(
+          new DataSetSessionWindowAggregateProcessor(
             aggregates,
+            Array(),
             aggOffsetMapping,
             // the additional two fields are used to store window-start and window-end attributes
             intermediateRowArity + 2,
@@ -375,7 +379,7 @@ object AggregateUtil {
             startPos,
             endPos,
             asLong(gap),
-            isInputCombined)
+            isInputCombined).asInstanceOf[MapPartitionFunction[Row, Row]]
         }
       case _ =>
         throw new UnsupportedOperationException(s"$window is currently not supported on batch")

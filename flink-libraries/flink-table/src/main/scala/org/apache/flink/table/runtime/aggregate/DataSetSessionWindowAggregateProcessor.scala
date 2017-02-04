@@ -19,87 +19,100 @@ package org.apache.flink.table.runtime.aggregate
 
 import java.lang.Iterable
 
+import org.apache.flink.api.common.functions.{AbstractRichFunction, GroupReduceFunction, MapPartitionFunction}
+import org.apache.flink.configuration.Configuration
 import org.apache.flink.types.Row
-import org.apache.flink.util.Collector
+import org.apache.flink.util.{Collector, Preconditions}
 
-object DataSetSessionWindowAggregateUtil {
+/**
+  * It wraps the aggregate logic inside of
+  * [[org.apache.flink.api.java.operators.GroupReduceOperator]] and
+  * [[org.apache.flink.api.java.operators.MapPartitionOperator]] . It is used for Session
+  * time-window on batch.
+  *
+  * Note:
+  *
+  *  This can handle two input types (depending if input is combined or not):
+  *
+  *  1. when partial aggregate is not supported, the input data structure of reduce is
+  *    |groupKey1|groupKey2|sum1|count1|sum2|count2|rowTime|
+  *  2. when partial aggregate is supported, the input data structure of reduce is
+  *    |groupKey1|groupKey2|sum1|count1|sum2|count2|windowStart|windowEnd|
+  *
+  * @param aggregates The aggregate functions.
+  * @param groupKeysMapping The index mapping of group keys between intermediate aggregate Row
+  *                         and output Row.
+  * @param aggregateMapping The index mapping between aggregate function list and aggregated value
+  *                         index in output Row.
+  * @param intermediateRowArity The intermediate row field count.
+  * @param finalRowArity The output row field count.
+  * @param finalRowWindowStartPos The relative window-start field position.
+  * @param finalRowWindowEndPos The relative window-end field position.
+  * @param gap Session time window gap.
+  */
+class DataSetSessionWindowAggregateProcessor(
+  aggregates: Array[Aggregate[_ <: Any]],
+  groupKeysMapping: Array[(Int, Int)],
+  aggregateMapping: Array[(Int, Int)],
+  intermediateRowArity: Int,
+  finalRowArity: Int,
+  finalRowWindowStartPos: Option[Int],
+  finalRowWindowEndPos: Option[Int],
+  gap:Long,
+  isInputCombined: Boolean)
+  extends AbstractRichFunction
+    with MapPartitionFunction[Row, Row]
+    with GroupReduceFunction[Row, Row] {
+
+
+  private var aggregateBuffer: Row = _
+  private var intermediateRowWindowStartPos = 0
+  private var intermediateRowWindowEndPos = 0
+  private var output: Row = _
+  private var collector: TimeWindowPropertyCollector = _
+
+  override def open(config: Configuration) {
+    Preconditions.checkNotNull(aggregates)
+    Preconditions.checkNotNull(groupKeysMapping)
+    aggregateBuffer = new Row(intermediateRowArity)
+    intermediateRowWindowStartPos = intermediateRowArity - 2
+    intermediateRowWindowEndPos = intermediateRowArity - 1
+    output = new Row(finalRowArity)
+    collector = new TimeWindowPropertyCollector(finalRowWindowStartPos, finalRowWindowEndPos)
+  }
+
   /**
-    * Intermediate aggregate Rows, divide window based on the rowtime
-    * (current'rowtime - previous’rowtime > gap), and then merge data (within a unified window)
-    * into an aggregate buffer.
+    * For grouped intermediate aggregate Rows, divide window according to the window-start
+    * and window-end, merge data (within a unified window) into an aggregate buffer, calculate
+    * aggregated values output from aggregate buffer, and then set them into output
+    * Row based on the mapping relationship between intermediate aggregate data and output data.
     *
-    * @param records Intermediate aggregate Rows.
-    * @return PreProcessing intermediate aggregate Row.
+    * @param records Grouped intermediate aggregate Rows iterator.
+    * @param out The collector to hand results to.
     *
     */
-  def preProcessing(
-    aggregates: Array[Aggregate[_ <: Any]],
-    groupingKeys: Array[Int],
-    rowTimeFieldPos: Int,
-    gap: Long,
-    aggregateBuffer: Row,
+  override def reduce(
     records: Iterable[Row],
     out: Collector[Row]): Unit = {
-
-    var windowStart: java.lang.Long = null
-    var windowEnd: java.lang.Long = null
-    var currentRowTime: java.lang.Long = null
-
-    val iterator = records.iterator()
-    while (iterator.hasNext) {
-      val record = iterator.next()
-      currentRowTime = record.getField(rowTimeFieldPos).asInstanceOf[Long]
-      // initial traversal or opening a new window
-      if (windowEnd == null || (windowEnd != null && (currentRowTime > windowEnd))) {
-
-        // calculate the current window and open a new window.
-        if (windowEnd != null) {
-          // emit the current window's merged data
-          doCollect(aggregateBuffer, rowTimeFieldPos, out, windowStart, windowEnd)
-        } else {
-          // set group keys to aggregateBuffer.
-          for (i <- groupingKeys.indices) {
-            aggregateBuffer.setField(i, record.getField(i))
-          }
-        }
-
-        // initiate intermediate aggregate value.
-        aggregates.foreach(_.initiate(aggregateBuffer))
-        windowStart = record.getField(rowTimeFieldPos).asInstanceOf[Long]
-      }
-
-      // merge intermediate aggregate value to the buffered value.
-      aggregates.foreach(_.merge(record, aggregateBuffer))
-
-      // the current rowtime is the last rowtime of the next calculation.
-      windowEnd = currentRowTime + gap
-    }
-    // emit the merged data of the current window.
-    doCollect(aggregateBuffer, rowTimeFieldPos, out, windowStart, windowEnd)
+    processing(records, out)
   }
 
   /**
-    * Emit the merged data of the current window.
+    * Divide window according to the window-start
+    * and window-end, merge data (within a unified window) into an aggregate buffer, calculate
+    * aggregated values output from aggregate buffer, and then set them into output
+    * Row based on the mapping relationship between intermediate aggregate data and output data.
     *
-    * @param windowStart the window's start attribute value is the min (rowtime)
-    *                    of all rows in the window.
-    * @param windowEnd   the window's end property value is max (rowtime) + gap
-    *                    for all rows in the window.
+    * @param records  Aggregate Rows iterator.
+    * @param out The collector to hand results to.
+    *
     */
-  def doCollect(
-    aggregateBuffer: Row,
-    rowTimeFieldPos: Int,
-    out: Collector[Row],
-    windowStart: Long,
-    windowEnd: Long): Unit = {
-
-    // intermediate Row WindowStartPos is rowtime pos .
-    aggregateBuffer.setField(rowTimeFieldPos, windowStart)
-    // intermediate Row WindowEndPos is rowtime pos + 1 .
-    aggregateBuffer.setField(rowTimeFieldPos + 1, windowEnd)
-
-    out.collect(aggregateBuffer)
+  override def mapPartition(
+    records: Iterable[Row],
+    out: Collector[Row]): Unit = {
+    processing(records, out)
   }
+
 
   /**
     * Intermediate aggregate Rows, divide window according to the window-start
@@ -112,18 +125,6 @@ object DataSetSessionWindowAggregateUtil {
     *
     */
   def processing(
-    aggregates: Array[Aggregate[_ <: Any]],
-    groupKeysMapping: Array[(Int, Int)],
-    aggregateMapping: Array[(Int, Int)],
-    intermediateRowWindowStartPos: Int,
-    intermediateRowWindowEndPos: Int,
-    output: Row,
-    aggregateBuffer: Row,
-    gap:Long,
-    isInputCombined: Boolean,
-    collector: TimeWindowPropertyCollector,
-    finalRowWindowStartPos: Option[Int],
-    finalRowWindowEndPos: Option[Int],
     records: Iterable[Row],
     out: Collector[Row]): Unit = {
 
