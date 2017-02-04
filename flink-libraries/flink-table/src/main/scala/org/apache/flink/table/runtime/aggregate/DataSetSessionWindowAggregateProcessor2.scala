@@ -50,7 +50,7 @@ import org.apache.flink.util.{Collector, Preconditions}
   * @param finalRowWindowEndPos The relative window-end field position.
   * @param gap Session time window gap.
   */
-class DataSetSessionWindowAggregateProcessor(
+class DataSetSessionWindowAggregateProcessor2(
   aggregates: Array[Aggregate[_ <: Any]],
   groupKeysMapping: Array[(Int, Int)],
   aggregateMapping: Array[(Int, Int)],
