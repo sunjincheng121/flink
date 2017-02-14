@@ -22,6 +22,8 @@ package org.apache.flink.table.functions.utils
 import java.lang.{Long => JLong, Integer => JInt}
 import java.lang.reflect.{Method, Modifier}
 import java.sql.{Date, Time, Timestamp}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import org.apache.commons.codec.binary.Base64
 
 import com.google.common.primitives.Primitives
 import org.apache.calcite.sql.SqlFunction
@@ -311,7 +313,6 @@ object UserDefinedFunctionUtils {
     }
   }.toArray
 
-
   /**
     * Compares parameter candidate classes with expected classes. If true, the parameters match.
     * Candidate can be null (acts as a wildcard).
@@ -324,4 +325,19 @@ object UserDefinedFunctionUtils {
     candidate == classOf[Time] && (expected == classOf[Int] || expected == classOf[JInt]) ||
     candidate == classOf[Timestamp] && (expected == classOf[Long] || expected == classOf[JLong])
 
+  @throws[Exception]
+  def serialize(function: UserDefinedFunction): String = {
+    val byteArrayOutPut = new ByteArrayOutputStream
+    val objectOutPut = new ObjectOutputStream(byteArrayOutPut)
+    objectOutPut.writeObject(function)
+    objectOutPut.flush()
+    Base64.encodeBase64URLSafeString(byteArrayOutPut.toByteArray)
+  }
+
+  @throws[Exception]
+  def deserialize(data: String): UserDefinedFunction = {
+    val byteData = Base64.decodeBase64(data)
+    new ObjectInputStream(
+      new ByteArrayInputStream(byteData)).readObject.asInstanceOf[UserDefinedFunction]
+  }
 }

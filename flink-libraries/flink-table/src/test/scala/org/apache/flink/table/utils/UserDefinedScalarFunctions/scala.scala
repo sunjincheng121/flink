@@ -15,13 +15,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.flink.table.functions
+package org.apache.flink.table.utils.UserDefinedScalarFunctions
 
-/**
-  * Base class for all user-defined functions such as scalar functions, table functions,
-  * or aggregation functions.
-  *
-  * User-defined functions must have a default constructor and must be instantiable during runtime.
-  */
-trait UserDefinedFunction extends Serializable{
+import org.apache.flink.table.functions.ScalarFunction
+
+
+class ScalarFunc0(data: String) extends ScalarFunction {
+  def this() {
+    this("default")
+  }
+
+  def eval(input: String): String = {
+    data.concat(input)
+  }
 }

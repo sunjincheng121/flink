@@ -25,6 +25,7 @@ import org.apache.calcite.rex._
 import org.apache.calcite.sql.SqlOperator
 import org.apache.calcite.sql.`type`.SqlTypeName._
 import org.apache.calcite.sql.fun.SqlStdOperatorTable._
+import org.apache.commons.codec.digest.DigestUtils
 import org.apache.flink.api.common.functions.{FlatJoinFunction, FlatMapFunction, Function, MapFunction}
 import org.apache.flink.api.common.io.GenericInputFormat
 import org.apache.flink.api.common.typeinfo.{AtomicType, SqlTimeTypeInfo, TypeInformation}
@@ -39,9 +40,11 @@ import org.apache.flink.table.codegen.Indenter.toISC
 import org.apache.flink.table.codegen.calls.FunctionGenerator
 import org.apache.flink.table.codegen.calls.ScalarOperators._
 import org.apache.flink.table.functions.UserDefinedFunction
+import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
 import org.apache.flink.table.runtime.TableFunctionCollector
 import org.apache.flink.table.typeutils.TypeCheckUtils._
 import org.apache.flink.types.Row
+
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -1463,7 +1466,11 @@ class CodeGenerator(
     */
   def addReusableFunction(function: UserDefinedFunction): String = {
     val classQualifier = function.getClass.getCanonicalName
-    val fieldTerm = s"function_${classQualifier.replace('.', '$')}"
+    val functionSerData = serialize(function)
+    val fieldTerm =
+      s"""
+         |function_${classQualifier.replace('.', '$')}_${DigestUtils.md5Hex(functionSerData)}
+       """.stripMargin
 
     val fieldFunction =
       s"""
@@ -1471,13 +1478,11 @@ class CodeGenerator(
         |""".stripMargin
     reusableMemberStatements.add(fieldFunction)
 
-    val constructorTerm = s"constructor_${classQualifier.replace('.', '$')}"
     val constructorAccessibility =
       s"""
-        |java.lang.reflect.Constructor $constructorTerm =
-        |  $classQualifier.class.getDeclaredConstructor();
-        |$constructorTerm.setAccessible(true);
-        |$fieldTerm = ($classQualifier) $constructorTerm.newInstance();
+         |$fieldTerm = ($classQualifier)
+         |org.apache.flink.table.functions.utils.UserDefinedFunctionUtils
+         |.deserialize("$functionSerData");
        """.stripMargin
     reusableInitStatements.add(constructorAccessibility)
     fieldTerm
