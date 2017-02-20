@@ -98,11 +98,6 @@ abstract class TableFunction[T] extends UserDefinedFunction {
 
   override def toString: String = getClass.getCanonicalName
 
-  final def functionIdentifier: String = {
-    val md5  =  DigestUtils.md5Hex(serialize(this))
-    getClass.getCanonicalName.replace('.', '$').concat("$").concat(md5)
-  }
-
   // ----------------------------------------------------------------------------------------------
 
   /**
