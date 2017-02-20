@@ -206,8 +206,8 @@ class DataSetUserDefinedFunctionITCase(
 
     val results = result.collect()
 
-    val expected = "Anna#44,Anna,OneConf_Anna,TwoConf_Anna,44,44,44\n"+
-      "Jack#22,Jack,OneConf_Jack,TwoConf_Jack,22,22,22\n"+
+    val expected = "Anna#44,Anna,OneConf_Anna,TwoConf_Anna,44,44,44\n" +
+      "Jack#22,Jack,OneConf_Jack,TwoConf_Jack,22,22,22\n" +
       "John#19,John,OneConf_John,TwoConf_John,19,19,19\n"
     TestBaseUtils.compareResultAsText(results.asJava, expected)
   }
@@ -226,9 +226,9 @@ class DataSetUserDefinedFunctionITCase(
 
     val results = result.collect()
 
-    val expected = "default-Anna#44,Sunny-Anna#44,kevin2-Anna#44\n"+
-      "default-Jack#22,Sunny-Jack#22,kevin2-Jack#22\n"+
-      "default-John#19,Sunny-John#19,kevin2-John#19\n"+
+    val expected = "default-Anna#44,Sunny-Anna#44,kevin2-Anna#44\n" +
+      "default-Jack#22,Sunny-Jack#22,kevin2-Jack#22\n" +
+      "default-John#19,Sunny-John#19,kevin2-John#19\n" +
       "default-nosharp,Sunny-nosharp,kevin2-nosharp"
     TestBaseUtils.compareResultAsText(results.asJava, expected)
   }

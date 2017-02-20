@@ -58,10 +58,13 @@ abstract class ScalarFunction extends UserDefinedFunction {
     ScalarFunctionCall(this, params)
   }
 
-  override def toString: String = {
+  override def toString: String = getClass.getCanonicalName
+
+  final def functionIdentifier: String = {
     val md5  =  DigestUtils.md5Hex(serialize(this))
     getClass.getCanonicalName.replace('.', '$').concat("$").concat(md5)
   }
+
   // ----------------------------------------------------------------------------------------------
 
   /**

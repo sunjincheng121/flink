@@ -1504,7 +1504,7 @@ class CodeGenerator(
   def addReusableFunction(function: UserDefinedFunction): String = {
     val classQualifier = function.getClass.getCanonicalName
     val functionSerializedData = UserDefinedFunctionUtils.serialize(function)
-    val fieldTerm = s"function_${function.toString}"
+    val fieldTerm = s"function_${function.functionIdentifier}"
 
     val fieldFunction =
       s"""

@@ -96,7 +96,9 @@ abstract class TableFunction[T] extends UserDefinedFunction {
     TableFunctionCall(getClass.getSimpleName, this, params, resultType)
   }
 
-  override def toString: String = {
+  override def toString: String = getClass.getCanonicalName
+
+  final def functionIdentifier: String = {
     val md5  =  DigestUtils.md5Hex(serialize(this))
     getClass.getCanonicalName.replace('.', '$').concat("$").concat(md5)
   }
