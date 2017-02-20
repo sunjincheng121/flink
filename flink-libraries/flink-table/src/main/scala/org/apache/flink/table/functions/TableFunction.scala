@@ -18,10 +18,8 @@
 
 package org.apache.flink.table.functions
 
-import org.apache.commons.codec.digest.DigestUtils
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.expressions.{Expression, TableFunctionCall}
-import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils.serialize
 import org.apache.flink.util.Collector
 
 /**
