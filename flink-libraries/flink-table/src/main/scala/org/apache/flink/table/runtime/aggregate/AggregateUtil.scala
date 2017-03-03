@@ -680,30 +680,11 @@ object AggregateUtil {
   }
 
   private def createAccumulatorType(
-      inputType: RelDataType,
-      aggregates: Array[TableAggregateFunction[_]]): Seq[TypeInformation[_]] = {
-
-    val aggTypes: Seq[TypeInformation[_]] =
-      aggregates.map {
-        agg =>
-          val accType = agg.getAccumulatorType()
-          if (accType != null) {
-            accType
-          } else {
-            val accumulator = agg.createAccumulator()
-            try {
-              TypeInformation.of(accumulator.getClass)
-            } catch {
-              case ite: InvalidTypesException =>
-                throw new TableException(
-                  "Cannot infer type of accumulator. " +
-                    "You can override AggregateFunction.getAccumulatorType() to specify the type.",
-                  ite)
-            }
-          }
-      }
-
-    aggTypes
+    inputType: RelDataType,
+    aggregates: Array[TableAggregateFunction[_]]): Seq[TypeInformation[_]] = {
+    aggregates.map {
+      agg => TypeInformation.of(agg.getClass)
+    }
   }
 
   private def createDataSetAggregateBufferDataType(

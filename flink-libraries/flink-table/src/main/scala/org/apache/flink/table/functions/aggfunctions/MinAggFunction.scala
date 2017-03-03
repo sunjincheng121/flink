@@ -75,13 +75,6 @@ abstract class MinAggFunction[T](implicit ord: Ordering[T]) extends AggregateFun
     ret
   }
 
-  override def getAccumulatorType(): TypeInformation[_] = {
-    new TupleTypeInfo(
-      new MinAccumulator[T].getClass,
-      getValueTypeInfo,
-      BasicTypeInfo.BOOLEAN_TYPE_INFO)
-  }
-
   def getValueTypeInfo: TypeInformation[_]
 }
 

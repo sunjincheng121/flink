@@ -57,8 +57,4 @@ class CountAggFunction extends AggregateFunction[Long] {
   override def createAccumulator(): Accumulator = {
     new CountAccumulator
   }
-
-  override def getAccumulatorType(): TypeInformation[_] = {
-    new TupleTypeInfo((new CountAccumulator).getClass, BasicTypeInfo.LONG_TYPE_INFO)
-  }
 }

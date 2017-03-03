@@ -64,14 +64,6 @@ abstract class AggregateFunction[T] extends UserDefinedFunction {
     */
   def merge(accumulators: JList[Accumulator]): Accumulator
 
-  /**
-    * Returns the [[TypeInformation]] of the accumulator.
-    * This function is optional and can be implemented if the accumulator type cannot automatically
-    * inferred from the instance returned by [[createAccumulator()]].
-    *
-    * @return The type information for the accumulator.
-    */
-  def getAccumulatorType(): TypeInformation[_] = null
 }
 
 /**
