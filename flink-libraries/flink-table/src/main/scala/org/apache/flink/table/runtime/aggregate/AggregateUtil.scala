@@ -99,12 +99,14 @@ object AggregateUtil {
     * @param namedAggregates List of calls to aggregate functions and their output field names
     * @param inputType Input row type
     * @param outputType Output row type
-    * @return [[UnboundedProcessingOverProcessFunction]]
+    * @param isPartitioned isPartitioned is used to identify whether the over window is partitioned
+    * @return  [[ProcessFunction]]
     */
   private[flink] def CreateUnboundedProcessingOverProcessFunction(
     namedAggregates: Seq[CalcitePair[AggregateCall, String]],
     inputType: RelDataType,
-    outputType: RelDataType): UnboundedProcessingOverProcessFunction = {
+    outputType: RelDataType,
+    isPartitioned: Boolean = false): ProcessFunction[Row, Row] = {
 
     val (aggFields, aggregates) =
       transformToAggregateFunctions(
@@ -117,12 +119,21 @@ object AggregateUtil {
     val aggregationStateType: RowTypeInfo =
       createDataSetAggregateBufferDataType(Array(), aggregates, inputType)
 
-    new UnboundedProcessingOverProcessFunction(
-      aggregates,
-      aggFields,
-      inputType.getFieldCount,
-      aggregationStateType,
-      rowTypeInfo)
+    if (isPartitioned) {
+      new UnboundedProcessingOverProcessFunction(
+        aggregates,
+        aggFields,
+        inputType.getFieldCount,
+        aggregationStateType,
+        rowTypeInfo)
+    } else {
+      new UnboundedNonPartitionedProcessingOverProcessFunction(
+        aggregates,
+        aggFields,
+        inputType.getFieldCount,
+        aggregationStateType,
+        rowTypeInfo)
+    }
   }
 
   /**

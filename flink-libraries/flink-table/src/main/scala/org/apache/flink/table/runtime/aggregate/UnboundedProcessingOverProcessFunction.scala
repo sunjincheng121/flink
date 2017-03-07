@@ -52,7 +52,7 @@ class UnboundedProcessingOverProcessFunction(
 
   override def processElement(
     input: Row,
-    ctx: ProcessFunction[Row, Row]#Context,
+    ctx: Context,
     out: Collector[Row]): Unit = {
 
     var accumulators = state.value()

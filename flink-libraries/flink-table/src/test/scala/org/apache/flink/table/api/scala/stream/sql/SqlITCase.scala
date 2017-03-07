@@ -208,10 +208,38 @@ class SqlITCase extends StreamingWithStateTestBase {
     env.execute()
 
     val expected = mutable.MutableList(
-      "Hello World,1,7", "Hello World,2,15", "Hello World,3,35",
+      "Hello World,7,28", "Hello World,8,36", "Hello World,9,56",
       "Hello,1,1", "Hello,2,3", "Hello,3,6", "Hello,4,10", "Hello,5,15", "Hello,6,21")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
+
+  @Test
+  def testUnboundNonPartitionedProcessingWindowWithRow(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStateBackend(getStateBackend)
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.testResults = mutable.MutableList()
+
+    val t1 = env.fromCollection(data).toTable(tEnv).as('a, 'b, 'c)
+
+    tEnv.registerTable("T1", t1)
+
+    val sqlQuery = "SELECT " +
+      "c, " +
+      "count(a) OVER (ORDER BY ProcTime() ROWS BETWEEN UNBOUNDED preceding AND " +
+      "CURRENT ROW)" +
+      "from T1"
+
+    val result = tEnv.sql(sqlQuery).toDataStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    val expected = mutable.MutableList(
+      "Hello World,7", "Hello World,8", "Hello World,9",
+      "Hello,1", "Hello,2", "Hello,3", "Hello,4", "Hello,5", "Hello,6")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
 
   @Test
   def testUnboundPartitionedProcessingWindowWithRange(): Unit = {
@@ -251,7 +279,6 @@ class SqlITCase extends StreamingWithStateTestBase {
     StreamITCase.testResults = mutable.MutableList()
 
     val t1 = env.fromCollection(data).toTable(tEnv).as('a, 'b, 'c)
-
     tEnv.registerTable("T1", t1)
 
     val sqlQuery = "SELECT " +

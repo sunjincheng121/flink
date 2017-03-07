@@ -44,7 +44,7 @@ class UnboundedNonPartitionedProcessingOverProcessFunction(
   private var accumulators: Row = _
   private var output: Row = _
   private var accumulatorsState:ListState[Row] = null
-  private var accumulatorsStateDescriptor: ListStateDescriptor[Row] = null
+
 
   private val aggregateWithIndex: Array[(AggregateFunction[_], Int)] = aggregates.zipWithIndex
 
@@ -82,9 +82,11 @@ class UnboundedNonPartitionedProcessingOverProcessFunction(
   }
 
   override def initializeState(context: FunctionInitializationContext): Unit = {
-    accumulatorsStateDescriptor =
-      new ListStateDescriptor[Row]("result",aggregationStateType)
+
+    val accumulatorsSerializer =
+      aggregationStateType.createSerializer(getRuntimeContext.getExecutionConfig)
+    val accumulatorsDescriptor = new ListStateDescriptor[Row]("overState",accumulatorsSerializer)
     accumulatorsState =
-      context.getOperatorStateStore.getOperatorState(accumulatorsStateDescriptor)
+      context.getOperatorStateStore.getOperatorState(accumulatorsDescriptor)
   }
 }
