@@ -25,8 +25,7 @@ import org.apache.calcite.sql.{SqlAggFunction, SqlKind}
 import org.apache.calcite.sql.`type`.SqlTypeName._
 import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.fun._
-import org.apache.flink.api.common.functions.{GroupCombineFunction, InvalidTypesException,
-MapFunction, MapPartitionFunction, RichGroupReduceFunction, AggregateFunction => ApiAggregateFunction}
+import org.apache.flink.api.common.functions.{RichMapFunction,GroupCombineFunction, InvalidTypesException, MapFunction, MapPartitionFunction, RichGroupReduceFunction, AggregateFunction => ApiAggregateFunction}
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
 import org.apache.flink.api.java.tuple.Tuple
 import org.apache.flink.api.java.typeutils.RowTypeInfo
@@ -98,42 +97,66 @@ object AggregateUtil {
     *
     * @param namedAggregates List of calls to aggregate functions and their output field names
     * @param inputType Input row type
-    * @param outputType Output row type
-    * @param isPartitioned isPartitioned is used to identify whether the over window is partitioned
     * @return  [[ProcessFunction]]
     */
   private[flink] def CreateUnboundedProcessingOverProcessFunction(
     namedAggregates: Seq[CalcitePair[AggregateCall, String]],
     inputType: RelDataType,
-    outputType: RelDataType,
-    isPartitioned: Boolean = false): ProcessFunction[Row, Row] = {
+    forwardedField: Option[Array[Int]]=None): ProcessFunction[Row, Row] = {
 
     val (aggFields, aggregates) =
       transformToAggregateFunctions(
         namedAggregates.map(_.getKey),
         inputType)
 
-    val rowTypeInfo = new RowTypeInfo(outputType.getFieldList
-      .map(field => FlinkTypeFactory.toTypeInfo(field.getType)): _*)
-
     val aggregationStateType: RowTypeInfo =
       createDataSetAggregateBufferDataType(Array(), aggregates, inputType)
 
-    if (isPartitioned) {
-      new UnboundedProcessingOverProcessFunction(
-        aggregates,
-        aggFields,
-        inputType.getFieldCount,
-        aggregationStateType,
-        rowTypeInfo)
-    } else {
+    if (forwardedField.isDefined) {
+      val returnType =
+        createDataSetAggregateBufferDataType(forwardedField.get, aggregates, inputType)
       new UnboundedNonPartitionedProcessingOverProcessFunction(
         aggregates,
         aggFields,
         inputType.getFieldCount,
         aggregationStateType,
-        rowTypeInfo)
+        returnType)
+    } else {
+      new UnboundedProcessingOverProcessFunction(
+        aggregates,
+        aggFields,
+        inputType.getFieldCount,
+        aggregationStateType)
+
     }
+  }
+
+  /**
+    * Create an [[MapFunction]] to evaluate final aggregate value.
+    *
+    * @param namedAggregates List of calls to aggregate functions and their output field names
+    * @param inputType Input row type
+    * @param outputType Output row type
+    * @return  [[MapFunction]]
+    */
+  private[flink] def CreateUnboundedProcessingOverMapFunction(
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    inputType: RelDataType,
+    outputType: RelDataType,
+    isPartitioned: Boolean = false): RichMapFunction[Row, Row] = {
+
+    val aggregates =
+      transformToAggregateFunctions(
+        namedAggregates.map(_.getKey),
+        inputType)._2
+
+    val rowTypeInfo = new RowTypeInfo(outputType.getFieldList
+      .map(field => FlinkTypeFactory.toTypeInfo(field.getType)): _*)
+
+    new UnboundedNonPartitionedProcessingOverResultMapFunction(
+      aggregates,
+      outputType.getFieldCount - aggregates.length,
+      rowTypeInfo)
   }
 
   /**

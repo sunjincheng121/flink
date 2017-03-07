@@ -141,9 +141,7 @@ class DataStreamOverAggregate(
         if (partition.nonEmpty) {
           val processFunction = AggregateUtil.CreateUnboundedProcessingOverProcessFunction(
             namedAggregates,
-            inputType,
-            getRowType,
-            true)
+            inputType)
 
           inputDS
           .keyBy(partition: _*)
@@ -154,13 +152,21 @@ class DataStreamOverAggregate(
         }
         // global non-partitioned aggregation
         else {
+          val inputIndicies = (0 until inputType.getFieldCount).toArray
           val processFunction =
             AggregateUtil.CreateUnboundedProcessingOverProcessFunction(
               namedAggregates,
               inputType,
+              Option(inputIndicies))
+          val mapFunction =
+            AggregateUtil.CreateUnboundedProcessingOverMapFunction(
+              namedAggregates,
+              inputType,
               getRowType)
 
-          inputDS.process(processFunction)
+          inputDS
+            .process(processFunction)
+            .map(mapFunction).setParallelism(1)
             .returns(rowTypeInfo)
             .name(aggOpName)
             .asInstanceOf[DataStream[Row]]

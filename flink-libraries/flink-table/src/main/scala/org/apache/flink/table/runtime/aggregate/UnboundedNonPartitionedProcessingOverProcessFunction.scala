@@ -17,10 +17,9 @@
  */
 package org.apache.flink.table.runtime.aggregate
 
-import org.apache.flink.api.common.state.{ListState, ListStateDescriptor, ValueState, ValueStateDescriptor}
+import org.apache.flink.api.common.state.{ListState, ListStateDescriptor}
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.api.common.typeutils.TypeSerializer
-import org.apache.flink.api.java.typeutils.RowTypeInfo
+import org.apache.flink.api.java.typeutils.{ResultTypeQueryable, RowTypeInfo}
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.runtime.state.{FunctionInitializationContext, FunctionSnapshotContext}
 import org.apache.flink.streaming.api.functions.ProcessFunction
@@ -35,7 +34,9 @@ class UnboundedNonPartitionedProcessingOverProcessFunction(
     private val forwardedFieldCount: Int,
     private val aggregationStateType: RowTypeInfo,
     private val returnType: TypeInformation[Row])
-  extends ProcessFunction[Row, Row] with CheckpointedFunction{
+  extends ProcessFunction[Row, Row]
+  with CheckpointedFunction
+  with ResultTypeQueryable[Row]{
 
   Preconditions.checkNotNull(aggregates)
   Preconditions.checkNotNull(aggFields)
@@ -66,10 +67,9 @@ class UnboundedNonPartitionedProcessingOverProcessFunction(
     }
 
     for (i <- aggregates.indices) {
-      val index = forwardedFieldCount + i
       val accumulator = accumulators.getField(i).asInstanceOf[Accumulator]
       aggregates(i).accumulate(accumulator, input.getField(aggFields(i)))
-      output.setField(index, aggregates(i).getValue(accumulator))
+      output.setField(forwardedFieldCount + i, accumulator)
     }
     accumulatorsState.clear()
     accumulatorsState.add(accumulators)
@@ -88,5 +88,9 @@ class UnboundedNonPartitionedProcessingOverProcessFunction(
     val accumulatorsDescriptor = new ListStateDescriptor[Row]("overState",accumulatorsSerializer)
     accumulatorsState =
       context.getOperatorStateStore.getOperatorState(accumulatorsDescriptor)
+  }
+
+  override def getProducedType: TypeInformation[Row] = {
+    returnType
   }
 }
