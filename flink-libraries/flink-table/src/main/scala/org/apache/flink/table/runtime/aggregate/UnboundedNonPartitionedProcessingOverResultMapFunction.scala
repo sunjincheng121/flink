@@ -17,65 +17,61 @@
  */
 package org.apache.flink.table.runtime.aggregate
 
-import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.configuration.Configuration
-import org.apache.flink.streaming.api.functions.ProcessFunction
-import org.apache.flink.types.Row
-import org.apache.flink.util.{Collector, Preconditions}
-import org.apache.flink.api.common.state.ValueStateDescriptor
-import org.apache.flink.api.java.typeutils.RowTypeInfo
-import org.apache.flink.api.common.state.ValueState
-import org.apache.flink.table.functions.{Accumulator, AggregateFunction}
+import java.util
 
-class UnboundedProcessingOverProcessFunction(
+import org.apache.flink.api.common.functions.RichMapFunction
+import org.apache.flink.api.common.typeinfo.TypeInformation
+import org.apache.flink.api.java.typeutils.{ResultTypeQueryable, RowTypeInfo}
+import org.apache.flink.configuration.Configuration
+import org.apache.flink.table.functions.{Accumulator, AggregateFunction}
+import org.apache.flink.types.Row
+import org.apache.flink.util.Preconditions
+
+class UnboundedNonPartitionedProcessingOverResultMapFunction(
     private val aggregates: Array[AggregateFunction[_]],
-    private val aggFields: Array[Int],
     private val forwardedFieldCount: Int,
-    private val aggregationStateType: RowTypeInfo)
-  extends ProcessFunction[Row, Row]{
+    private val returnType: TypeInformation[Row])
+  extends RichMapFunction[Row, Row]
+  with ResultTypeQueryable[Row]{
 
   Preconditions.checkNotNull(aggregates)
-  Preconditions.checkNotNull(aggFields)
-  Preconditions.checkArgument(aggregates.length == aggFields.length)
 
+  private var accumulators: Row = _
   private var output: Row = _
-  private var state: ValueState[Row] = _
   private val aggregateWithIndex: Array[(AggregateFunction[_], Int)] = aggregates.zipWithIndex
 
   override def open(config: Configuration) {
     output = new Row(forwardedFieldCount + aggregates.length)
-    val stateDescriptor: ValueStateDescriptor[Row] =
-      new ValueStateDescriptor[Row]("overState", aggregationStateType)
-    state = getRuntimeContext.getState(stateDescriptor)
+    accumulators = new Row(aggregates.length)
+    aggregateWithIndex.foreach { case (agg, i) =>
+      accumulators.setField(i, agg.createAccumulator())
+    }
   }
 
-  override def processElement(
-    input: Row,
-    ctx: ProcessFunction[Row, Row]#Context,
-    out: Collector[Row]): Unit = {
-
-    var accumulators = state.value()
-
-    if (null == accumulators) {
-      accumulators = new Row(aggregates.length)
-      aggregateWithIndex.foreach { case (agg, i) =>
-        accumulators.setField(i, agg.createAccumulator())
-      }
+  override def map(value: Row): Row = {
+    for (i <- aggregates.indices) {
+      // merge acc list
+      val retAcc = aggregates(i).merge(
+        new util.ArrayList[Accumulator]() {
+          accumulators
+        })
+      // insert result into acc list
+      accumulators.setField(forwardedFieldCount + i, retAcc)
     }
 
     for (i <- 0 until forwardedFieldCount) {
-      output.setField(i, input.getField(i))
+      output.setField(i, value.getField(i))
     }
 
     for (i <- aggregates.indices) {
       val index = forwardedFieldCount + i
       val accumulator = accumulators.getField(i).asInstanceOf[Accumulator]
-      aggregates(i).accumulate(accumulator, input.getField(aggFields(i)))
       output.setField(index, aggregates(i).getValue(accumulator))
     }
-    state.update(accumulators)
-
-    out.collect(output)
+    output
   }
 
+  override def getProducedType: TypeInformation[Row] = {
+    returnType
+  }
 }
