@@ -19,14 +19,18 @@
 package org.apache.flink.table.api.scala.stream.sql
 
 import org.apache.flink.api.scala._
+import org.apache.flink.table.api.scala.stream.sql.SqlITCase.TimestampWithLatenessWatermark
+import org.apache.flink.streaming.api.functions.AssignerWithPunctuatedWatermarks
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
+import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.table.api.{TableEnvironment, TableException}
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.api.scala.stream.utils.{StreamingWithStateTestBase, StreamITCase,
-StreamTestData}
+import org.apache.flink.table.api.scala.stream.utils.{StreamITCase, StreamTestData, StreamingWithStateTestBase}
 import org.apache.flink.types.Row
 import org.junit.Assert._
 import org.junit._
+
+import org.apache.flink.streaming.api.TimeCharacteristic
 
 import scala.collection.mutable
 
@@ -293,6 +297,122 @@ class SqlITCase extends StreamingWithStateTestBase {
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 
+  @Test
+  def testBoundPartitionedEventTimeWindowWithRow(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setStateBackend(getStateBackend)
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.clear
+
+    val t1 = env.fromCollection(data)
+      .assignTimestampsAndWatermarks(new TimestampWithLatenessWatermark(0))
+      .toTable(tEnv).as('a, 'b, 'c)
+
+    tEnv.registerTable("T1", t1)
+
+    val sqlQuery = "SELECT " +
+      "c, a, " +
+      "sum(a) OVER (PARTITION BY c ORDER BY RowTime() ROWS BETWEEN 2 preceding AND CURRENT ROW)" +
+      "from T1"
+
+    val result = tEnv.sql(sqlQuery).toDataStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    val expected = mutable.MutableList(
+      "Hello,1,1", "Hello,2,3", "Hello,3,6", "Hello,4,9", "Hello,5,12",
+      "Hello,6,15", "Hello World,7,7", "Hello World,8,15", "Hello World,20,35")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testBoundPartitionedEventTimeWindowWithRowWithLateEvent(): Unit = {
+
+    val data = List(
+      (1L, 1, "Hello"),
+      (2L, 2, "Hello"),
+      (4L, 4, "Hello"),
+      (3L, 3, "Hello"),
+      (7L, 7, "Hello"),
+      (8L, 8, "Hello World"),
+      (7L, 8, "Hello"),
+      (5L, 5, "Hello"),
+      (20L, 20, "Hello World"),
+      (9L, 9, "Hello World"))
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    env.setStateBackend(getStateBackend)
+    StreamITCase.clear
+
+    // set the parallelism to 1 such that the test elements are arrived in order. For instance,
+    // element (20L, 20, "Hello World") arrives before element (9L, 9, "Hello World").
+    env.setParallelism(1)
+
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.testResults = mutable.MutableList()
+
+    val t1 = env.fromCollection(data)
+        .assignTimestampsAndWatermarks(new TimestampWithLatenessWatermark(2)) // allowedLateness = 2
+        .toTable(tEnv).as('a, 'b, 'c)
+
+    tEnv.registerTable("T1", t1)
+
+    val sqlQuery = "SELECT " +
+        "c, a, " +
+        "sum(a) OVER (PARTITION BY c ORDER BY RowTime() ROWS BETWEEN 2 preceding AND CURRENT ROW)" +
+        "from T1"
+
+    val result = tEnv.sql(sqlQuery).toDataStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    val expected = mutable.MutableList("Hello,1,1", "Hello,2,3", "Hello,3,6", "Hello,4,9",
+      "Hello,7,14", "Hello,7,18", "Hello World,8,8", "Hello World,20,28")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testBoundPartitionedProcTimeWindowWithRow(): Unit = {
+    val data = List(
+      (1L, 1, "Hello"),
+      (2L, 2, "Hello"),
+      (3L, 3, "Hello"),
+      (4L, 4, "Hello"),
+      (7L, 7, "Hello World"),
+      (5L, 5, "Hello"),
+      (5L, 6, "Hello"),
+      (8L, 8, "Hello World"),
+      (20L, 20, "Hello World"))
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStateBackend(getStateBackend)
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.clear
+
+    // for sum aggregation ensure that every time the order of each element is consistent
+    env.setParallelism(1)
+    val t1 = env.fromCollection(data)
+      .toTable(tEnv).as('a, 'b, 'c)
+
+    tEnv.registerTable("T1", t1)
+
+    val sqlQuery = "SELECT " +
+      "c, a, b, " +
+      "sum(b) OVER (PARTITION BY c ORDER BY  ProcTime() ROWS BETWEEN 2 preceding AND CURRENT ROW)" +
+      "from T1"
+
+    val result = tEnv.sql(sqlQuery).toDataStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+    val expected = mutable.MutableList(
+      "Hello,1,1,1", "Hello,2,2,3", "Hello,3,3,6", "Hello,4,4,9", "Hello,5,5,12", "Hello,5,6,15",
+      "Hello World,7,7,7", "Hello World,8,8,15", "Hello World,20,20,35")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+
   /**
     *  All aggregates must be computed on the same window.
     */
@@ -317,4 +437,24 @@ class SqlITCase extends StreamingWithStateTestBase {
     result.addSink(new StreamITCase.StringSink)
     env.execute()
   }
+
+}
+
+object SqlITCase {
+
+  class TimestampWithLatenessWatermark(allowedLateness: Long)
+      extends AssignerWithPunctuatedWatermarks[(Long, Int, String)] {
+    override def checkAndGetNextWatermark(
+      lastElement: (Long, Int, String),
+      extractedTimestamp: Long): Watermark = {
+      new Watermark(extractedTimestamp - allowedLateness)
+    }
+
+    override def extractTimestamp(
+      element: (Long, Int, String),
+      previousElementTimestamp: Long): Long = {
+      element._1
+    }
+  }
+
 }
