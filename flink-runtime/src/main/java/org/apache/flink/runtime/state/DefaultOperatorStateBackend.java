@@ -20,6 +20,7 @@ package org.apache.flink.runtime.state;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
@@ -105,6 +106,9 @@ public class DefaultOperatorStateBackend implements OperatorStateBackend {
 			OperatorStateHandle.Mode mode) throws IOException {
 
 		Preconditions.checkNotNull(stateDescriptor);
+
+		// TODO until FLINK-5995 merged
+		stateDescriptor.initializeSerializerUnlessSet(new ExecutionConfig());
 
 		String name = Preconditions.checkNotNull(stateDescriptor.getName());
 		TypeSerializer<S> partitionStateSerializer = Preconditions.checkNotNull(stateDescriptor.getElementSerializer());

@@ -23,6 +23,7 @@ import org.apache.calcite.rel.core.AggregateCall
 import org.apache.calcite.rel.{RelNode, RelWriter, SingleRel}
 import org.apache.flink.api.java.typeutils.RowTypeInfo
 import org.apache.flink.streaming.api.datastream.DataStream
+import org.apache.flink.table.functions.TimeModeType
 import org.apache.flink.table.api.{StreamTableEnvironment, TableException}
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.runtime.aggregate._
@@ -32,6 +33,8 @@ import org.apache.calcite.rel.core.Window
 import org.apache.calcite.rel.core.Window.Group
 import java.util.{List => JList}
 
+
+import org.apache.calcite.rex.RexInputRef
 import org.apache.flink.table.functions.{ProcTimeType, RowTimeType}
 import org.apache.flink.table.runtime.aggregate.AggregateUtil.CalcitePair
 
@@ -101,18 +104,25 @@ class DataStreamOverAggregate(
       .getValue
 
     timeType match {
-      case _: ProcTimeType =>
+      case pt: ProcTimeType =>
         // both ROWS and RANGE clause with UNBOUNDED PRECEDING and CURRENT ROW condition.
         if (overWindow.lowerBound.isUnbounded &&
-          overWindow.upperBound.isCurrentRow) {
+            overWindow.upperBound.isCurrentRow) {
           createUnboundedAndCurrentRowProcessingTimeOverWindow(inputDS)
+        } else if (!overWindow.lowerBound.isUnbounded && overWindow.upperBound.isCurrentRow) {
+          createBoundedAndCurrentRowOverWindow(inputDS, pt)
         } else {
           throw new TableException(
-              "OVER window only support ProcessingTime UNBOUNDED PRECEDING and CURRENT ROW " +
-              "condition.")
+            "OVER ProcessingTime window only support CURRENT ROW condition.")
         }
-      case _: RowTimeType =>
-        throw new TableException("OVER Window of the EventTime type is not currently supported.")
+      case rt: RowTimeType =>
+        if (!overWindow.lowerBound.isUnbounded &&
+            overWindow.upperBound.isCurrentRow) {
+          createBoundedAndCurrentRowOverWindow(inputDS, rt)
+        } else {
+          throw new TableException(
+            "OVER EventTime window only support BOUNDED PRECEDING and CURRENT ROW condition.")
+        }
       case _ =>
         throw new TableException(s"Unsupported time type {$timeType}")
     }
@@ -156,6 +166,53 @@ class DataStreamOverAggregate(
             .name(aggOpName)
             .asInstanceOf[DataStream[Row]]
         }
+    result
+  }
+
+  def createBoundedAndCurrentRowOverWindow(
+      inputDS: DataStream[Row], timeType: TimeModeType): DataStream[Row]  = {
+
+    val overWindow: Group = logicWindow.groups.get(0)
+    val partitionKeys: Array[Int] = overWindow.keys.toArray
+    val namedAggregates: Seq[CalcitePair[AggregateCall, String]] = generateNamedAggregates
+    val inputFields = (0 until inputType.getFieldCount).toArray
+    val processingOffset  = overWindow.lowerBound.getOffset.asInstanceOf[RexInputRef].getIndex
+    // get the output types
+    val rowTypeInfo = FlinkTypeFactory.toInternalRowTypeInfo(getRowType).asInstanceOf[RowTypeInfo]
+
+    val result: DataStream[Row] =
+    // partitioned aggregation
+      if (partitionKeys.nonEmpty) {
+        val processFunction = timeType match {
+          case _: RowTimeType =>
+            AggregateUtil.CreateBoundedEventTimeOverProcessFunction(
+              namedAggregates,
+              inputType,
+              inputFields,
+              processingOffset,
+              true
+            )
+          case _ =>
+            AggregateUtil.CreateBoundedEventTimeOverProcessFunction(
+              namedAggregates,
+              inputType,
+              inputFields,
+              processingOffset,
+              false
+            )
+        }
+        inputDS
+            .keyBy(partitionKeys: _*)
+            .process(processFunction)
+            .returns(rowTypeInfo)
+            .name(aggOpName)
+            .asInstanceOf[DataStream[Row]]
+      }
+      // non-partitioned aggregation
+      else {
+        throw TableException(
+          "BoundNonPartitioned event time OVER aggregation is not supported yet.")
+      }
     result
   }
 

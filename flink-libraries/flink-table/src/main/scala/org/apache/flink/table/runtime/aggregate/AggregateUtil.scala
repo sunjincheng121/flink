@@ -91,6 +91,53 @@ object AggregateUtil {
   }
 
   /**
+    * Create an [[org.apache.flink.streaming.api.functions.ProcessFunction]] to evaluate final
+    * aggregate value.
+    *
+    * @param namedAggregates List of calls to aggregate functions and their output field names
+    * @param inputType Input row type
+    * @param isEvenTime It is a tag that indicates whether the time type is Event-Time
+    * @param isPartitioned It is a tag that indicates whether the data has partitioned
+    * @return [[org.apache.flink.streaming.api.functions.ProcessFunction]]
+    */
+  private[flink] def CreateBoundedEventTimeOverProcessFunction(
+      namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+      inputType: RelDataType,
+      inputFields: Array[Int],
+      processingOffset: Int,
+      isEvenTime: Boolean,
+      isPartitioned: Boolean = true
+  ): ProcessFunction[Row, Row] = {
+
+    val (aggFields, aggregates) =
+      transformToAggregateFunctions(
+        namedAggregates.map(_.getKey),
+        inputType,
+        needRetraction = true)
+
+    val aggregationStateType: RowTypeInfo =
+      createDataSetAggregateBufferDataType(Array(), aggregates, inputType)
+    val dataStateType: RowTypeInfo =
+      createDataSetAggregateBufferDataType(inputFields, Array(), inputType)
+
+    if (isPartitioned) {
+      new BoundedOverProcessFunction(
+        aggregates,
+        aggFields,
+        inputType.getFieldCount,
+        aggregationStateType,
+        dataStateType,
+        processingOffset,
+        isEvenTime
+      )
+    } else {
+      throw TableException(
+        "BoundNonPartitioned OVER aggregation is not supported yet.")
+    }
+  }
+
+
+  /**
     * Create a [[org.apache.flink.api.common.functions.MapFunction]] that prepares for aggregates.
     * The output of the function contains the grouping keys and the timestamp and the intermediate
     * aggregate values of all aggregate function. The timestamp field is aligned to time window
