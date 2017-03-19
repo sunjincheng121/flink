@@ -61,7 +61,7 @@ object AggregateUtil {
     * @param isPartitioned Flag to indicate whether the input is partitioned or not
     * @return [[org.apache.flink.streaming.api.functions.ProcessFunction]]
     */
-  private[flink] def CreateUnboundedProcessingOverProcessFunction(
+  private[flink] def createUnboundedProcessingOverProcessFunction(
     namedAggregates: Seq[CalcitePair[AggregateCall, String]],
     inputType: RelDataType,
     isPartitioned: Boolean = true): ProcessFunction[Row, Row] = {
@@ -87,6 +87,59 @@ object AggregateUtil {
         aggFields,
         inputType.getFieldCount,
         aggregationStateType)
+    }
+  }
+
+  /**
+    * Create an [[org.apache.flink.streaming.api.functions.ProcessFunction]] for ROWS clause
+    * bounded OVER window to evaluate final aggregate value.
+    *
+    * @param namedAggregates List of calls to aggregate functions and their output field names
+    * @param inputType       Input row type
+    * @param inputFields     All input fields
+    * @param precedingOffset the preceding offset
+    * @param isRowTimeType   It is a tag that indicates whether the time type is rowTimeType
+    * @param isPartitioned   It is a tag that indicates whether the data has partitioned
+    * @return [[org.apache.flink.streaming.api.functions.ProcessFunction]]
+    */
+  private[flink] def createRowsClauseBoundedOverProcessFunction(
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    inputType: RelDataType,
+    inputFields: Array[Int],
+    precedingOffset: Long,
+    isRowTimeType: Boolean,
+    isPartitioned: Boolean = true): ProcessFunction[Row, Row] = {
+
+    val (aggFields, aggregates) =
+      transformToAggregateFunctions(
+        namedAggregates.map(_.getKey),
+        inputType,
+        needRetraction = true)
+
+    val aggregationStateType: RowTypeInfo =
+      createDataSetAggregateBufferDataType(Array(), aggregates, inputType)
+
+    if (isPartitioned) {
+      val processFunction = if (isRowTimeType) {
+        new RowsClauseBoundedOverProcessFunction(
+          aggregates,
+          aggFields,
+          inputType.getFieldCount,
+          aggregationStateType,
+          precedingOffset
+        )
+      } else {
+        new RowsClauseProcessingBoundedOverProcessFunction(
+          aggregates,
+          aggFields,
+          inputType.getFieldCount,
+          aggregationStateType,
+          precedingOffset)
+      }
+      processFunction
+    } else {
+      throw TableException(
+        "Bounded Non-Partitioned OVER aggregation is not supported yet.")
     }
   }
 
