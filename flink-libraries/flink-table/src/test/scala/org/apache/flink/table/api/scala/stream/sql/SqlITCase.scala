@@ -196,8 +196,7 @@ class SqlITCase extends StreamingWithStateTestBase {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setStateBackend(getStateBackend)
     val tEnv = TableEnvironment.getTableEnvironment(env)
-
-    StreamITCase.clear
+    StreamITCase.testResults = mutable.MutableList()
 
     // for sum aggregation ensure that every time the order of each element is consistent
     env.setParallelism(1)
@@ -281,7 +280,6 @@ class SqlITCase extends StreamingWithStateTestBase {
 
   @Test
   def testUnboundNonPartitionedProcessingWindowWithRow(): Unit = {
-
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setStateBackend(getStateBackend)
     val tEnv = TableEnvironment.getTableEnvironment(env)

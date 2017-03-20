@@ -105,7 +105,7 @@ object AggregateUtil {
       inputType: RelDataType,
       inputFields: Array[Int],
       processingOffset: Int,
-      isEvenTime: Boolean,
+      isEvenTime: Boolean = true,
       isPartitioned: Boolean = true
   ): ProcessFunction[Row, Row] = {
 

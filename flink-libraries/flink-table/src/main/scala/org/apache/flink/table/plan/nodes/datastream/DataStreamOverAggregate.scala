@@ -33,7 +33,6 @@ import org.apache.calcite.rel.core.Window
 import org.apache.calcite.rel.core.Window.Group
 import java.util.{List => JList}
 
-
 import org.apache.calcite.rex.RexInputRef
 import org.apache.flink.table.functions.{ProcTimeType, RowTimeType}
 import org.apache.flink.table.runtime.aggregate.AggregateUtil.CalcitePair
@@ -73,7 +72,7 @@ class DataStreamOverAggregate(
 
     super.explainTerms(pw)
       .itemIf("partitionBy", partitionToString(inputType, partitionKeys), partitionKeys.nonEmpty)
-        .item("orderBy",orderingToString(inputType, overWindow.orderKeys.getFieldCollations))
+      .item("orderBy",orderingToString(inputType, overWindow.orderKeys.getFieldCollations))
       .itemIf("rows", windowRange(overWindow), overWindow.isRows)
       .itemIf("range", windowRange(overWindow), !overWindow.isRows)
       .item(
@@ -107,7 +106,7 @@ class DataStreamOverAggregate(
       case pt: ProcTimeType =>
         // both ROWS and RANGE clause with UNBOUNDED PRECEDING and CURRENT ROW condition.
         if (overWindow.lowerBound.isUnbounded &&
-            overWindow.upperBound.isCurrentRow) {
+          overWindow.upperBound.isCurrentRow) {
           createUnboundedAndCurrentRowProcessingTimeOverWindow(inputDS)
         } else if (!overWindow.lowerBound.isUnbounded && overWindow.upperBound.isCurrentRow) {
           createBoundedAndCurrentRowOverWindow(inputDS, pt)
@@ -189,8 +188,7 @@ class DataStreamOverAggregate(
               namedAggregates,
               inputType,
               inputFields,
-              processingOffset,
-              true
+              processingOffset
             )
           case _ =>
             AggregateUtil.CreateBoundedEventTimeOverProcessFunction(
@@ -202,11 +200,11 @@ class DataStreamOverAggregate(
             )
         }
         inputDS
-            .keyBy(partitionKeys: _*)
-            .process(processFunction)
-            .returns(rowTypeInfo)
-            .name(aggOpName)
-            .asInstanceOf[DataStream[Row]]
+          .keyBy(partitionKeys: _*)
+          .process(processFunction)
+          .returns(rowTypeInfo)
+          .name(aggOpName)
+          .asInstanceOf[DataStream[Row]]
       }
       // non-partitioned aggregation
       else {

@@ -87,10 +87,7 @@ class BoundedOverProcessFunction(
   private var lastTriggerTs: JLong = JLong.MIN_VALUE
 
   // the length of time that the user configures the allowable data delay
-  private var allowedLateness = 0l
-
-
-
+  private var allowedLateness = 0L
 
   override def open(config: Configuration) {
 
