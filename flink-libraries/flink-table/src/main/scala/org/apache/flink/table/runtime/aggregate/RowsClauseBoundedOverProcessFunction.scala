@@ -63,27 +63,36 @@ class RowsClauseBoundedOverProcessFunction(
   private var output: Row = _
   private var accumulators: Row = _
 
-  // keep the last expired data
+  // the intermediate buffer which keeps the last expired row
   private var lastExpiredRow: Row = _
-  // materialize the last expired data to state for failover recovery
+  // the state which keeps the last expired data for failover recovery
   private var lastExpiredRowState: ListState[Row] = null
 
-  // for event-time, sorted the data by timestamp
+  // a priority queue which keeps the time stamps of the data that are not expired for event-time
+  // case. The first element of the tuple is the origin time stamp (ts) of each data. The second
+  // element of the tuple is the derived time stamp (Long.MaxValue - ts), as we want a min-priority
+  // queue based on ts.This timeStampPriorityQueue is used for retracting the expired
+  // (out of window scope) data while the over window is sliding.
   private var timestampPriorityQueue: PriorityQueue[(Long, Long)] = _
-  // for proc-time
+
+  // a list which keeps the time stamps for proc-time case
   private var timestampList: JList[Long] = _
-  // materialize the buffered data for failover recovery
+
+  // the state which is used to materialize the time stamps. For event-time processing,
+  // it saves the bufferedRowPriorityQueue, while for proc-time, it saves bufferedRowList.
   private var timestampState: ListState[Long] = null
 
-  // materialize the accumulator for incremental calculation
+  // the state which used to materialize the accumulator for incremental calculation
   private var accumulatorState: ValueState[Row] = _
 
-  // materialize the data records of the window
+  // the state which keeps all the data that are not expired.
+  // The first element (as the mapState key) of the tuple is the time stamp. Per each time stamp,
+  // the second element of tuple is a list that contains the entire data of all the rows belonging
+  // to this time stamp.
   private var dataState: MapState[Long, JList[Row]] = _
 
   private var lastTriggerTimestamp: JLong = JLong.MIN_VALUE
 
-  // the length of time that the user configures the allowable data delay
   private var allowedLateness = 0L
 
   override def open(config: Configuration) {
