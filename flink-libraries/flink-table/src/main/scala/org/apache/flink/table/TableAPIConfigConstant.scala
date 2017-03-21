@@ -21,6 +21,6 @@ package org.apache.flink.table
   * All configuration constants
   */
 object TableAPIConfigConstant {
-  // used by event-time bounded over window,
+  // used by event-time over window,
   val OVER_EVENT_TIME_ALLOWED_LATENESS = "OVER_EVENT_TIME_ALLOWED_LATENESS"
 }

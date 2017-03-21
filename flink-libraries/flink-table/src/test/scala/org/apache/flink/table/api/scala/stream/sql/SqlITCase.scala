@@ -349,16 +349,15 @@ class SqlITCase extends StreamingWithStateTestBase {
     env.setStateBackend(getStateBackend)
     StreamITCase.clear
 
-    // TODO EVENT-TIME OVER window data delay to do a unified configuration,
-    // TODO when we support multi "OVER" window when doing well
     val config = new JHashMap[String,String]()
-    // need some advice on the definition of this constant
+    // TODO OVER_EVENT_TIME_ALLOWED_LATENESS is applied for entire job. Ideally, we want to define
+    // TODO OVER_EVENT_TIME_ALLOWED_LATENESS for each "OVER" window.
     config.put(OVER_EVENT_TIME_ALLOWED_LATENESS, "2")
 
     env.getConfig.setGlobalJobParameters(ParameterTool.fromMap(config))
 
-    // make sure that element (20L, 20, "Hello World") arrived at processing node
-    // followed by element (9L, 9, "Hello World").
+    // set the parallelism to 1 such that the test elements are arrived in order. For instance,
+    // element (20L, 20, "Hello World") arrives before element (9L, 9, "Hello World").
     env.setParallelism(1)
 
     val tEnv = TableEnvironment.getTableEnvironment(env)
@@ -453,8 +452,8 @@ class SqlITCase extends StreamingWithStateTestBase {
 
 object SqlITCase {
 
-  class TimestampWithLatenessWatermark() extends AssignerWithPunctuatedWatermarks[(Long,
-    Int, String)] {
+  class TimestampWithLatenessWatermark()
+      extends AssignerWithPunctuatedWatermarks[(Long, Int, String)] {
     override def checkAndGetNextWatermark(
       lastElement: (Long, Int, String),
       extractedTimestamp: Long): Watermark = {

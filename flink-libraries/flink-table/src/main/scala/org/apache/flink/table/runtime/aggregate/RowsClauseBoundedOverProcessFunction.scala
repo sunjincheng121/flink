@@ -68,18 +68,18 @@ class RowsClauseBoundedOverProcessFunction(
   // the state which keeps the last expired data for failover recovery
   private var lastExpiredRowState: ListState[Row] = null
 
-  // a priority queue which keeps the time stamps of the data that are not expired for event-time
-  // case. The first element of the tuple is the origin time stamp (ts) of each data. The second
-  // element of the tuple is the derived time stamp (Long.MaxValue - ts), as we want a min-priority
-  // queue based on ts.This timeStampPriorityQueue is used for retracting the expired
+  // a priority queue which keeps the time stamps of the data that are not expired for the case of
+  // event-time. The first element of the tuple is the origin time stamp (ts) of each data.
+  // The second element of the tuple is the derived time stamp (Long.MaxValue - ts), as we want
+  // a min-priority queue based on ts.This timeStampPriorityQueue is used for retracting the expired
   // (out of window scope) data while the over window is sliding.
   private var timestampPriorityQueue: PriorityQueue[(Long, Long)] = _
 
-  // a list which keeps the time stamps for proc-time case
+  // a list which keeps the time stamps for the case of proc-time
   private var timestampList: JList[Long] = _
 
   // the state which is used to materialize the time stamps. For event-time processing,
-  // it saves the bufferedRowPriorityQueue, while for proc-time, it saves bufferedRowList.
+  // it saves the timestampPriorityQueue, while for proc-time, it saves timestampList.
   private var timestampState: ListState[Long] = null
 
   // the state which used to materialize the accumulator for incremental calculation
@@ -97,10 +97,10 @@ class RowsClauseBoundedOverProcessFunction(
 
   override def open(config: Configuration) {
 
-    // TODO EVENT-TIME OVER window data delay to do a unified configuration,
-    // TODO when we support multi "OVER" window when doing well
     val jobParameters = getRuntimeContext.getExecutionConfig.getGlobalJobParameters
     if (null != jobParameters) {
+      // OVER_EVENT_TIME_ALLOWED_LATENESS is applied for entire job. Ideally, we want to define
+      // OVER_EVENT_TIME_ALLOWED_LATENESS for each "OVER" window.
       val allowedLatenessStr = jobParameters.toMap.get(OVER_EVENT_TIME_ALLOWED_LATENESS)
       if (null != allowedLatenessStr)
         allowedLateness = allowedLatenessStr.toLong
@@ -134,21 +134,21 @@ class RowsClauseBoundedOverProcessFunction(
       out: Collector[Row]): Unit = {
 
     if (isRowTimeType) {
-      // trigger timestamp for trigger calculation
-      val triggerTimestamp = ctx.timestamp + allowedLateness
+      // triggering timestamp for trigger calculation
+      val triggeringTs = ctx.timestamp + allowedLateness
       // check if the data is expired, if not, save the data and register event time timer
-      if (triggerTimestamp > lastTriggerTimestamp
-          && triggerTimestamp > ctx.timerService.currentWatermark()) {
-        if (dataState.contains(triggerTimestamp)) {
-          val data = dataState.get(triggerTimestamp)
+      if (triggeringTs > lastTriggerTimestamp
+          && triggeringTs > ctx.timerService.currentWatermark()) {
+        if (dataState.contains(triggeringTs)) {
+          val data = dataState.get(triggeringTs)
           data.add(input)
-          dataState.put(triggerTimestamp, data)
+          dataState.put(triggeringTs, data)
         } else {
           val data = new ArrayList[Row]()
           data.add(input)
-          dataState.put(triggerTimestamp, data)
+          dataState.put(triggeringTs, data)
           // register event time timer
-          ctx.timerService().registerEventTimeTimer(triggerTimestamp)
+          ctx.timerService().registerEventTimeTimer(triggeringTs)
         }
       }
     } else {
@@ -163,7 +163,7 @@ class RowsClauseBoundedOverProcessFunction(
         data.add(input)
         dataState.put(processingTimestamp, data)
       }
-      calculate(processingTimestamp, input, out)
+      process(processingTimestamp, input, out)
     }
   }
 
@@ -171,13 +171,13 @@ class RowsClauseBoundedOverProcessFunction(
       timestamp: Long,
       ctx: ProcessFunction[Row, Row]#OnTimerContext,
       out: Collector[Row]): Unit = {
-    // gets all window data for the calculation from state
+    // gets all window data from state for the calculation
     val inputs: JList[Row] = dataState.get(timestamp)
     if (null != inputs) {
       var j: Int = 0
       while (j < inputs.size) {
         val input = inputs.get(j)
-        calculate(timestamp, input, out)
+        process(timestamp, input, out)
         j = j + 1
       }
     }
@@ -185,13 +185,13 @@ class RowsClauseBoundedOverProcessFunction(
   }
 
   /**
-    * Aggregate calculations for the current element
+    * Processing the current element
     *
     * @param timestamp timestamp of current element
     * @param input     the element to be calculated
     * @param out       the collector of the results
     */
-  def calculate(timestamp: Long, input: Row, out: Collector[Row]): Unit = {
+  def process(timestamp: Long, input: Row, out: Collector[Row]): Unit = {
     accumulators = accumulatorState.value()
 
     // initialize when first run or failover recovery per key
@@ -234,7 +234,7 @@ class RowsClauseBoundedOverProcessFunction(
     }
 
     if (isRowTimeType) {
-      // keep the timestamp to the priority-queue
+      // add the timestamp to the priority-queue
       timestampPriorityQueue.enqueue((timestamp, Long.MaxValue - timestamp))
       if (timestampPriorityQueue.size > precedingOffset) {
         val expiredRowTimestamp = timestampPriorityQueue.dequeue()
@@ -250,7 +250,7 @@ class RowsClauseBoundedOverProcessFunction(
         }
       }
     } else {
-      // keep the timestamp to the List
+      // add the timestamp to the List
       timestampList.add(timestamp)
       if (timestampList.size >= precedingOffset) {
         val expiredRowTimestamp = timestampList.get(0)

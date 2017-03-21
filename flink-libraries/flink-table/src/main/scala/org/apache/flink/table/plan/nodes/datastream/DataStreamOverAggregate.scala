@@ -204,7 +204,7 @@ class DataStreamOverAggregate(
       // non-partitioned aggregation
       else {
         throw TableException(
-          "BoundNonPartitioned event time OVER aggregation is not supported yet.")
+          "Bounded Non-Partitioned event time OVER aggregation is not supported yet.")
       }
     result
   }
