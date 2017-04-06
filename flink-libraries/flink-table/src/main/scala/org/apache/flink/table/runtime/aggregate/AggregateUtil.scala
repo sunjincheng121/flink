@@ -66,9 +66,9 @@ object AggregateUtil {
     * @param isRowsClause It is a tag that indicates whether the OVER clause is ROWS clause
     */
   private[flink] def createUnboundedOverProcessFunction(
-      generator: CodeGenerator,
-      namedAggregates: Seq[CalcitePair[AggregateCall, String]],
-      inputType: RelDataType,
+    generator: CodeGenerator,
+    namedAggregates: Seq[CalcitePair[AggregateCall, String]],
+    inputType: RelDataType,
     isRowTimeType: Boolean,
     isPartitioned: Boolean,
     isRowsClause: Boolean): ProcessFunction[Row, Row] = {

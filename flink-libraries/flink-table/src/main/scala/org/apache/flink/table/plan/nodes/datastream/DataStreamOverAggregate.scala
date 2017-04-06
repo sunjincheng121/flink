@@ -25,24 +25,18 @@ import org.apache.calcite.rel.core.{AggregateCall, Window}
 import org.apache.calcite.rel.core.Window.Group
 import org.apache.calcite.rel.{RelNode, RelWriter, SingleRel}
 import org.apache.calcite.rel.RelFieldCollation.Direction.ASCENDING
-import org.apache.flink.api.java.functions.NullByteKeySelector
 import org.apache.flink.api.java.typeutils.RowTypeInfo
 import org.apache.flink.streaming.api.datastream.DataStream
 import org.apache.flink.table.api.{StreamTableEnvironment, TableException}
 import org.apache.flink.table.calcite.FlinkTypeFactory
-import org.apache.flink.table.functions.{ProcTimeType, RowTimeType}
 import org.apache.flink.table.plan.nodes.OverAggregate
-import org.apache.flink.table.runtime.aggregate.AggregateUtil.CalcitePair
 import org.apache.flink.table.runtime.aggregate._
 import org.apache.flink.types.Row
 
-<<<<<<< HEAD
 import org.apache.flink.api.java.functions.NullByteKeySelector
 import org.apache.flink.table.codegen.CodeGenerator
 import org.apache.flink.table.functions.{ProcTimeType, RowTimeType}
 import org.apache.flink.table.runtime.aggregate.AggregateUtil.CalcitePair
-=======
->>>>>>> [FLINK-6257][table] Consistent naming of {{ProcessFunctions}} and methods, And add ORDER BY checking
 
 class DataStreamOverAggregate(
     logicWindow: Window,
@@ -128,6 +122,7 @@ class DataStreamOverAggregate(
         if (overWindow.lowerBound.isUnbounded && overWindow.upperBound.isCurrentRow) {
           // unbounded OVER window
           createUnboundedAndCurrentRowOverWindow(
+            generator,
             inputDS,
             isRowTimeType = false,
             isRowsClause = overWindow.isRows)
@@ -136,6 +131,7 @@ class DataStreamOverAggregate(
             overWindow.upperBound.isCurrentRow) {
           // bounded OVER window
           createBoundedAndCurrentRowOverWindow(
+            generator,
             inputDS,
             isRowTimeType = false,
             isRowsClause = overWindow.isRows
@@ -150,6 +146,7 @@ class DataStreamOverAggregate(
           overWindow.lowerBound.isUnbounded && overWindow.upperBound.isCurrentRow) {
           // unbounded OVER window
           createUnboundedAndCurrentRowOverWindow(
+            generator,
             inputDS,
             isRowTimeType = true,
             isRowsClause = overWindow.isRows
@@ -157,6 +154,7 @@ class DataStreamOverAggregate(
         } else if (overWindow.lowerBound.isPreceding && overWindow.upperBound.isCurrentRow) {
           // bounded OVER window
           createBoundedAndCurrentRowOverWindow(
+            generator,
             inputDS,
             isRowTimeType = true,
             isRowsClause = overWindow.isRows
@@ -173,6 +171,7 @@ class DataStreamOverAggregate(
   }
 
   def createUnboundedAndCurrentRowOverWindow(
+    generator: CodeGenerator,
     inputDS: DataStream[Row],
     isRowTimeType: Boolean,
     isRowsClause: Boolean): DataStream[Row] = {
@@ -185,6 +184,7 @@ class DataStreamOverAggregate(
     val rowTypeInfo = FlinkTypeFactory.toInternalRowTypeInfo(getRowType).asInstanceOf[RowTypeInfo]
 
     val processFunction = AggregateUtil.createUnboundedOverProcessFunction(
+      generator,
       namedAggregates,
       inputType,
       isRowTimeType,
