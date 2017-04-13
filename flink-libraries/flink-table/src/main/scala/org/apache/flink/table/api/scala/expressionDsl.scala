@@ -19,12 +19,15 @@ package org.apache.flink.table.api.scala
 
 import java.sql.{Date, Time, Timestamp}
 
+import org.apache.flink.table.api.ExpressionParserException
 import org.apache.calcite.avatica.util.DateTimeUtils._
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.expressions.ExpressionUtils.{convertArray, toMilliInterval, toMonthInterval, toRowInterval}
 import org.apache.flink.table.expressions.TimeIntervalUnit.TimeIntervalUnit
 import org.apache.flink.table.expressions._
 import java.math.{BigDecimal => JBigDecimal}
+
+import org.apache.flink.table.api.OverWindow
 
 import scala.language.implicitConversions
 
@@ -533,6 +536,17 @@ trait ImplicitExpressionOperations {
     */
   def rows = toRowInterval(expr)
 
+  def over(alias: Expression) = {
+    expr match {
+      case agg: Aggregation => new OverCall(expr.asInstanceOf[Aggregation], alias)
+      case _ =>
+        throw new ExpressionParserException(
+          "over function can only using with aggregation expression.")
+    }
+  }
+
+
+
   /**
     * Accesses the field of a Flink composite type (such as Tuple, POJO, etc.) by name and
     * returns it's value.
@@ -586,6 +600,9 @@ trait ImplicitExpressionOperations {
  * to [[ImplicitExpressionOperations]].
  */
 trait ImplicitExpressionConversions {
+  implicit val OVER = new OverWindow
+  implicit val UNBOUNDED_ROW = toRowInterval(Long.MaxValue)
+  implicit val UNBOUNDED_RANGE = toMilliInterval(Long.MaxValue, MILLIS_PER_DAY)
   implicit class WithOperations(e: Expression) extends ImplicitExpressionOperations {
     def expr = e
   }

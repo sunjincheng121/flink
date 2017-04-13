@@ -19,7 +19,7 @@
 package org.apache.flink.table.plan
 
 import org.apache.flink.api.common.typeutils.CompositeType
-import org.apache.flink.table.api.TableEnvironment
+import org.apache.flink.table.api.{OverWindow, TableEnvironment}
 import org.apache.flink.table.expressions._
 import org.apache.flink.table.plan.logical.{LogicalNode, Project}
 
@@ -190,8 +190,8 @@ object ProjectionTranslator {
   def expandProjectList(
       exprs: Seq[Expression],
       parent: LogicalNode,
-      tableEnv: TableEnvironment)
-    : Seq[Expression] = {
+      tableEnv: TableEnvironment,
+      overWindows: OverWindow*): Seq[Expression] = {
 
     val projectList = new ListBuffer[Expression]
 
@@ -215,6 +215,10 @@ object ProjectionTranslator {
           case _ =>
             projectList += unresolved
         }
+
+      case OverCall(agg, alias, _) =>
+        val overWindow = overWindows.find(_.alias.equals(alias))
+        projectList += OverCall(agg, alias, overWindow.get)
 
       case e: Expression => projectList += e
     }

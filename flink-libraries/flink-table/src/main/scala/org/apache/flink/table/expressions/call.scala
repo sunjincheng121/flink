@@ -17,10 +17,18 @@
  */
 package org.apache.flink.table.expressions
 
-import org.apache.calcite.rex.RexNode
+import java.util
+
+import com.google.common.collect.ImmutableList
+import org.apache.calcite.rel.`type`.RelDataType
+import org.apache.calcite.rex.{RexFieldCollation, RexNode, RexWindowBound}
+import org.apache.calcite.sql.{SqlAggFunction, SqlKind, SqlWindow}
+import org.apache.calcite.sql.`type`.{BasicSqlType, SqlTypeName}
+import org.apache.calcite.sql.fun.SqlCountAggFunction
+import org.apache.calcite.sql.parser.SqlParserPos
 import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.table.api.{UnresolvedException, ValidationException}
+import org.apache.flink.table.api.{OverWindow, UnresolvedException, ValidationException}
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
 import org.apache.flink.table.functions.{ScalarFunction, TableFunction}
@@ -46,6 +54,92 @@ case class Call(functionName: String, args: Seq[Expression]) extends Expression 
 
   override private[flink] def validateInput(): ValidationResult =
     ValidationFailure(s"Unresolved function call: $functionName")
+}
+
+case class OverCall(
+    agg: Aggregation,
+    alias: Expression,
+    var overWindow: OverWindow = null) extends Expression {
+
+
+  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
+
+    val rexBuilder = relBuilder.getRexBuilder
+
+    val aaa = agg.resultType
+
+    val aggCall = agg.toAggCall(agg.toString)
+
+    val relDataType: RelDataType = new BasicSqlType(relBuilder.getTypeFactory.getTypeSystem,
+                                                    SqlTypeName.BIGINT)
+    val operator: SqlAggFunction = new SqlCountAggFunction()
+    val aggParams: util.ArrayList[RexNode] = new util.ArrayList[RexNode]()
+    aggParams.add(relBuilder.field("b"))
+
+    val orderKeys: ImmutableList.Builder[RexFieldCollation] =
+      new ImmutableList.Builder[RexFieldCollation]()
+    val sets:util.HashSet[SqlKind] = new util.HashSet[SqlKind]()
+    //    sets.add(SqlKind.SELECT)
+
+    val orderName = overWindow.orderBy.asInstanceOf[UnresolvedFieldReference].name
+    val rexNode = if(orderName.equalsIgnoreCase("rowtime")){
+      relBuilder.field(0)
+    }else{
+      relBuilder.literal(orderName)
+    }
+    val ordering = new RexFieldCollation(rexNode,sets)
+
+    orderKeys.add(ordering)
+
+    //    val tem  = relBuilder.sort(order.toRexNode(relBuilder)).build()
+    val partitionKeys: util.ArrayList[RexNode] = new util.ArrayList[RexNode]()
+    overWindow.partitionBy.foreach(x=> partitionKeys
+                                         .add(relBuilder.field(x.asInstanceOf[UnresolvedFieldReference]
+                                                               .name)))
+
+
+    //    val rexNode =
+    //      rexBuilder.makeLiteral(
+    //        20L,
+    //        TimeModeTypes.ROWTIME, false).asInstanceOf[RexLiteral]
+    //    val rexNode2 =
+    //      rexBuilder.makeLiteral(
+    //        0L,
+    //        relDataType, false).asInstanceOf[RexLiteral]
+
+
+    val unbounded = SqlWindow.createUnboundedPreceding(new SqlParserPos(1, 74, 1, 94))
+    val currentRow =SqlWindow.createCurrentRow(new SqlParserPos(1, 74, 1, 94))
+    val lowerBound:RexWindowBound = RexWindowBound.create(unbounded, null)
+    val upperBound :RexWindowBound = RexWindowBound.create(currentRow, null)
+
+    val physical:Boolean = false
+    val allowPartial:Boolean = true
+    val nullWhenCountZero:Boolean = false
+
+    rexBuilder.makeOver(
+      relDataType,
+      operator,
+      aggParams,
+      partitionKeys,
+      orderKeys.build,
+      lowerBound,
+      upperBound,
+      physical,
+      allowPartial,
+      nullWhenCountZero)
+  }
+
+  override private[flink] def children: Seq[Expression] = Seq()
+
+  override def toString =
+    s"${this.getClass.getCanonicalName}(${alias.toString})"
+
+  override private[flink] def resultType = agg.resultType
+
+  override private[flink] def validateInput(): ValidationResult = {
+    ValidationSuccess
+  }
 }
 
 /**

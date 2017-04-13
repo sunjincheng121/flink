@@ -146,6 +146,39 @@ class AggregationsITCase extends StreamingMultipleProgramsTestBase {
       "Hi,1,1,1,1,1,1970-01-01 00:00:00.0,1970-01-01 00:00:00.005")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
+
+  @Test
+  def testForRexOver(): Unit = {
+    val data = List(
+      (1L, 1, "Hello"),
+      (2L, 2, "Hello"),
+      (3L, 3, "Hello"),
+      (4L, 4, "Hello"),
+      (5L, 5, "Hello"),
+      (6L, 6, "Hello"),
+      (7L, 7, "Hello World"),
+      (8L, 8, "Hello World"),
+      (20L, 20, "Hello World"))
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.testResults = mutable.MutableList()
+
+    val stream = env.fromCollection(data)
+    val table = stream.toTable(tEnv, 'a, 'b, 'c)
+
+    val windowedTable = table
+      .window(OVER partitionBy 'c orderBy 'procTime preceding UNBOUNDED_ROW as 'w)
+      .select('c, 'b.count over 'w)
+
+    val results = windowedTable.toDataStream[Row]
+    results.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    for(data <- StreamITCase.testResults.sorted){
+      println(data)
+    }
+  }
 }
 
 object AggregationsITCase {

@@ -32,10 +32,9 @@ import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.plan.nodes.OverAggregate
 import org.apache.flink.table.runtime.aggregate._
 import org.apache.flink.types.Row
-
 import org.apache.flink.api.java.functions.NullByteKeySelector
 import org.apache.flink.table.codegen.CodeGenerator
-import org.apache.flink.table.functions.{ProcTimeType, RowTimeType}
+import org.apache.flink.table.functions.{ProcTimeType, RowTimeType, TimeModeType}
 import org.apache.flink.table.runtime.aggregate.AggregateUtil.CalcitePair
 
 class DataStreamOverAggregate(
@@ -93,28 +92,38 @@ class DataStreamOverAggregate(
 
     val orderKeys = overWindow.orderKeys.getFieldCollations
 
-    if (orderKeys.size() != 1) {
-      throw new TableException(
-        "Unsupported use of OVER windows. The window can only be ordered by a single time column.")
-    }
-    val orderKey = orderKeys.get(0)
+    val timeType = if (!orderKeys.isEmpty) {
+      if (orderKeys.size() != 1) {
+        throw new TableException(
+          "Unsupported use of OVER windows. The window can only be ordered by a single time " +
+            "column.")
+      }
+      val orderKey = orderKeys.get(0)
 
-    if (!orderKey.direction.equals(ASCENDING)) {
-      throw new TableException(
-        "Unsupported use of OVER windows. The window can only be ordered in ASCENDING mode.")
+      if (!orderKey.direction.equals(ASCENDING)) {
+        throw new TableException(
+          "Unsupported use of OVER windows. The window can only be ordered in ASCENDING mode.")
+      }
+      val orderBy = inputType
+        .getFieldList
+        .get(orderKey.getFieldIndex)
+        .getValue
+
+      if (orderBy.isInstanceOf[TimeModeType]) {
+        orderBy.asInstanceOf[TimeModeType]
+      } else {
+        new RowTimeType
+      }
+    } else {
+      new ProcTimeType
     }
 
     val inputDS = input.asInstanceOf[DataStreamRel].translateToPlan(tableEnv)
 
     val generator = new CodeGenerator(
-      tableEnv.getConfig,
-      false,
-      inputDS.getType)
-
-    val timeType = inputType
-      .getFieldList
-      .get(orderKey.getFieldIndex)
-      .getValue
+    tableEnv.getConfig,
+    false,
+    inputDS.getType)
 
     timeType match {
       case _: ProcTimeType =>

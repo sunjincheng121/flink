@@ -22,6 +22,41 @@ import org.apache.flink.table.expressions.{Expression, ExpressionParser}
 import org.apache.flink.table.plan.logical._
 
 /**
+  * A Over window specification
+  */
+class OverWindow {
+
+  private[flink] var alias: Expression = _
+  private[flink] var partitionBy: Seq[Expression] = Seq[Expression]()
+  private[flink] var orderBy: Expression = _
+  private[flink] var preceding: Expression = _
+  private[flink] var following: Expression = _
+
+  def as(alias: Expression): OverWindow = {
+    this.alias = alias
+    this
+  }
+  def following(following: Expression): OverWindow = {
+    this.following = following
+    this
+  }
+
+  def orderBy(orderBy: Expression): OverWindow = {
+    this.orderBy = orderBy
+    this
+  }
+
+  def partitionBy(partitionBy: Expression*): OverWindow = {
+    this.partitionBy = partitionBy
+    this
+  }
+
+  def preceding(preceding: Expression): OverWindow = {
+    this.preceding = preceding
+    this
+  }
+}
+/**
   * A window specification.
   *
   * Window groups rows based on time or row-count intervals. It is a general way to group the

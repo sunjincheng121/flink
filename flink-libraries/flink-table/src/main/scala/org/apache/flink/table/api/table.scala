@@ -810,6 +810,18 @@ class Table(
     new WindowedTable(this, window)
   }
 
+  /**
+    * Over Window
+    * @param overWindows
+    * @return
+    */
+  def window(overWindows: OverWindow*): OverWindowedTable = {
+    if (overWindows.size != 1) {
+      throw ValidationException("OverWindow only supported single window at current time.")
+    }
+    new OverWindowedTable(this, overWindows: _*)
+  }
+
   var tableName: String = _
 
   /**
@@ -926,6 +938,27 @@ class WindowedTable(
     groupBy(fieldsExpr: _*)
   }
 
+}
+
+class OverWindowedTable(
+    private[flink] val table: Table,
+    private[flink] val overWindows: OverWindow*) {
+  def select(fields: Expression*): Table = {
+    val expandedFields = expandProjectList(
+      fields,
+      table.logicalPlan,
+      table.tableEnv,
+      overWindows: _*)
+
+    new Table(
+      table.tableEnv,
+      Project(expandedFields.map(UnresolvedAlias), table.logicalPlan).validate(table.tableEnv))
+  }
+
+  def select(fields: String): Table = {
+    val fieldExprs = ExpressionParser.parseExpressionList(fields)
+    select(fieldExprs: _*)
+  }
 }
 
 class WindowGroupedTable(
