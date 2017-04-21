@@ -37,6 +37,7 @@ import org.apache.flink.table.typeutils.RowIntervalTypeInfo
 import org.apache.flink.table.api.Types
 import org.apache.flink.table.api.scala.{UNBOUNDED_RANGE, UNBOUNDED_ROW, CURRENT_RANGE, CURRENT_ROW}
 import org.apache.flink.table.functions.{EventTimeExtractor, ProcTimeExtractor}
+import org.apache.flink.table.plan.logical.LogicalOverWindow
 /**
   * General expression for unresolved function calls. The function can be a built-in
   * scalar function or a user-defined scalar function.
@@ -68,7 +69,8 @@ case class Call(functionName: String, args: Seq[Expression]) extends Expression 
 case class OverCall(
     agg: Aggregation,
     overWindowAlias: Expression,
-    var overWindow: OverWindow = null) extends Expression {
+    var overWindow: OverWindow = null,
+    var logicOverWindow: LogicalOverWindow = null) extends Expression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
 
@@ -190,11 +192,6 @@ case class OverCall(
       && !orderName.equalsIgnoreCase("proctime")) {
       validationResult = ValidationFailure(
         s"OrderBy expression must be ['rowtime] or ['proctime], but got ['${orderName}]")
-    }
-
-    if(!overWindow.preceding.isInstanceOf[Literal] || overWindow.following.isInstanceOf[Literal]){
-      validationResult = ValidationFailure(
-        "Proceeding and the following must be a Literal type.")
     }
 
     if (!overWindow.preceding.asInstanceOf[Literal].resultType.getClass

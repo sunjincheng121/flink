@@ -274,3 +274,51 @@ case class EventTimeSessionGroupWindow(
 
   override def toString: String = s"EventTimeSessionGroupWindow($alias, $timeField, $gap)"
 }
+
+case class LogicalOverWindow(
+    name: Expression,
+    partitionBy: Seq[Expression],
+    orderBy: Expression,
+    preceding: Expression,
+    following: Expression
+) extends LogicalWindow(Some(name)) {
+  override def resolveExpressions(resolve: (Expression) => Expression): LogicalWindow =
+    LogicalOverWindow(
+      resolve(name),
+      partitionBy.map(resolve),
+      resolve(orderBy),
+      resolve(preceding),
+      resolve(following)
+    )
+
+  def validatePreceding(preceding: Expression): ValidationResult =
+    preceding match {
+      case Literal(_, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
+        ValidationSuccess
+      case Literal(_, RowIntervalTypeInfo.INTERVAL_ROWS) =>
+        ValidationSuccess
+      case _ =>
+        ValidationFailure(
+          "Over window expects preceding literal of type Interval of " +
+          "Milliseconds or Interval of Rows.")
+    }
+
+  def validateFollowing(following: Expression): ValidationResult =
+    following match {
+      case Literal(_, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
+        ValidationSuccess
+      case Literal(_, RowIntervalTypeInfo.INTERVAL_ROWS) =>
+        ValidationSuccess
+      case _ =>
+        ValidationFailure(
+          "Over window expects following literal of type Interval of " +
+          "Milliseconds or Interval of Rows.")
+    }
+  override def validate(tableEnv: TableEnvironment): ValidationResult = super.validate(tableEnv)
+    .orElse(validatePreceding(preceding))
+    .orElse(validateFollowing(following))
+
+  override def toString: String =
+    s"LogicalOverWindow($name, $partitionBy, $orderBy,$preceding,$following)"
+
+}

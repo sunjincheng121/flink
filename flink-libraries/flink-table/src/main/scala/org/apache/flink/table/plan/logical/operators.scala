@@ -541,7 +541,16 @@ case class LogicalRelNode(
 
   override def validate(tableEnv: TableEnvironment): LogicalNode = this
 }
+case class LogicalOverWindowNode( name: Expression,
+    partitionBy: Seq[Expression],
+    orderBy: Expression,
+    preceding: Expression,
+    following: Expression) extends LeafNode{
 
+  override def output: Seq[Attribute] = ???
+
+  override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = ???
+}
 case class WindowAggregate(
     groupingExpressions: Seq[Expression],
     window: LogicalWindow,
