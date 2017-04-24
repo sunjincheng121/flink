@@ -126,6 +126,7 @@ trait CommonCorrelate {
       returnType,
       rowType.getFieldNames.asScala)
 
+
     val collectorCode = if (condition.isEmpty) {
       s"""
          |${crossResultExpr.code}
@@ -144,6 +145,7 @@ trait CommonCorrelate {
          |}
          |""".stripMargin
     }
+
 
     val ccc  =  generator.udtf(
       "TableFunctionCollector",
@@ -193,7 +195,7 @@ trait CommonCorrelate {
       throw TableException(s"Unsupported SemiJoinType: $joinType for correlate join.")
     }
 
-    functionGenerator.generateFunction(
+    functionGenerator.generateUdtfFunction(
       ruleDescription,
       classOf[FlatMapFunction[Row, Row]],
       body,

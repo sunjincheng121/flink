@@ -599,6 +599,89 @@ class CodeGenerator(
     GeneratedFunction(funcName, returnType, funcCode)
   }
 
+  def generateUdtfFunction[F <: Function, T <: Any](
+      name: String,
+      clazz: Class[F],
+      bodyCode: String,
+      returnType: TypeInformation[T])
+    : GeneratedFunction[F, T] = {
+    val funcName = newName(name)
+
+    val input2TypeClass = boxedTypeTermForTypeInfo(returnType)
+    // Janino does not support generics, that's why we need
+    // manual casting here
+    val samHeader =
+      // FlatMapFunction
+      if (clazz == classOf[FlatMapFunction[_, _]]) {
+        val baseClass = classOf[RichFlatMapFunction[_, _]]
+        val inputTypeTerm = boxedTypeTermForTypeInfo(input1)
+        addReusableOutRecord(returnType)
+        (baseClass,
+          s"void flatMap(Object _in1, org.apache.flink.util.Collector $collectorTerm)",
+          List(s"$inputTypeTerm $input1Term = ($inputTypeTerm) _in1;"))
+      }
+
+      // MapFunction
+      else if (clazz == classOf[MapFunction[_, _]]) {
+        val baseClass = classOf[RichMapFunction[_, _]]
+        val inputTypeTerm = boxedTypeTermForTypeInfo(input1)
+        (baseClass,
+          "Object map(Object _in1)",
+          List(s"$inputTypeTerm $input1Term = ($inputTypeTerm) _in1;"))
+      }
+
+      // FlatJoinFunction
+      else if (clazz == classOf[FlatJoinFunction[_, _, _]]) {
+        val baseClass = classOf[RichFlatJoinFunction[_, _, _]]
+        val inputTypeTerm1 = boxedTypeTermForTypeInfo(input1)
+        val inputTypeTerm2 = boxedTypeTermForTypeInfo(input2.getOrElse(
+          throw new CodeGenException("Input 2 for FlatJoinFunction should not be null")))
+        (baseClass,
+          s"void join(Object _in1, Object _in2, org.apache.flink.util.Collector $collectorTerm)",
+          List(s"$inputTypeTerm1 $input1Term = ($inputTypeTerm1) _in1;",
+               s"$inputTypeTerm2 $input2Term = ($inputTypeTerm2) _in2;"))
+      }
+      else {
+        // TODO more functions
+        throw new CodeGenException("Unsupported Function.")
+      }
+
+    println("==================> map"+reuseMemberCode)
+    val funcCode = j"""
+      public class $funcName
+          extends ${samHeader._1.getCanonicalName} {
+
+        ${reuseMemberCode()}
+
+        public $funcName() throws Exception {
+          ${reuseInitCode()}
+        }
+
+        ${reuseConstructorCode(funcName)}
+
+        @Override
+        public void open(${classOf[Configuration].getCanonicalName} parameters) throws Exception {
+          ${reuseOpenCode()}
+        }
+
+        @Override
+        public ${samHeader._2} throws Exception {
+          ${samHeader._3.mkString("\n")}
+          ${reusePerRecordCode()}
+          ${reuseInputUnboxingCode()}
+          $bodyCode
+        }
+
+        @Override
+        public void close() throws Exception {
+          ${reuseCloseCode()}
+        }
+      }
+    """.stripMargin
+
+    GeneratedFunction(funcName, returnType, funcCode)
+  }
+
   /**
     * Generates a values input format that can be passed to Java compiler.
     *
@@ -709,7 +792,6 @@ class CodeGenerator(
     val input2TypeClass = boxedTypeTermForTypeInfo(collectedType)
 
     val funcCode = j"""
-          |org.apache.flink.types.Row out =new org.apache.flink.types.Row(4);
           $input2TypeClass $input2Term = ($input2TypeClass) record;
           ${reuseInputUnboxingCode()}
           $bodyCode

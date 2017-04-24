@@ -66,8 +66,8 @@ class AggregationsITCase extends StreamingMultipleProgramsTestBase {
     val udtf = new MyUdtf
     val udtf2 = new MyUdtf2
     val windowedTable = table
-//      .join(udtf('string) as ('name))
-      .join(udtf2('string) as ('last))
+      .join(udtf('string) as ('name))
+      .join(udtf2('name) as ('last))
       .select('last)
 
     val results = windowedTable.toDataStream[Row]
@@ -195,7 +195,7 @@ object AggregationsITCase {
 
     def eval(data: String): java.util.List[String] = {
       val results = new java.util.ArrayList[String]()
-      results.add(data)
+      results.add(data+"AAAAAAAAA")
       // return java.lang.Iterable
       results
     }
