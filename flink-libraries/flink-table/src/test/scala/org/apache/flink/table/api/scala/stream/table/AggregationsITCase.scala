@@ -27,12 +27,14 @@ import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
 import org.apache.flink.table.api.TableEnvironment
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.scala.stream.table.AggregationsITCase.TimestampAndWatermarkWithOffset
-import org.apache.flink.table.api.scala.stream.table.AggregationsITCase.Myudtf
+import org.apache.flink.table.api.scala.stream.table.AggregationsITCase.{MyUdtf,MyUdtf2}
 import org.apache.flink.table.api.scala.stream.utils.StreamITCase
 import org.apache.flink.table.functions.TableFunction
 import org.apache.flink.types.Row
 import org.junit.Assert._
 import org.junit.Test
+import java.util.{ArrayList => JList}
+import java.util.{Iterator => JIterator}
 
 import scala.collection.mutable
 
@@ -61,10 +63,12 @@ class AggregationsITCase extends StreamingMultipleProgramsTestBase {
     val stream = env.fromCollection(data)
     val table = stream.toTable(tEnv, 'long, 'int, 'string)
 
-    val udtf = new Myudtf
-    val windowedTable = table.join(udtf('string) as ('name))
-
-      .select('name)
+    val udtf = new MyUdtf
+    val udtf2 = new MyUdtf2
+    val windowedTable = table
+//      .join(udtf('string) as ('name))
+      .join(udtf2('string) as ('last))
+      .select('last)
 
     val results = windowedTable.toDataStream[Row]
     results.addSink(new StreamITCase.StringSink)
@@ -186,18 +190,27 @@ object AggregationsITCase {
     }
   }
 
-  import java.util.{ArrayList => JList}
-  class Myudtf extends TableFunction[String] {
 
-        def eval(data: String): JList[String] = {
-          val results = new JList[String]()
-          results.add(data)
-          results.add(data+"=========>udtf")
-          results
+  class MyUdtf extends TableFunction[String] {
+
+    def eval(data: String): java.util.List[String] = {
+      val results = new java.util.ArrayList[String]()
+      results.add(data)
+      // return java.lang.Iterable
+      results
+    }
+
+    def eval(data: Int): scala.collection.immutable.List[String] = {
+      // return scala.collection.Iterable
+      scala.collection.immutable.List[String](String.valueOf(data))
+    }
+
+  }
+
+  class MyUdtf2 extends TableFunction[String] {
+
+        def eval(data: String): List[String] = {
+          List[String](data, data+"hahahahahhahah")
         }
-//    def eval(data: String):Unit = {
-//      collect(data)
-//    }
-
   }
 }

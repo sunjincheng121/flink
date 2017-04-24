@@ -154,11 +154,20 @@ trait CommonCorrelate {
     var body =
       s"""
         |${call.code}
+        |if (iterable instanceof java.lang.Iterable){
         |java.util.Iterator it = ((java.lang.Iterable)iterable).iterator();
         |while(it.hasNext()){
         |Object record = it.next();
         |$ccc
         |}
+        |}else{
+        |scala.collection.Iterator it = ((scala.collection.Iterable)iterable).iterator();
+        |while(it.hasNext()){
+        |Object record = it.next();
+        |$ccc
+        |}
+        |}
+        |
         |""".stripMargin
 
     if (joinType == SemiJoinType.LEFT) {
