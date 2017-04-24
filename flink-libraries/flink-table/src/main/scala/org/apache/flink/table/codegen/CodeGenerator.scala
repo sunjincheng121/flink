@@ -563,6 +563,7 @@ class CodeGenerator(
         throw new CodeGenException("Unsupported Function.")
       }
 
+    println("==================> map"+reuseMemberCode)
     val funcCode = j"""
       public class $funcName
           extends ${samHeader._1.getCanonicalName} {
@@ -671,7 +672,7 @@ class CodeGenerator(
     val className = newName(name)
     val input1TypeClass = boxedTypeTermForTypeInfo(input1)
     val input2TypeClass = boxedTypeTermForTypeInfo(collectedType)
-
+    println("==================> collect"+reuseMemberCode)
     val funcCode = j"""
       public class $className extends ${classOf[TableFunctionCollector[_]].getCanonicalName} {
 
@@ -697,6 +698,24 @@ class CodeGenerator(
     """.stripMargin
 
     GeneratedCollector(className, funcCode)
+  }
+
+  def udtf(
+      name: String,
+      bodyCode: String,
+      collectedType: TypeInformation[Any]) :String = {
+
+    val input1TypeClass = boxedTypeTermForTypeInfo(input1)
+    val input2TypeClass = boxedTypeTermForTypeInfo(collectedType)
+
+    val funcCode = j"""
+          |org.apache.flink.types.Row out =new org.apache.flink.types.Row(4);
+          $input2TypeClass $input2Term = ($input2TypeClass) record;
+          ${reuseInputUnboxingCode()}
+          $bodyCode
+    """.stripMargin
+
+    funcCode
   }
 
   /**
@@ -1710,6 +1729,7 @@ class CodeGenerator(
           |    new ${ti.getTypeClass.getCanonicalName}();
           |""".stripMargin
     }
+    println("addReusableOutRecord"+ statement)
     reusableMemberStatements.add(statement)
   }
 
@@ -1730,6 +1750,7 @@ class CodeGenerator(
         |    org.apache.flink.api.java.typeutils.TypeExtractor.getDeclaredField(
         |      ${clazz.getCanonicalName}.class, "$fieldName");
         |""".stripMargin
+    println("addReusablePrivateFieldAccess"+ fieldExtraction)
     reusableMemberStatements.add(fieldExtraction)
 
     val fieldAccessibility =
@@ -1758,6 +1779,7 @@ class CodeGenerator(
           |transient java.math.BigDecimal $fieldTerm =
           |    new java.math.BigDecimal("${decimal.toString}");
           |""".stripMargin
+      println("addReusableDecimal"+ fieldDecimal)
       reusableMemberStatements.add(fieldDecimal)
       fieldTerm
   }
@@ -1777,6 +1799,7 @@ class CodeGenerator(
       s"""
         |transient $classQualifier $fieldTerm = null;
         |""".stripMargin
+    println("addReusableFunction"+ fieldFunction)
     reusableMemberStatements.add(fieldFunction)
 
     val functionDeserialization =
@@ -1842,6 +1865,7 @@ class CodeGenerator(
         |transient $classQualifier $fieldTerm =
         |    new $initArray;
         |""".stripMargin
+    println("addReusableArray"+ fieldArray)
     reusableMemberStatements.add(fieldArray)
     fieldTerm
   }

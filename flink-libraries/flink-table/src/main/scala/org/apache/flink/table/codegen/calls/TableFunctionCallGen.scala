@@ -87,8 +87,7 @@ class TableFunctionCallGen(
     val functionReference = codeGenerator.addReusableFunction(tableFunction)
     val functionCallCode =
       s"""
-        |${parameters.map(_.code).mkString("\n")}
-        |$functionReference.eval(${parameters.map(_.resultTerm).mkString(", ")});
+        |java.lang.Object iterable = $functionReference.eval(${parameters.map(_.resultTerm).mkString(", ")});
         |""".stripMargin
 
     // has no result

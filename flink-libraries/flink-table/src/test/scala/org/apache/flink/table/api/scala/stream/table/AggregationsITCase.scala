@@ -27,7 +27,9 @@ import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
 import org.apache.flink.table.api.TableEnvironment
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.scala.stream.table.AggregationsITCase.TimestampAndWatermarkWithOffset
+import org.apache.flink.table.api.scala.stream.table.AggregationsITCase.Myudtf
 import org.apache.flink.table.api.scala.stream.utils.StreamITCase
+import org.apache.flink.table.functions.TableFunction
 import org.apache.flink.types.Row
 import org.junit.Assert._
 import org.junit.Test
@@ -47,8 +49,10 @@ class AggregationsITCase extends StreamingMultipleProgramsTestBase {
     (8L, 3, "Hello world"),
     (16L, 3, "Hello world"))
 
+  import org.apache.flink.table.functions.TableFunction
+
   @Test
-  def testProcessingTimeSlidingGroupWindowOverCount(): Unit = {
+  def testUDTF(): Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
     val tEnv = TableEnvironment.getTableEnvironment(env)
@@ -57,18 +61,22 @@ class AggregationsITCase extends StreamingMultipleProgramsTestBase {
     val stream = env.fromCollection(data)
     val table = stream.toTable(tEnv, 'long, 'int, 'string)
 
-    val windowedTable = table
-      .window(Slide over 2.rows every 1.rows as 'w)
-      .groupBy('w, 'string)
-      .select('string, 'int.count, 'int.avg)
+    val udtf = new Myudtf
+    val windowedTable = table.join(udtf('string) as ('name))
+
+      .select('name)
 
     val results = windowedTable.toDataStream[Row]
     results.addSink(new StreamITCase.StringSink)
     env.execute()
 
-    val expected = Seq("Hello world,1,3", "Hello world,2,3", "Hello,1,2", "Hello,2,2", "Hi,1,1")
-    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+    for (data <- StreamITCase.testResults.sorted){
+      println(data)
+    }
+
   }
+
+
 
   @Test
   def testEventTimeSessionGroupWindowOverTime(): Unit = {
@@ -176,5 +184,20 @@ object AggregationsITCase {
         previousElementTimestamp: Long): Long = {
       element._1
     }
+  }
+
+  import java.util.{ArrayList => JList}
+  class Myudtf extends TableFunction[String] {
+
+        def eval(data: String): JList[String] = {
+          val results = new JList[String]()
+          results.add(data)
+          results.add(data+"=========>udtf")
+          results
+        }
+//    def eval(data: String):Unit = {
+//      collect(data)
+//    }
+
   }
 }

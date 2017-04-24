@@ -28,7 +28,7 @@ import org.apache.flink.table.codegen.CodeGenUtils.primitiveDefaultValue
 import org.apache.flink.table.codegen.GeneratedExpression.{ALWAYS_NULL, NO_CODE}
 import org.apache.flink.table.codegen.{CodeGenerator, GeneratedCollector, GeneratedExpression, GeneratedFunction}
 import org.apache.flink.table.functions.utils.TableSqlFunction
-import org.apache.flink.table.runtime.{CorrelateFlatMapRunner, TableFunctionCollector}
+import org.apache.flink.table.runtime.{FlatMapRunner}
 import org.apache.flink.types.Row
 
 import scala.collection.JavaConverters._
@@ -39,7 +39,7 @@ import scala.collection.JavaConverters._
 trait CommonCorrelate {
 
   /**
-    * Creates the [[CorrelateFlatMapRunner]] to execute the join of input table
+    * Creates the [[FlatMapRunner]] to execute the join of input table
     * and user-defined table function.
     */
   private[flink] def correlateMapFunction(
@@ -52,7 +52,7 @@ trait CommonCorrelate {
       condition: Option[RexNode],
       pojoFieldMapping: Option[Array[Int]], // udtf return type pojo field mapping
       ruleDescription: String)
-    : CorrelateFlatMapRunner[Row, Row] = {
+    : FlatMapRunner[Row, Row] = {
 
     val returnType = FlinkTypeFactory.toInternalRowTypeInfo(rowType)
 
@@ -64,25 +64,24 @@ trait CommonCorrelate {
       rowType,
       joinType,
       rexCall,
+      condition,
       pojoFieldMapping,
       ruleDescription)
 
-    val collector = generateCollector(
-      config,
-      inputTypeInfo,
-      udtfTypeInfo,
-      returnType,
-      rowType,
-      condition,
-      pojoFieldMapping)
+//    val collector = generateCollector(
+//      config,
+//      inputTypeInfo,
+//      udtfTypeInfo,
+//      returnType,
+//      rowType,
+//      condition,
+//      pojoFieldMapping)
 
-    new CorrelateFlatMapRunner[Row, Row](
+
+    new FlatMapRunner[Row, Row](
       flatMap.name,
       flatMap.code,
-      collector.name,
-      collector.code,
       flatMap.returnType)
-
   }
 
   /**
@@ -96,6 +95,7 @@ trait CommonCorrelate {
       rowType: RelDataType,
       joinType: SemiJoinType,
       rexCall: RexCall,
+      condition: Option[RexNode],
       pojoFieldMapping: Option[Array[Int]],
       ruleDescription: String)
     : GeneratedFunction[FlatMapFunction[Row, Row], Row] = {
@@ -110,15 +110,55 @@ trait CommonCorrelate {
 
     val (input1AccessExprs, input2AccessExprs) = functionGenerator.generateCorrelateAccessExprs
 
-    val collectorTerm = functionGenerator
-      .addReusableConstructor(classOf[TableFunctionCollector[_]])
-      .head
-
     val call = functionGenerator.generateExpression(rexCall)
+
+    val generator = new CodeGenerator(
+      config,
+      false,
+      inputTypeInfo,
+      Some(udtfTypeInfo),
+      None,
+      pojoFieldMapping)
+
+
+    val crossResultExpr = generator.generateResultExpression(
+      input1AccessExprs ++ input2AccessExprs,
+      returnType,
+      rowType.getFieldNames.asScala)
+
+    val collectorCode = if (condition.isEmpty) {
+      s"""
+         |${crossResultExpr.code}
+         |c.collect(${crossResultExpr.resultTerm});
+         |""".stripMargin
+    } else {
+      val filterGenerator = new CodeGenerator(config, false, udtfTypeInfo, None, pojoFieldMapping)
+      filterGenerator.input1Term = filterGenerator.input2Term
+      val filterCondition = filterGenerator.generateExpression(condition.get)
+      s"""
+         |${filterGenerator.reuseInputUnboxingCode()}
+         |${filterCondition.code}
+         |if (${filterCondition.resultTerm}) {
+         |  ${crossResultExpr.code}
+         |  c.collect(${crossResultExpr.resultTerm});
+         |}
+         |""".stripMargin
+    }
+
+    val ccc  =  generator.udtf(
+      "TableFunctionCollector",
+      collectorCode,
+      udtfTypeInfo)
+
+
     var body =
       s"""
-        |${call.resultTerm}.setCollector($collectorTerm);
         |${call.code}
+        |java.util.Iterator it = ((java.lang.Iterable)iterable).iterator();
+        |while(it.hasNext()){
+        |Object record = it.next();
+        |$ccc
+        |}
         |""".stripMargin
 
     if (joinType == SemiJoinType.LEFT) {
@@ -137,11 +177,8 @@ trait CommonCorrelate {
         input1AccessExprs ++ input2NullExprs, returnType, rowType.getFieldNames.asScala)
       body +=
         s"""
-          |boolean hasOutput = $collectorTerm.isCollected();
-          |if (!hasOutput) {
           |  ${outerResultExpr.code}
-          |  ${functionGenerator.collectorTerm}.collect(${outerResultExpr.resultTerm});
-          |}
+          |  c.collect(${outerResultExpr.resultTerm});
           |""".stripMargin
     } else if (joinType != SemiJoinType.INNER) {
       throw TableException(s"Unsupported SemiJoinType: $joinType for correlate join.")
@@ -200,6 +237,7 @@ trait CommonCorrelate {
         |}
         |""".stripMargin
     }
+
 
     generator.generateTableFunctionCollector(
       "TableFunctionCollector",
