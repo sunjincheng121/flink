@@ -31,7 +31,6 @@ abstract class ProcessFunctionWithCleanupState[IN,OUT](queryConfig: StreamQueryC
   protected val maxRetentionTime = queryConfig.getMaxIdleStateRetentionTime
   protected val stateCleaningEnabled = minRetentionTime > 1 && maxRetentionTime > 1
 
-
   // holds the latest registered cleanup timer
   private var cleanupTimeState: ValueState[JLong] = _
 

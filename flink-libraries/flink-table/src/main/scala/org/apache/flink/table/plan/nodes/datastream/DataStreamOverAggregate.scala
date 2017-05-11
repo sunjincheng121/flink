@@ -125,8 +125,8 @@ class DataStreamOverAggregate(
     }
 
     if (overWindow.lowerBound.isUnbounded) {
-      if (overWindow.keys.size() > 0 && (queryConfig.getMinIdleStateRetentionTime < 0
-        || queryConfig.getMaxIdleStateRetentionTime < 0)) {
+      if (queryConfig.getMinIdleStateRetentionTime < 0
+        || queryConfig.getMaxIdleStateRetentionTime < 0) {
         LOG.warn(
           "No state retention interval configured for a query which accumulates state. " +
           "Please provide a query configuration with valid retention interval to prevent " +

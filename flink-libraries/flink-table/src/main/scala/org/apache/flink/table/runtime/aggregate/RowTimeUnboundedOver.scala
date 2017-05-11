@@ -106,7 +106,6 @@ abstract class RowTimeUnboundedOver(
     val input = inputC.row
 
     val timestamp = ctx.timestamp()
-
     // register state-cleanup timer
     registerEventCleanupTimer(ctx, timestamp)
 
