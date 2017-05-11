@@ -45,8 +45,8 @@ abstract class RowTimeUnboundedOver(
     genAggregations: GeneratedAggregationsFunction,
     intermediateType: TypeInformation[Row],
     inputType: TypeInformation[CRow],
-    qConfig: StreamQueryConfig)
-  extends ProcessFunctionWithCleanupState[CRow, CRow](qConfig)
+    queryConfig: StreamQueryConfig)
+  extends ProcessFunctionWithCleanupState[CRow, CRow](queryConfig)
     with Compiler[GeneratedAggregations] {
 
   protected var output: CRow = _
@@ -144,7 +144,9 @@ abstract class RowTimeUnboundedOver(
     Preconditions.checkArgument(out.isInstanceOf[TimestampedCollector[CRow]])
     val collector = out.asInstanceOf[TimestampedCollector[CRow]]
 
-    val isCleanup = cleanupStateOnTimer(timestamp, rowMapState, accumulatorState)
+    val isCleanup = cleanupStateOnTimer(
+      timestamp,
+      rowMapState, accumulatorState)
 
     if (isCleanup) {
       return
@@ -236,12 +238,12 @@ class RowTimeUnboundedRowsOver(
     genAggregations: GeneratedAggregationsFunction,
     intermediateType: TypeInformation[Row],
     inputType: TypeInformation[CRow],
-    qConfig: StreamQueryConfig)
+    queryConfig: StreamQueryConfig)
   extends RowTimeUnboundedOver(
     genAggregations: GeneratedAggregationsFunction,
     intermediateType,
     inputType,
-    qConfig) {
+    queryConfig) {
 
   override def processElementsWithSameTimestamp(
     curRowList: JList[Row],
@@ -276,12 +278,12 @@ class RowTimeUnboundedRangeOver(
     genAggregations: GeneratedAggregationsFunction,
     intermediateType: TypeInformation[Row],
     inputType: TypeInformation[CRow],
-    qConfig: StreamQueryConfig)
+    queryConfig: StreamQueryConfig)
   extends RowTimeUnboundedOver(
     genAggregations: GeneratedAggregationsFunction,
     intermediateType,
     inputType,
-    qConfig) {
+    queryConfig) {
 
   override def processElementsWithSameTimestamp(
     curRowList: JList[Row],

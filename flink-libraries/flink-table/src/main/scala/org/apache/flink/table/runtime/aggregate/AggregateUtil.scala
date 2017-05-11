@@ -77,7 +77,7 @@ object AggregateUtil {
       inputType: RelDataType,
       inputTypeInfo: TypeInformation[Row],
       inputFieldTypeInfo: Seq[TypeInformation[_]],
-      qConfig: StreamQueryConfig,
+      queryConfig: StreamQueryConfig,
       isRowTimeType: Boolean,
       isPartitioned: Boolean,
       isRowsClause: Boolean)
@@ -119,26 +119,26 @@ object AggregateUtil {
           genFunction,
           aggregationStateType,
           CRowTypeInfo(inputTypeInfo),
-          qConfig)
+          queryConfig)
       } else {
         // RANGE unbounded over process function
         new RowTimeUnboundedRangeOver(
           genFunction,
           aggregationStateType,
           CRowTypeInfo(inputTypeInfo),
-          qConfig)
+          queryConfig)
       }
     } else {
       if (isPartitioned) {
         new ProcTimeUnboundedPartitionedOver(
           genFunction,
           aggregationStateType,
-          qConfig)
+          queryConfig)
       } else {
         new ProcTimeUnboundedNonPartitionedOver(
           genFunction,
           aggregationStateType,
-          qConfig)
+          queryConfig)
       }
     }
   }
@@ -160,7 +160,7 @@ object AggregateUtil {
       inputRowType: RelDataType,
       inputFieldTypes: Seq[TypeInformation[_]],
       groupings: Array[Int],
-      qConfig: StreamQueryConfig,
+      queryConfig: StreamQueryConfig,
       generateRetraction: Boolean,
       consumeRetraction: Boolean): ProcessFunction[CRow, CRow] = {
 
@@ -197,7 +197,7 @@ object AggregateUtil {
       genFunction,
       aggregationStateType,
       generateRetraction,
-      qConfig)
+      queryConfig)
 
   }
 
@@ -222,7 +222,7 @@ object AggregateUtil {
       inputTypeInfo: TypeInformation[Row],
       inputFieldTypeInfo: Seq[TypeInformation[_]],
       precedingOffset: Long,
-      qConfig: StreamQueryConfig,
+      queryConfig: StreamQueryConfig,
       isRowsClause: Boolean,
       isRowTimeType: Boolean)
     : ProcessFunction[CRow, CRow] = {
@@ -265,14 +265,14 @@ object AggregateUtil {
           aggregationStateType,
           inputRowType,
           precedingOffset,
-          qConfig)
+          queryConfig)
       } else {
         new RowTimeBoundedRangeOver(
           genFunction,
           aggregationStateType,
           inputRowType,
           precedingOffset,
-          qConfig)
+          queryConfig)
       }
     } else {
       if (isRowsClause) {
@@ -281,14 +281,14 @@ object AggregateUtil {
           precedingOffset,
           aggregationStateType,
           inputRowType,
-          qConfig)
+          queryConfig)
       } else {
         new ProcTimeBoundedRangeOver(
           genFunction,
           precedingOffset,
           aggregationStateType,
           inputRowType,
-          qConfig)
+          queryConfig)
       }
     }
   }

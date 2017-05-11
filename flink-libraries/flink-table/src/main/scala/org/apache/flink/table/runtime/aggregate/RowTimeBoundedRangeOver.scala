@@ -44,8 +44,8 @@ class RowTimeBoundedRangeOver(
     aggregationStateType: RowTypeInfo,
     inputRowType: CRowTypeInfo,
     precedingOffset: Long,
-    qConfig: StreamQueryConfig)
-  extends ProcessFunctionWithCleanupState[CRow, CRow](qConfig)
+    queryConfig: StreamQueryConfig)
+  extends ProcessFunctionWithCleanupState[CRow, CRow](queryConfig)
     with Compiler[GeneratedAggregations] {
   Preconditions.checkNotNull(aggregationStateType)
   Preconditions.checkNotNull(precedingOffset)
