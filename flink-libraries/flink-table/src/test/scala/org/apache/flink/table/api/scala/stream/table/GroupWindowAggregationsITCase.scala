@@ -67,9 +67,8 @@ class GroupWindowAggregationsITCase extends StreamingMultipleProgramsTestBase {
 
     val windowedTable = table
       .window(Slide over 2.rows every 1.rows on 'proctime as 'w)
-      .groupBy('w, 'string)
-      .select('string, countFun('int), 'int.avg,
-              weightAvgFun('long, 'int), weightAvgFun('int, 'int))
+      .groupBy('w)
+      .select('int.avg)
 
     val results = windowedTable.toDataStream[Row]
     results.addSink(new StreamITCase.StringSink)
