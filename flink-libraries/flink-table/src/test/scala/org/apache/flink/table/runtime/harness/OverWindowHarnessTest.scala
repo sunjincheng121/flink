@@ -48,8 +48,8 @@ class OverWindowHarnessTest extends HarnessTestBase{
         queryConfig))
 
     val testHarness =
-      createHarnessTester(processFunction,new TupleRowKeySelector[Integer](0),BasicTypeInfo
-        .INT_TYPE_INFO)
+      createKeyedOneInputStreamOperatorTestHarness(processFunction, new TupleRowKeySelector[Integer](0), BasicTypeInfo
+                                                                                                         .INT_TYPE_INFO)
 
     testHarness.open()
 
@@ -161,7 +161,7 @@ class OverWindowHarnessTest extends HarnessTestBase{
         queryConfig))
 
     val testHarness =
-      createHarnessTester(
+      createKeyedOneInputStreamOperatorTestHarness(
         processFunction,
         new TupleRowKeySelector[Integer](0),
         BasicTypeInfo.INT_TYPE_INFO)
@@ -282,7 +282,7 @@ class OverWindowHarnessTest extends HarnessTestBase{
         queryConfig))
 
     val testHarness =
-      createHarnessTester(
+      createKeyedOneInputStreamOperatorTestHarness(
         processFunction,
         new TupleRowKeySelector[Integer](0),
         BasicTypeInfo.INT_TYPE_INFO)
@@ -390,7 +390,7 @@ class OverWindowHarnessTest extends HarnessTestBase{
         new StreamQueryConfig().withIdleStateRetentionTime(Time.seconds(1), Time.seconds(2))))
 
     val testHarness =
-      createHarnessTester(
+      createKeyedOneInputStreamOperatorTestHarness(
         processFunction,
         new TupleRowKeySelector[String](3),
         BasicTypeInfo.STRING_TYPE_INFO)
@@ -555,7 +555,7 @@ class OverWindowHarnessTest extends HarnessTestBase{
         new StreamQueryConfig().withIdleStateRetentionTime(Time.seconds(1), Time.seconds(2))))
 
     val testHarness =
-      createHarnessTester(
+      createKeyedOneInputStreamOperatorTestHarness(
         processFunction,
         new TupleRowKeySelector[String](3),
         BasicTypeInfo.STRING_TYPE_INFO)
@@ -718,7 +718,7 @@ class OverWindowHarnessTest extends HarnessTestBase{
         new StreamQueryConfig().withIdleStateRetentionTime(Time.seconds(1), Time.seconds(2))))
 
     val testHarness =
-      createHarnessTester(
+      createKeyedOneInputStreamOperatorTestHarness(
         processFunction,
         new TupleRowKeySelector[String](3),
         BasicTypeInfo.STRING_TYPE_INFO)
@@ -866,7 +866,7 @@ class OverWindowHarnessTest extends HarnessTestBase{
         new StreamQueryConfig().withIdleStateRetentionTime(Time.seconds(1), Time.seconds(2))))
 
     val testHarness =
-      createHarnessTester(
+      createKeyedOneInputStreamOperatorTestHarness(
         processFunction,
         new TupleRowKeySelector[String](3),
         BasicTypeInfo.STRING_TYPE_INFO)

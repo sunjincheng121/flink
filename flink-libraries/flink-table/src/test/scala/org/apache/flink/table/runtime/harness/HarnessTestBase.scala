@@ -307,7 +307,7 @@ class HarnessTestBase {
   protected val genMinMaxAggFunction = GeneratedAggregationsFunction(minMaxFuncName, minMaxCode)
   protected val genSumAggFunction = GeneratedAggregationsFunction(sumFuncName, sumAggCode)
 
-  def createHarnessTester[IN, OUT, KEY](
+  def createKeyedOneInputStreamOperatorTestHarness[IN, OUT, KEY](
     operator: OneInputStreamOperator[IN, OUT],
     keySelector: KeySelector[IN, KEY],
     keyType: TypeInformation[KEY]): KeyedOneInputStreamOperatorTestHarness[KEY, IN, OUT] = {
