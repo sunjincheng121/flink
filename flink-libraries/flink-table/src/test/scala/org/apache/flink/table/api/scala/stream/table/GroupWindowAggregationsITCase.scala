@@ -31,6 +31,7 @@ import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.scala.stream.table.GroupWindowAggregationsITCase.TimestampAndWatermarkWithOffset
 import org.apache.flink.table.api.scala.stream.utils.StreamITCase
 import org.apache.flink.table.functions.aggfunctions.CountAggFunction
+import org.apache.flink.table.utils.TableFunc0
 import org.apache.flink.types.Row
 import org.junit.Assert._
 import org.junit.Test
@@ -175,6 +176,47 @@ class GroupWindowAggregationsITCase extends StreamingMultipleProgramsTestBase {
       "Hello world,1,3,16,3,3,3,3,1970-01-01 00:00:00.015,1970-01-01 00:00:00.02",
       "Hello,2,2,3,2,2,2,4,1970-01-01 00:00:00.0,1970-01-01 00:00:00.005",
       "Hi,1,1,1,1,1,1,1,1970-01-01 00:00:00.0,1970-01-01 00:00:00.005")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testEventTimeTumblingWindowFollowByJoinUDTF(): Unit = {
+    val data = List(
+      (1L, 1, "Hi#2"),
+      (2L, 2, "Hello#2"),
+      (4L, 2, "Hello#2"),
+      (8L, 3, "Hello world#2"),
+      (16L, 3, "Hello world#2"))
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.testResults = mutable.MutableList()
+
+    val stream = env
+      .fromCollection(data)
+      .assignTimestampsAndWatermarks(new TimestampAndWatermarkWithOffset(0L))
+    val table = stream.toTable(tEnv, 'long.rowtime, 'int, 'string)
+    val countFun = new CountAggFunction
+    val weightAvgFun = new WeightedAvg
+    val udtf = new TableFunc0
+
+    val windowedTable =
+      table
+      .join(udtf('string) as ('name, 'age) ).select('*)
+//      .window(Tumble over 5.milli on 'long as 'w)
+//      .groupBy('w, 'name, 'age)
+//      .select('name,'age, countFun('string), 'int.avg, weightAvgFun('int, 'int),
+//              'int.min, 'int.max, 'int.sum, 'w.start, 'w.end)
+
+    val results = windowedTable.toAppendStream[Row]
+    results.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    val expected = Seq(
+      "Hello world,2,1,3,3,3,3,3,1970-01-01 00:00:00.005,1970-01-01 00:00:00.01",
+      "Hello world,2,1,3,3,3,3,3,1970-01-01 00:00:00.015,1970-01-01 00:00:00.02",
+      "Hello,2,2,2,2,2,2,4,1970-01-01 00:00:00.0,1970-01-01 00:00:00.005",
+      "Hi,2,1,1,1,1,1,1,1970-01-01 00:00:00.0,1970-01-01 00:00:00.005")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 

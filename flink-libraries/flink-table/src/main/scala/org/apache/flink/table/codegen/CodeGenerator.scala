@@ -956,6 +956,8 @@ class CodeGenerator(
       case ct: CompositeType[_] =>
         fieldExprs.zipWithIndex foreach {
           case (fieldExpr, i) if fieldExpr.resultType != ct.getTypeAt(i) =>
+            println(fieldExpr.resultType)
+            println(ct.getTypeAt(i))
             throw new CodeGenException("Incompatible types of expression and result type.")
           case _ => // ok
         }

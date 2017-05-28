@@ -124,7 +124,7 @@ trait CommonCorrelate {
     val generator = new CodeGenerator(
       config,
       false,
-      inputSchema.physicalTypeInfo,
+      inputSchema.logicalTypeInfo,
       Some(udtfTypeInfo),
       None,
       pojoFieldMapping)
@@ -133,8 +133,8 @@ trait CommonCorrelate {
 
     val crossResultExpr = generator.generateResultExpression(
       input1AccessExprs ++ input2AccessExprs,
-      returnSchema.physicalTypeInfo,
-      returnSchema.physicalFieldNames)
+      returnSchema.logicalTypeInfo,
+      returnSchema.logicalFieldNames)
 
     val collectorCode = if (condition.isEmpty) {
       s"""
