@@ -93,7 +93,8 @@ class DataStreamCalc(
     val inputDataStream =
       getInput.asInstanceOf[DataStreamRel].translateToPlan(tableEnv, queryConfig)
 
-    val generator = new CodeGenerator(config, false, inputSchema.logicalTypeInfo)
+    val generator = new CodeGenerator(config, false, inputSchema.physicalTypeInfo)
+//    val generator = new CodeGenerator(config, false, inputSchema.logicalTypeInfo)
 
     val genFunction = generateFunction(
       generator,
