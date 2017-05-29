@@ -231,6 +231,8 @@ case class StreamTableTestUtil() extends TableTestUtil {
     val relNode = resultTable.getRelNode
     val optimized = tEnv.optimize(relNode, updatesAsRetraction = false)
     val actual = RelOptUtil.toString(optimized)
+    println(expected.split("\n").map(_.trim).mkString("\n"))
+    println(actual.split("\n").map(_.trim).mkString("\n"))
     assertEquals(
       expected.split("\n").map(_.trim).mkString("\n"),
       actual.split("\n").map(_.trim).mkString("\n"))

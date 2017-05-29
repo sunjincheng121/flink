@@ -18,11 +18,36 @@
 package org.apache.flink.table.api.java.utils;
 
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.table.api.java.stream.utils.TPojo;
 import org.apache.flink.table.functions.AggregateFunction;
-
+import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.util.Iterator;
 
 public class UserDefinedAggFunctions {
+    public static class TestAcc1 extends Tuple2<TPojo, Integer>{}
+
+    public static class TestAgg1 extends AggregateFunction<TPojo, TestAcc1> {
+
+        @Override
+        public TestAcc1 createAccumulator() {
+            return new TestAcc1();
+        }
+
+        @Override
+        public TPojo getValue(TestAcc1 accumulator) {
+            return accumulator.getField(0);
+        }
+
+        //Overloaded accumulate method
+        public void accumulate(TestAcc1 accumulator, TPojo pojo,BigDecimal b, Timestamp iValue, int
+                iWeight) {
+            accumulator.setField(pojo, 0);
+            accumulator.setField(iWeight, 1);
+        }
+
+    }
+
     // Accumulator for test requiresOver
     public static class Accumulator0 extends Tuple2<Long, Integer>{}
 

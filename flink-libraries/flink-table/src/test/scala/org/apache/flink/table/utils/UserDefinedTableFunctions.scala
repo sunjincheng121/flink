@@ -18,7 +18,11 @@
 package org.apache.flink.table.utils
 
 import java.lang.Boolean
+import java.math.BigDecimal
+import java.sql.Timestamp
+import java.sql.Date
 
+import org.apache.calcite.avatica.util.DateTimeUtils
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
 import org.apache.flink.api.java.tuple.Tuple3
 import org.apache.flink.api.java.typeutils.RowTypeInfo
@@ -26,6 +30,7 @@ import org.apache.flink.table.api.ValidationException
 import org.apache.flink.table.functions.{FunctionContext, TableFunction}
 import org.apache.flink.types.Row
 import org.junit.Assert
+import org.apache.flink.table.api.java.stream.utils.TPojo
 
 import scala.annotation.varargs
 
@@ -35,11 +40,35 @@ case class SimpleUser(name: String, age: Int)
 class TableFunc0 extends TableFunction[SimpleUser] {
   // make sure input element's format is "<string>#<int>"
   def eval(user: String): Unit = {
+    println("========================="+user)
     if (user.contains("#")) {
       val splits = user.split("#")
       collect(SimpleUser(splits(0), splits(1).toInt))
+    }else{
+      collect(SimpleUser(user, 1))
     }
   }
+}
+
+class TableFuncPojo extends TableFunction[TPojo] {
+  def eval(pojo: TPojo): Unit = {
+    pojo.setId(pojo.getId+22000L)
+    collect(pojo)
+  }
+  // make sure input element's format is "<string>#<int>"
+  def eval(age: Long, name:String): Unit = {
+      collect(new TPojo(age,name))
+  }
+//  // make sure input element's format is "<string>#<int>"
+  def eval(age: BigDecimal, name:String): Unit = {
+      collect(new TPojo(1000L,name))
+  }
+  def eval(age: Int, name:String): Unit = {
+    collect(new TPojo(age.toLong,name))
+  }
+//  def eval(age: Date, name:String): Unit = {
+//      collect(new TPojo(org.apache.calcite.runtime.SqlFunctions.toInt(age).toLong,name))
+//  }
 }
 
 class TableFunc1 extends TableFunction[String] {

@@ -458,11 +458,19 @@ trait ImplicitExpressionOperations {
     */
   def over(alias: Expression) = {
     expr match {
-      case _: Aggregation => UnresolvedOverCall(
-        expr.asInstanceOf[Aggregation],
-        alias)
+      case _: Aggregation => UnresolvedOverCall(expr.asInstanceOf[Aggregation], alias)
+      case Literal(value, _) if value.isInstanceOf[String] =>
+        val valueExpr = ExpressionParser.parseExpression(value.asInstanceOf[String])
+        UnresolvedOverCall(valueExpr, alias)
+        valueExpr match {
+          case Call(_, _) => UnresolvedOverCall(valueExpr, alias)
+          case _ => throw new TableException(
+            "The over method can only using with aggregation expression " +
+            "or string expression with function call.")
+        }
       case _ => throw new TableException(
-        "The over method can only using with aggregation expression.")
+        "The over method can only using with aggregation expression " +
+        "or string expression with function call.")
     }
   }
 

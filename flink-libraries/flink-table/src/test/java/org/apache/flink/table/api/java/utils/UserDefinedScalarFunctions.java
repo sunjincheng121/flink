@@ -17,8 +17,12 @@
  */
 package org.apache.flink.table.api.java.utils;
 
-import java.util.Arrays;
+import org.apache.flink.table.api.java.stream.utils.TPojo;
 import org.apache.flink.table.functions.ScalarFunction;
+
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.sql.Timestamp;
 
 public class UserDefinedScalarFunctions {
 
@@ -57,6 +61,21 @@ public class UserDefinedScalarFunctions {
 	public static class JavaFunc4 extends ScalarFunction {
 		public String eval(Integer[] a, String[] b) {
 			return Arrays.toString(a) + " and " + Arrays.toString(b);
+		}
+	}
+
+	public static class JavaFunc5 extends ScalarFunction {
+		public Integer eval(Integer d) {
+			return d;
+		}
+		public BigDecimal eval(BigDecimal d) {
+			return d;
+		}
+		public TPojo eval(TPojo b) {
+			return b;
+		}
+		public Timestamp eval(Timestamp b) {
+			return b;
 		}
 	}
 

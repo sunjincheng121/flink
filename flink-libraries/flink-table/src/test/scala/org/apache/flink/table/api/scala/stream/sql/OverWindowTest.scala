@@ -35,7 +35,7 @@ class OverWindowTest extends TableTestBase {
     val sql = "SELECT " +
       "c, " +
       "count(a) OVER (PARTITION BY c ORDER BY proctime ROWS BETWEEN 2 preceding AND " +
-      "CURRENT ROW) as cnt1 " +
+      "CURRENT ROW) as cntSql " +
       "from MyTable"
 
     val expected =

@@ -47,15 +47,18 @@ class GroupWindowTest extends TableTestBase {
       .select(overAgg('long, 'int))
   }
 
-  @Test(expected = classOf[ValidationException])
+  @Test
   def testGroupByWithoutWindowAlias(): Unit = {
     val util = batchTestUtil()
-    val table = util.addTable[(Long, Int, String)]('long, 'int, 'string)
+    val table = util.addTable[(Long, Int, String)]('rowtime.rowtime, 'int, 'string)
 
     table
-      .window(Tumble over 5.milli on 'long as 'w)
-      .groupBy('string)
-      .select('string, 'int.count)
+    .window(Tumble over 2.millis on 'rowtime as 'w)
+    .groupBy('w)
+    .select('w.rowtime as 'rowtime, 'int.count as 'int)
+    .window(Tumble over 4.millis on 'rowtime as 'w2)
+    .groupBy('w2)
+    .select('w2.rowtime, 'w2.end, 'int.count)
   }
 
   @Test(expected = classOf[ValidationException])
