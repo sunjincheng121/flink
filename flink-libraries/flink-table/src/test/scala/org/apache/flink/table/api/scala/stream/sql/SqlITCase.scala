@@ -32,6 +32,29 @@ import org.junit._
 
 class SqlITCase extends StreamingWithStateTestBase {
 
+
+  @Test
+  def test(): Unit = {
+
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    StreamITCase.clear
+
+    val sqlQuery = "SELECT timestampAdd(MINUTE, 2, timestamp '2016-02-24 12:42:25') as a FROM " +
+      "MyTable "
+
+    val t = StreamTestData.getSmall3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
+    tEnv.registerTable("MyTable", t)
+
+    val result = tEnv.sql(sqlQuery).toAppendStream[Row]
+    result.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    for (data <- StreamITCase.testResults.sorted) {
+      println(data)
+    }
+  }
+
    /** test row stream registered table **/
   @Test
   def testRowRegister(): Unit = {

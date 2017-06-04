@@ -869,6 +869,14 @@ object localTimestamp {
   }
 }
 
+object timestampAdd {
+  def apply(
+      timestampInterval: Expression,
+      number: Expression,
+      timestamp: Expression): Expression = {
+    TimestampAdd(timestampInterval, number, timestamp)
+  }
+}
 /**
   * Determines whether two anchored time intervals overlap. Time point and temporal are
   * transformed into a range defined by two time points (start, end). The function

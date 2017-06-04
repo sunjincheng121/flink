@@ -246,7 +246,9 @@ object FunctionCatalog {
 
     // ordering
     "asc" -> classOf[Asc],
-    "desc" -> classOf[Desc]
+    "desc" -> classOf[Desc],
+
+    "timestampAdd" -> classOf[TimestampAdd]
   )
 
   /**
@@ -396,7 +398,9 @@ class BasicOperatorTable extends ReflectiveSqlOperatorTable {
     SqlStdOperatorTable.HOP_END,
     SqlStdOperatorTable.SESSION,
     SqlStdOperatorTable.SESSION_START,
-    SqlStdOperatorTable.SESSION_END
+    SqlStdOperatorTable.SESSION_END,
+
+    SqlStdOperatorTable.TIMESTAMP_ADD
   )
 
   builtInSqlOperators.foreach(register)

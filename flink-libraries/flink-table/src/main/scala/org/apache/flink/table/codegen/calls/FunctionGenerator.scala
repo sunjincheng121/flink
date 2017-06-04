@@ -458,6 +458,11 @@ object FunctionGenerator {
     Seq(),
     new CurrentTimePointCallGen(SqlTimeTypeInfo.TIMESTAMP, local = true))
 
+  addSqlFunction(
+    TIMESTAMP_ADD,
+    Seq(),
+    new TimestampAddCallGen())
+
   // ----------------------------------------------------------------------------------------------
 
   /**

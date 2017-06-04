@@ -24,13 +24,13 @@ import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.fun.SqlStdOperatorTable
 import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
-import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
+import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.calcite.FlinkRelBuilder
 import org.apache.flink.table.expressions.ExpressionUtils.{divide, getFactor, mod}
 import org.apache.flink.table.expressions.TimeIntervalUnit.TimeIntervalUnit
 import org.apache.flink.table.typeutils.TypeCheckUtils.isTimeInterval
 import org.apache.flink.table.typeutils.{TimeIntervalTypeInfo, TypeCheckUtils}
-import org.apache.flink.table.validate.{ValidationResult, ValidationFailure, ValidationSuccess}
+import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, ValidationSuccess}
 
 import scala.collection.JavaConversions._
 
@@ -250,6 +250,27 @@ case class CurrentTimestamp() extends CurrentTimePoint(SqlTimeTypeInfo.TIMESTAMP
 case class LocalTime() extends CurrentTimePoint(SqlTimeTypeInfo.TIME, local = true)
 
 case class LocalTimestamp() extends CurrentTimePoint(SqlTimeTypeInfo.TIMESTAMP, local = true)
+
+case class TimestampAdd(
+    timestampInterval: Expression,
+    number: Expression,
+    timestamp: Expression)
+  extends Expression with InputTypeSpec{
+
+  override private[flink] def children: Seq[Expression] =
+    timestampInterval :: number :: timestamp :: Nil
+
+  override private[flink] def resultType: TypeInformation[_] = BasicTypeInfo.STRING_TYPE_INFO
+
+  override private[flink] def expectedTypes: Seq[TypeInformation[_]] =
+   STRING_TYPE_INFO :: INT_TYPE_INFO :: STRING_TYPE_INFO :: Nil
+
+  override def toString: String = s"Add ${number} to ${timestampInterval} part of ${timestamp}."
+
+  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
+    relBuilder.call(SqlStdOperatorTable.TIMESTAMP_ADD, children.map(_.toRexNode))
+  }
+}
 
 /**
   * Extracts the quarter of a year from a SQL date.
