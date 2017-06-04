@@ -40,7 +40,7 @@ class SqlITCase extends StreamingWithStateTestBase {
     val tEnv = TableEnvironment.getTableEnvironment(env)
     StreamITCase.clear
 
-    val sqlQuery = "SELECT timestampAdd(MINUTE, 2, timestamp '2016-02-24 12:42:25') as a FROM " +
+    val sqlQuery = "SELECT timestampAdd(MINUTE, 4, timestamp '2016-02-24 12:42:25') as a FROM " +
       "MyTable "
 
     val t = StreamTestData.getSmall3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)

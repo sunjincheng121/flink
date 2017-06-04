@@ -1339,8 +1339,8 @@ class CodeGenerator(
 
     val operands = call.getOperands.map(_.accept(this))
     val resultType = FlinkTypeFactory.toTypeInfo(call.getType)
-
-    call.getOperator match {
+    val op = call.getOperator
+    op match {
       // arithmetic
       case PLUS if isNumeric(resultType) =>
         val left = operands.head
@@ -1374,6 +1374,13 @@ class CodeGenerator(
         val left = operands.head
         val right = operands(1)
         requireNumeric(left)
+        requireNumeric(right)
+        generateArithmeticOperator("*", nullCheck, resultType, left, right)
+
+      case MULTIPLY if isTimeInterval(resultType) =>
+        val left = operands.head
+        val right = operands(1)
+        requireTimeInterval(left)
         requireNumeric(right)
         generateArithmeticOperator("*", nullCheck, resultType, left, right)
 

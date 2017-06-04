@@ -1089,6 +1089,10 @@ object ScalarOperators {
         && !isDecimal(operandType) && !isDecimal(resultType)) {
       (operandTerm) => s"(($resultTypeTerm) $operandTerm)"
     }
+    // timesampAdd
+    else if (isTimeInterval(resultType)){
+      (operandTerm) => s"(($resultTypeTerm) $operandTerm)"
+    }
     else {
       throw new CodeGenException(s"Unsupported casting from $operandType to $resultType.")
     }
