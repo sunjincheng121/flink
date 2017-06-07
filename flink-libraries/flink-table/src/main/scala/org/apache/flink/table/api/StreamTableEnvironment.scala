@@ -436,7 +436,7 @@ abstract class StreamTableEnvironment(
                 case e: Tuple => e.getField(rowtime.get._1).asInstanceOf[Long]
                 case e: Record => e.getField(rowtime.get._1, classOf[LongValue]).getValue
                 case _ =>
-                  throw TableException("xxxxxxxxxxxxxxxx")
+                  throw TableException("xxxxxxxxxxxxxxxxaa")
               }
             }
           })
