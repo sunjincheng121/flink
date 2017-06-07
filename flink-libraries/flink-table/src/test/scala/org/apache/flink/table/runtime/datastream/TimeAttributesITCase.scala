@@ -26,6 +26,7 @@ import org.apache.flink.streaming.api.functions.AssignerWithPunctuatedWatermarks
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.util.StreamingMultipleProgramsTestBase
+import org.apache.flink.table.api.java.utils.Pojos.AtomicTypePojo
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.scala.stream.utils.StreamITCase
 import org.apache.flink.table.api.{TableEnvironment, TableException, Types, ValidationException}
@@ -33,6 +34,7 @@ import org.apache.flink.table.calcite.RelTimeIndicatorConverterTest.TableFunc
 import org.apache.flink.table.expressions.TimeIntervalUnit
 import org.apache.flink.table.runtime.datastream.TimeAttributesITCase.TimestampWithEqualWatermark
 import org.apache.flink.types.Row
+import org.apache.flink.api.java.tuple.Tuple3
 import org.junit.Assert._
 import org.junit.Test
 
@@ -84,6 +86,62 @@ class TimeAttributesITCase extends StreamingMultipleProgramsTestBase {
       .window(Tumble over 2.millis on 'rowtime as 'w)
       .groupBy('w)
       .select('w.end.rowtime, 'int.count as 'int) // no rowtime on non-window reference
+  }
+
+  @Test
+  def testDefaultTimestampAssignerWithSingleFieldPojo(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+    val p1 = new AtomicTypePojo
+    p1.setScore(1L)
+    val p2 = new AtomicTypePojo
+    p2.setScore(2L)
+    val p3 = new AtomicTypePojo
+    p3.setScore(3L)
+    val stream = env.fromCollection(Seq(p1, p2, p3))
+    val table = stream.toTable(tEnv, 'score.rowtime, 'proctime.proctime)
+    val t = table.select('score.cast(Types.STRING))
+
+    val results = t.toAppendStream[Row]
+    results.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    for(data <- StreamITCase.testResults.sorted){
+      println(data)
+    }
+
+    val expected = Seq(
+      "1970-01-01 00:00:00.001",
+      "1970-01-01 00:00:00.002",
+      "1970-01-01 00:00:00.003"
+    )
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testDefaultTimestampAssignerWithJavaTuple(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
+    val tEnv = TableEnvironment.getTableEnvironment(env)
+
+    val stream = env.fromCollection(Seq(new Tuple3(1L, 1, "Ha"), new Tuple3(2L, 2, "Ha2")))
+    val table = stream.toTable(tEnv, 'long.rowtime, 'int, 'string, 'proctime.proctime)
+    val t = table.select('long.cast(Types.STRING), 'string)
+
+    val results = t.toAppendStream[Row]
+    results.addSink(new StreamITCase.StringSink)
+    env.execute()
+
+    for(data <- StreamITCase.testResults.sorted){
+      println(data)
+    }
+
+    val expected = Seq(
+      "1970-01-01 00:00:00.001,Ha",
+      "1970-01-01 00:00:00.002,Ha2"
+    )
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 
   @Test(expected = classOf[TableException])

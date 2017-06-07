@@ -33,7 +33,7 @@ import org.apache.flink.api.common.functions.MapFunction
 import org.apache.flink.api.common.typeinfo.{AtomicType, TypeInformation}
 import org.apache.flink.api.common.typeutils.CompositeType
 import org.apache.flink.api.java.tuple.{Tuple, Tuple2 => JTuple2}
-import org.apache.flink.api.java.typeutils.TupleTypeInfo
+import org.apache.flink.api.java.typeutils.{PojoTypeInfo, TupleTypeInfo, TypeExtractor}
 import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
 import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.streaming.api.datastream.DataStream
@@ -53,7 +53,8 @@ import org.apache.flink.table.sinks.{AppendStreamTableSink, RetractStreamTableSi
 import org.apache.flink.table.sources.{DefinedRowtimeAttribute, StreamTableSource, TableSource}
 import org.apache.flink.table.typeutils.TypeCheckUtils
 import org.apache.flink.types.{LongValue, Record, Row}
-import org.apache.flink.streaming.api.datastream.{DataStreamSource,SingleOutputStreamOperator}
+import org.apache.flink.streaming.api.datastream.{DataStreamSource, SingleOutputStreamOperator}
+
 import _root_.scala.collection.JavaConverters._
 
 /**
@@ -414,7 +415,8 @@ abstract class StreamTableEnvironment(
       if (dataStream.isInstanceOf[DataStreamSource[_]] && !needDefaultTimestampAssigner) {
         throw new TableException(
           "[.rowtime] on virtual column must call [assignTimestampsAndWatermarks] method.")
-      } else if (!dataStream.isInstanceOf[DataStreamSource[_]] && needDefaultTimestampAssigner) {
+      } else if (dataStream.isInstanceOf[SingleOutputStreamOperator[_]] &&
+        !dataStream.isInstanceOf[DataStreamSource[_]] && needDefaultTimestampAssigner) {
         throw new TableException(
           "[.rowtime] on already existing column must must not call " +
             "[assignTimestampsAndWatermarks] method.")
@@ -427,6 +429,8 @@ abstract class StreamTableEnvironment(
                 lastElement: T, extractedTimestamp: Long): Watermark = {
               new Watermark(extractedTimestamp)
             }
+
+
             override def extractTimestamp(
                 element: T,
                 previousElementTimestamp: Long): Long = {
@@ -435,8 +439,17 @@ abstract class StreamTableEnvironment(
                 case e: Row => e.getField(rowtime.get._1).asInstanceOf[Long]
                 case e: Tuple => e.getField(rowtime.get._1).asInstanceOf[Long]
                 case e: Record => e.getField(rowtime.get._1, classOf[LongValue]).getValue
-                case _ =>
-                  throw TableException("xxxxxxxxxxxxxxxxaa")
+                case e =>
+                  val typeInfo = TypeExtractor.createTypeInfo(element.getClass)
+                  if (typeInfo.isInstanceOf[PojoTypeInfo[_]]) {
+                    val getMethodName =
+                      "get".concat(rowtime.get._2.substring(0,1).toUpperCase())
+                      .concat(rowtime.get._2.substring(1))
+                    element.getClass.getMethod(getMethodName).invoke(e).asInstanceOf[Long]
+                  } else {
+                    throw new TableException(
+                      s"Source of type ${typeInfo} cannot be converted into Table.")
+                  }
               }
             }
           })
