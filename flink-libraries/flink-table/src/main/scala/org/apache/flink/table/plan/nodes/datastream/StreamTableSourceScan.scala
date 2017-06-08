@@ -21,15 +21,22 @@ package org.apache.flink.table.plan.nodes.datastream
 import org.apache.calcite.plan._
 import org.apache.calcite.rel.RelNode
 import org.apache.calcite.rel.metadata.RelMetadataQuery
-import org.apache.flink.streaming.api.datastream.DataStream
-import org.apache.flink.table.api.{StreamQueryConfig, StreamTableEnvironment, TableEnvironment}
+import org.apache.flink.api.java.tuple.Tuple
+import org.apache.flink.api.java.typeutils.{PojoTypeInfo, TypeExtractor}
+import org.apache.flink.streaming.api.TimeCharacteristic
+import org.apache.flink.streaming.api.datastream.{DataStream, DataStreamSource, SingleOutputStreamOperator}
+import org.apache.flink.streaming.api.functions.AssignerWithPunctuatedWatermarks
+import org.apache.flink.streaming.api.watermark.Watermark
+import org.apache.flink.table.api.{StreamQueryConfig, StreamTableEnvironment, TableEnvironment, TableException}
 import org.apache.flink.table.calcite.FlinkTypeFactory
+import org.apache.flink.table.expressions.ExpressionParser
 import org.apache.flink.table.plan.nodes.PhysicalTableSourceScan
 import org.apache.flink.table.plan.schema.RowSchema
 import org.apache.flink.table.sources._
 import org.apache.flink.table.plan.schema.TableSourceTable
 import org.apache.flink.table.runtime.types.CRow
 import org.apache.flink.table.sources.{StreamTableSource, TableSource}
+import org.apache.flink.types.{LongValue, Record, Row}
 
 /** Flink RelNode to read data from an external source defined by a [[StreamTableSource]]. */
 class StreamTableSourceScan(
@@ -104,6 +111,73 @@ class StreamTableSourceScan(
 
     val config = tableEnv.getConfig
     val inputDataStream = tableSource.getDataStream(tableEnv.execEnv).asInstanceOf[DataStream[Any]]
+
+//    val streamType = inputDataStream.getType
+//    val fieldNames = tableEnv.getFieldInfo(streamType)._1.map(ExpressionParser.parseExpression)
+//
+//    // validate and extract time attributes
+//    val (rowtime, proctime, needDefaultTimestampAssigner): (Option[(Int, String)], Option[(Int,
+//      String)], Boolean)=
+//      tableEnv.validateAndExtractTimeAttributes(streamType, fieldNames)
+//
+//    // check if event-time is enabled
+//    if (rowtime.isDefined && tableEnv.execEnv.getStreamTimeCharacteristic != TimeCharacteristic
+//                                                                             .EventTime) {
+//      throw TableException(
+//        s"A rowtime attribute requires an EventTime time characteristic in stream environment. " +
+//          s"But is: ${tableEnv.execEnv.getStreamTimeCharacteristic}")
+//    }
+//
+//    if (rowtime.isDefined) {
+//      if (inputDataStream.isInstanceOf[DataStreamSource[_]] && !needDefaultTimestampAssigner) {
+//        throw new TableException(
+//          "[.rowtime] on virtual column must call [assignTimestampsAndWatermarks] method.")
+//      } else if (inputDataStream.isInstanceOf[SingleOutputStreamOperator[_]] &&
+//        !inputDataStream.isInstanceOf[DataStreamSource[_]] && needDefaultTimestampAssigner) {
+//        throw new TableException(
+//          "[.rowtime] on already existing column must must not call " +
+//            "[assignTimestampsAndWatermarks] method.")
+//      }
+//
+//      if (needDefaultTimestampAssigner) {
+//        val streamOperator = inputDataStream.assignTimestampsAndWatermarks(
+//          new AssignerWithPunctuatedWatermarks[Any] {
+//            override def checkAndGetNextWatermark(
+//                lastElement: Any, extractedTimestamp: Long): Watermark = {
+//              new Watermark(extractedTimestamp)
+//            }
+//
+//
+//            override def extractTimestamp(
+//                element: Any,
+//                previousElementTimestamp: Long): Long = {
+//              element match {
+//                case e: Product => e.productElement(rowtime.get._1).asInstanceOf[Long]
+//                case e: Row => e.getField(rowtime.get._1).asInstanceOf[Long]
+//                case e: Tuple => e.getField(rowtime.get._1).asInstanceOf[Long]
+//                case e: Record => e.getField(rowtime.get._1, classOf[LongValue]).getValue
+//                case e =>
+//                  val typeInfo = TypeExtractor.createTypeInfo(element.getClass)
+//                  if (typeInfo.isInstanceOf[PojoTypeInfo[_]]) {
+//                    val getMethodName =
+//                      "get".concat(rowtime.get._2.substring(0, 1).toUpperCase())
+//                      .concat(rowtime.get._2.substring(1))
+//                    element.getClass.getMethod(getMethodName).invoke(e).asInstanceOf[Long]
+//                  } else {
+//                    throw new TableException(
+//                      s"Source of type ${typeInfo} cannot be converted into Table.")
+//                  }
+//              }
+//            }
+//          })
+//        return convertToInternalRow(
+//          new RowSchema(getRowType),
+//          streamOperator,
+//          new TableSourceTable(tableSource),
+//          config)
+//      }
+//    }
+
     convertToInternalRow(
       new RowSchema(getRowType),
       inputDataStream,

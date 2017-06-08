@@ -398,7 +398,7 @@ abstract class StreamTableEnvironment(
     val (fieldNames, fieldIndexes) = getFieldInfo[T](streamType, fields)
 
     // validate and extract time attributes
-    val (rowtime, proctime) = validateAndExtractTimeAttributes(streamType, fields)
+    val (rowtime, proctime, _) = validateAndExtractTimeAttributes(streamType, fields)
 
     // check if event-time is enabled
     if (rowtime.isDefined && execEnv.getStreamTimeCharacteristic != TimeCharacteristic.EventTime) {
@@ -423,10 +423,10 @@ abstract class StreamTableEnvironment(
     *
     * @return rowtime attribute and proctime attribute
     */
-  private def validateAndExtractTimeAttributes(
+  private[flink] def validateAndExtractTimeAttributes(
     streamType: TypeInformation[_],
     exprs: Array[Expression])
-  : (Option[(Int, String)], Option[(Int, String)]) = {
+  : (Option[(Int, String)], Option[(Int, String)], Boolean) = {
 
     val fieldTypes: Array[TypeInformation[_]] = streamType match {
       case c: CompositeType[_] => (0 until c.getArity).map(i => c.getTypeAt(i)).toArray
@@ -482,7 +482,13 @@ abstract class StreamTableEnvironment(
         "The proctime attribute may not have the same name as an another field.")
     }
 
-    (rowtime, proctime)
+    val needDefaultTimestampAssigner = if (proctime.isDefined) {
+      rowtime.isDefined && exprs.length == (fieldTypes.length + 1)
+    } else {
+      rowtime.isDefined && exprs.length == fieldTypes.length
+    }
+
+    (rowtime, proctime, needDefaultTimestampAssigner)
   }
 
   /**
