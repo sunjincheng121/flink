@@ -29,7 +29,7 @@ import org.apache.calcite.tools.RuleSet
 import org.apache.flink.api.common.functions.MapFunction
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.io.DiscardingOutputFormat
-import org.apache.flink.api.java.typeutils.GenericTypeInfo
+import org.apache.flink.api.java.typeutils.{GenericTypeInfo, RowTypeInfo}
 import org.apache.flink.api.java.{DataSet, ExecutionEnvironment}
 import org.apache.flink.table.explain.PlanJsonParser
 import org.apache.flink.table.expressions.{Expression, TimeAttribute}
@@ -41,6 +41,8 @@ import org.apache.flink.table.runtime.MapRunner
 import org.apache.flink.table.sinks.{BatchTableSink, TableSink}
 import org.apache.flink.table.sources.{BatchTableSource, TableSource}
 import org.apache.flink.types.Row
+
+import _root_.scala.collection.JavaConverters._
 
 /**
   * The abstract base class for batch TableEnvironments.
@@ -144,14 +146,14 @@ abstract class BatchTableEnvironment(
     * Creates a final converter that maps the internal row type to external type.
     *
     * @param physicalTypeInfo the input of the sink
-    * @param schema the input schema with correct field names (esp. for POJO field mapping)
+    * @param fieldNames the input field names (esp. for POJO field mapping)
     * @param requestedTypeInfo the output type of the sink
     * @param functionName name of the map function. Must not be unique but has to be a
     *                     valid Java class identifier.
     */
   protected def getConversionMapper[IN, OUT](
       physicalTypeInfo: TypeInformation[IN],
-      schema: RowSchema,
+      fieldNames: Seq[String],
       requestedTypeInfo: TypeInformation[OUT],
       functionName: String):
     Option[MapFunction[IN, OUT]] = {
@@ -163,8 +165,8 @@ abstract class BatchTableEnvironment(
       // some type that is neither Row or CRow
 
       val converterFunction = generateRowConverterFunction[OUT](
-        physicalTypeInfo.asInstanceOf[TypeInformation[Row]],
-        schema,
+        physicalTypeInfo.asInstanceOf[RowTypeInfo],
+        fieldNames,
         requestedTypeInfo,
         functionName
       )
@@ -347,7 +349,7 @@ abstract class BatchTableEnvironment(
         val conversion =
           getConversionMapper(
             plan.getType,
-            new RowSchema(logicalType),
+            logicalType.getFieldNames.asScala,
             tpe,
             "DataSetSinkConversion")
         conversion match {

@@ -38,13 +38,13 @@ import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
 import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.streaming.api.datastream.DataStream
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
-import org.apache.flink.table.calcite.RelTimeIndicatorConverter
+import org.apache.flink.table.calcite.{FlinkTypeFactory, RelTimeIndicatorConverter}
 import org.apache.flink.table.explain.PlanJsonParser
 import org.apache.flink.table.expressions.{Expression, ProctimeAttribute, RowtimeAttribute, UnresolvedFieldReference}
 import org.apache.flink.table.plan.nodes.FlinkConventions
 import org.apache.flink.table.plan.nodes.datastream.{DataStreamRel, UpdateAsRetractionTrait, _}
 import org.apache.flink.table.plan.rules.FlinkRuleSets
-import org.apache.flink.table.plan.schema.{DataStreamTable, RowSchema, StreamTableSourceTable}
+import org.apache.flink.table.plan.schema.{DataStreamTable, StreamTableSourceTable}
 import org.apache.flink.table.runtime.types.{CRow, CRowTypeInfo}
 import org.apache.flink.table.runtime.{CRowInputJavaTupleOutputMapRunner, CRowInputMapRunner, CRowInputScalaTupleOutputMapRunner}
 import org.apache.flink.table.sinks.{AppendStreamTableSink, RetractStreamTableSink, TableSink, UpsertStreamTableSink}
@@ -225,14 +225,14 @@ abstract class StreamTableEnvironment(
     * Creates a final converter that maps the internal row type to external type.
     *
     * @param physicalTypeInfo the input of the sink
-    * @param schema the input schema with correct field names (esp. for POJO field mapping)
+    * @param fieldNames the input field names (esp. for POJO field mapping)
     * @param requestedTypeInfo the output type of the sink
     * @param functionName name of the map function. Must not be unique but has to be a
     *                     valid Java class identifier.
     */
   protected def getConversionMapper[IN, OUT](
       physicalTypeInfo: TypeInformation[IN],
-      schema: RowSchema,
+      fieldNames: Seq[String],
       requestedTypeInfo: TypeInformation[OUT],
       functionName: String):
     MapFunction[IN, OUT] = {
@@ -246,7 +246,7 @@ abstract class StreamTableEnvironment(
       // Some type that is neither CRow nor Row
       val converterFunction = generateRowConverterFunction[OUT](
         physicalTypeInfo.asInstanceOf[CRowTypeInfo].rowType,
-        schema,
+        fieldNames,
         requestedTypeInfo,
         functionName
       )
@@ -278,14 +278,14 @@ abstract class StreamTableEnvironment(
     * Creates a converter that maps the internal CRow type to Scala or Java Tuple2 with change flag.
     *
     * @param physicalTypeInfo the input of the sink
-    * @param schema the input schema with correct field names (esp. for POJO field mapping)
+    * @param fieldNames the input field names (esp. for POJO field mapping)
     * @param requestedTypeInfo the output type of the sink.
     * @param functionName name of the map function. Must not be unique but has to be a
     *                     valid Java class identifier.
     */
   private def getConversionMapperWithChanges[OUT](
     physicalTypeInfo: TypeInformation[CRow],
-    schema: RowSchema,
+    fieldNames: Seq[String],
     requestedTypeInfo: TypeInformation[OUT],
     functionName: String):
   MapFunction[CRow, OUT] = {
@@ -308,7 +308,7 @@ abstract class StreamTableEnvironment(
           // Use a map function to convert Row into requested type and wrap result in Tuple2
           val converterFunction = generateRowConverterFunction(
             physicalTypeInfo.asInstanceOf[CRowTypeInfo].rowType,
-            schema,
+            fieldNames,
             reqType,
             functionName
           )
@@ -340,7 +340,7 @@ abstract class StreamTableEnvironment(
           // Use a map function to convert Row into requested type and wrap result in Tuple2
           val converterFunction = generateRowConverterFunction(
             physicalTypeInfo.asInstanceOf[CRowTypeInfo].rowType,
-            schema,
+            fieldNames,
             reqType,
             functionName
           )
@@ -580,6 +580,14 @@ abstract class StreamTableEnvironment(
       physicalPlan
     }
 
+    // we do that here to make sure that plan optimized correct
+    decoratedPlan.getRowType.getFieldList.asScala.foreach { field =>
+      if (FlinkTypeFactory.isTimeIndicatorType(field.getType)) {
+        throw new TableException(
+          s"$field type is TimeIndicatorRelDataType, It should be optimized to TIMESTAMP type.")
+      }
+    }
+
     decoratedPlan
   }
 
@@ -636,17 +644,19 @@ abstract class StreamTableEnvironment(
     // get CRow plan
     val plan: DataStream[CRow] = translateToCRow(logicalPlan, queryConfig)
 
+    val fieldNames = logicalType.getFieldNames.asScala
+
     // convert CRow to output type
     val conversion = if (withChangeFlag) {
       getConversionMapperWithChanges(
         plan.getType,
-        new RowSchema(logicalType),
+        fieldNames,
         tpe,
         "DataStreamSinkConversion")
     } else {
       getConversionMapper(
         plan.getType,
-        new RowSchema(logicalType),
+        fieldNames,
         tpe,
         "DataStreamSinkConversion")
     }

@@ -38,7 +38,7 @@ import org.apache.calcite.tools._
 import org.apache.flink.api.common.functions.MapFunction
 import org.apache.flink.api.common.typeinfo.{AtomicType, TypeInformation}
 import org.apache.flink.api.common.typeutils.CompositeType
-import org.apache.flink.api.java.typeutils._
+import org.apache.flink.api.java.typeutils.{RowTypeInfo, _}
 import org.apache.flink.api.java.{ExecutionEnvironment => JavaBatchExecEnv}
 import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
 import org.apache.flink.api.scala.{ExecutionEnvironment => ScalaBatchExecEnv}
@@ -49,25 +49,21 @@ import org.apache.flink.table.api.scala.{BatchTableEnvironment => ScalaBatchTabl
 import org.apache.flink.table.calcite.{FlinkPlannerImpl, FlinkRelBuilder, FlinkTypeFactory, FlinkTypeSystem}
 import org.apache.flink.table.catalog.{ExternalCatalog, ExternalCatalogSchema}
 import org.apache.flink.table.codegen.{CodeGenerator, ExpressionReducer, GeneratedFunction}
-import org.apache.flink.table.expressions.{Alias, Expression, UnresolvedFieldReference}
-import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
-import org.apache.flink.table.functions.AggregateFunction
-import org.apache.flink.table.expressions._
-import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils.{checkForInstantiation, checkNotSingleton, createScalarSqlFunction, createTableSqlFunctions}
-import org.apache.flink.table.functions.{ScalarFunction, TableFunction}
+import org.apache.flink.table.expressions.{Alias, Expression, UnresolvedFieldReference, _}
+import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils.{checkForInstantiation, checkNotSingleton, createScalarSqlFunction, createTableSqlFunctions, _}
+import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
 import org.apache.flink.table.plan.cost.DataSetCostFactory
 import org.apache.flink.table.plan.logical.{CatalogNode, LogicalRelNode}
 import org.apache.flink.table.plan.rules.FlinkRuleSets
-import org.apache.flink.table.plan.schema.{RelTable, RowSchema}
+import org.apache.flink.table.plan.schema.RelTable
 import org.apache.flink.table.sinks.TableSink
 import org.apache.flink.table.sources.{DefinedFieldNames, TableSource}
 import org.apache.flink.table.validate.FunctionCatalog
 import org.apache.flink.types.Row
-import org.apache.flink.api.java.typeutils.RowTypeInfo
 
+import _root_.scala.annotation.varargs
 import _root_.scala.collection.JavaConverters._
 import _root_.scala.collection.mutable.HashMap
-import _root_.scala.annotation.varargs
 
 /**
   * The abstract base class for batch and stream TableEnvironments.
@@ -709,21 +705,13 @@ abstract class TableEnvironment(val config: TableConfig) {
   }
 
   protected def generateRowConverterFunction[OUT](
-      inputTypeInfo: TypeInformation[Row],
-      schema: RowSchema,
+      inputTypeInfo: RowTypeInfo,
+      fieldNames: Seq[String],
       requestedTypeInfo: TypeInformation[OUT],
       functionName: String):
     GeneratedFunction[MapFunction[Row, OUT], OUT] = {
 
-    // validate that at least the field types of physical and logical type match
-    // we do that here to make sure that plan translation was correct
-    if (schema.physicalTypeInfo != inputTypeInfo) {
-      throw TableException("The field types of physical and logical row types do not match." +
-        "This is a bug and should not happen. Please file an issue.")
-    }
-
-    val fieldTypes = schema.physicalFieldTypeInfo
-    val fieldNames = schema.physicalFieldNames
+    val fieldTypes = inputTypeInfo.getFieldTypes
 
     // validate requested type
     if (requestedTypeInfo.getArity != fieldTypes.length) {
