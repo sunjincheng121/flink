@@ -243,6 +243,7 @@ abstract class StreamTableEnvironment(
         override def map(value: CRow): Row = value.row
       }.asInstanceOf[MapFunction[IN, OUT]]
     } else {
+
       // Some type that is neither CRow nor Row
       val converterFunction = generateRowConverterFunction[OUT](
         physicalTypeInfo.asInstanceOf[CRowTypeInfo].rowType,
@@ -650,6 +651,9 @@ abstract class StreamTableEnvironment(
         tpe,
         "DataStreamSinkConversion")
     } else {
+      println("StreamTableEnvironment=> translate plan.getType["+plan
+                                                                 .getType+"]  " +
+                "logicalType["+logicalType+"]")
       getConversionMapper(
         plan.getType,
         new RowSchema(logicalType),

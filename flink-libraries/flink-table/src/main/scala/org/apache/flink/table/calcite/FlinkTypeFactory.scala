@@ -52,6 +52,11 @@ class FlinkTypeFactory(typeSystem: RelDataTypeSystem) extends JavaTypeFactoryImp
   private val seenTypes = mutable.HashMap[TypeInformation[_], RelDataType]()
 
   def createTypeFromTypeInfo(typeInfo: TypeInformation[_]): RelDataType = {
+    createTypeFromTypeInfo(typeInfo, false)
+  }
+
+  def createTypeFromTypeInfo(
+      typeInfo: TypeInformation[_], isTimeIndicator: Boolean): RelDataType = {
     // simple type can be converted to SQL types and vice versa
     if (isSimple(typeInfo)) {
       val sqlType = typeInfoToSqlTypeName(typeInfo)
@@ -65,8 +70,9 @@ class FlinkTypeFactory(typeSystem: RelDataTypeSystem) extends JavaTypeFactoryImp
           createSqlIntervalType(
             new SqlIntervalQualifier(TimeUnit.DAY, TimeUnit.SECOND, SqlParserPos.ZERO))
 
-        case TIMESTAMP if typeInfo.isInstanceOf[TimeIndicatorTypeInfo] =>
+        case TIMESTAMP if (typeInfo.isInstanceOf[TimeIndicatorTypeInfo] && isTimeIndicator)  =>
           if (typeInfo.asInstanceOf[TimeIndicatorTypeInfo].isEventTime) {
+            println("**************createTypeFromTypeInfo")
             createRowtimeIndicatorType()
           } else {
             createProctimeIndicatorType()
@@ -87,7 +93,7 @@ class FlinkTypeFactory(typeSystem: RelDataTypeSystem) extends JavaTypeFactoryImp
     * Creates a indicator type for processing-time, but with similar properties as SQL timestamp.
     */
   def createProctimeIndicatorType(): RelDataType = {
-    val originalType = createTypeFromTypeInfo(SqlTimeTypeInfo.TIMESTAMP)
+    val originalType = createTypeFromTypeInfo(SqlTimeTypeInfo.TIMESTAMP, true)
     canonize(
       new TimeIndicatorRelDataType(
         getTypeSystem,
@@ -100,7 +106,7 @@ class FlinkTypeFactory(typeSystem: RelDataTypeSystem) extends JavaTypeFactoryImp
     * Creates a indicator type for event-time, but with similar properties as SQL timestamp.
     */
   def createRowtimeIndicatorType(): RelDataType = {
-    val originalType = createTypeFromTypeInfo(SqlTimeTypeInfo.TIMESTAMP)
+    val originalType = createTypeFromTypeInfo(SqlTimeTypeInfo.TIMESTAMP,true)
     canonize(
       new TimeIndicatorRelDataType(
         getTypeSystem,
@@ -143,6 +149,7 @@ class FlinkTypeFactory(typeSystem: RelDataTypeSystem) extends JavaTypeFactoryImp
     var addedTimeAttributes = 0
     for (i <- 0 until totalNumberOfFields) {
       if (rowtime.isDefined && rowtime.get._1 == i) {
+        println("buildLogicalRowType==>["+rowtime.get._2+"==>"+ createRowtimeIndicatorType())
         logicalRowTypeBuilder.add(rowtime.get._2, createRowtimeIndicatorType())
         addedTimeAttributes += 1
       } else if (proctime.isDefined && proctime.get._1 == i) {
@@ -297,6 +304,7 @@ object FlinkTypeFactory {
     // time indicators
     case TIMESTAMP if relDataType.isInstanceOf[TimeIndicatorRelDataType] =>
       val indicator = relDataType.asInstanceOf[TimeIndicatorRelDataType]
+      println("TimeIndicatorTypeInfo.ROWTIME_INDICATOR..................")
       if (indicator.isEventTime) {
         TimeIndicatorTypeInfo.ROWTIME_INDICATOR
       } else {

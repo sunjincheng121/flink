@@ -37,6 +37,12 @@ object Func0 extends ScalarFunction {
   }
 }
 
+class Func100 extends ScalarFunction {
+  def eval(index: Timestamp): Long = {
+    index.getTime
+  }
+}
+
 object Func1 extends ScalarFunction {
   def eval(index: Integer): Integer = {
     index + 1

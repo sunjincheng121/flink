@@ -5,16 +5,13 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.table.sources.DefinedRowtimeAttribute;
 import org.apache.flink.table.sources.StreamTableSource;
 import org.apache.flink.types.Row;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 
-public class SongEventTableSource implements StreamTableSource<Row>, DefinedRowtimeAttribute {
+public class NewSongEventTableSource implements StreamTableSource<Row>, DefinedRowtimeAttribute {
 
     @Override
     public DataStream<Row> getDataStream(StreamExecutionEnvironment env) {
@@ -64,7 +61,6 @@ public class SongEventTableSource implements StreamTableSource<Row>, DefinedRowt
                 Types.STRING, Types.LONG, Types.STRING, Types.LONG, Types.STRING
         );
     }
-
     @Override
     public String explainSource() {
         return "SongEventTable";
@@ -76,97 +72,4 @@ public class SongEventTableSource implements StreamTableSource<Row>, DefinedRowt
     }
 }
 
-class MySourceFunction implements SourceFunction<SongEvent> {
-    private ArrayList<SongEvent> datas;
-
-    public MySourceFunction(ArrayList<SongEvent> datas) {
-        this.datas = datas;
-    }
-
-    @Override
-    public void run(SourceContext<SongEvent> ctx) throws Exception {
-        for (SongEvent songEvent : datas) {
-
-            if (songEvent.getType() == SongEventType.PLAY) {
-                ctx.emitWatermark(new Watermark(songEvent.getTimestamp()));
-            }
-            ctx.collectWithTimestamp(songEvent, songEvent.getTimestamp());
-        }
-    }
-
-    @Override
-    public void cancel() {
-
-    }
-}
-
-class Song implements Serializable {
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    private String name;
-    private Long length;
-    private String author;
-
-    public Long getLength() {
-        return length;
-    }
-
-    public void setLength(Long length) {
-        this.length = length;
-    }
-
-    public String getAuthor() {
-        return author;
-    }
-
-    public void setAuthor(String author) {
-        this.author = author;
-    }
-}
-
-class SongEvent implements Serializable{
-    private Song song;
-    private Long userId;
-    private Long timestamp;
-
-    public Long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(Long timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    public Song getSong() {
-        return song;
-    }
-
-    public void setSong(Song song) {
-        this.song = song;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public SongEventType getType() {
-        return type;
-    }
-
-    public void setType(SongEventType type) {
-        this.type = type;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
-
-    private SongEventType type;
-}
 

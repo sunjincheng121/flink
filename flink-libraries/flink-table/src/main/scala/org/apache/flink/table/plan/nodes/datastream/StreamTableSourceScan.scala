@@ -48,6 +48,7 @@ class StreamTableSourceScan(
   with StreamScan {
 
   override def deriveRowType() = {
+
     val flinkTypeFactory = cluster.getTypeFactory.asInstanceOf[FlinkTypeFactory]
 
     val fieldNames = TableEnvironment.getFieldNames(tableSource).toList
@@ -58,6 +59,7 @@ class StreamTableSourceScan(
     val rowtime = tableSource match {
       case timeSource: DefinedRowtimeAttribute if timeSource.getRowtimeAttribute != null =>
         val rowtimeAttribute = timeSource.getRowtimeAttribute
+        println("StreamTableSourceScan=>>>>>deriveRowType["+Some((fieldCnt, rowtimeAttribute))+"]")
         Some((fieldCnt, rowtimeAttribute))
       case _ =>
         None
@@ -71,11 +73,13 @@ class StreamTableSourceScan(
         None
     }
 
-    flinkTypeFactory.buildLogicalRowType(
+    val aaa = flinkTypeFactory.buildLogicalRowType(
       fieldNames,
       fieldTypes,
       rowtime,
       proctime)
+    println("[StreamTableSourceScan]=============================================>>["+aaa+"]")
+    aaa
   }
 
   override def computeSelfCost (planner: RelOptPlanner, metadata: RelMetadataQuery): RelOptCost = {

@@ -69,11 +69,13 @@ class FlinkLogicalTableSourceScan(
         None
     }
 
-    flinkTypeFactory.buildLogicalRowType(
+    val ccc = flinkTypeFactory.buildLogicalRowType(
       fieldNames,
       fieldTypes,
       rowtime,
       proctime)
+    println("[FlinkLogicalTableSourceScan]====================================>["+ccc+"]")
+    ccc
   }
 
   override def computeSelfCost(planner: RelOptPlanner, metadata: RelMetadataQuery): RelOptCost = {

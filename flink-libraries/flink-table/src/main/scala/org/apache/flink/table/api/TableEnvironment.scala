@@ -717,17 +717,28 @@ abstract class TableEnvironment(val config: TableConfig) {
 
     // validate that at least the field types of physical and logical type match
     // we do that here to make sure that plan translation was correct
-    if (schema.physicalTypeInfo != inputTypeInfo) {
-      throw TableException("The field types of physical and logical row types do not match." +
-        "This is a bug and should not happen. Please file an issue.")
+    val vv = schema.physicalTypeInfo
+    println("physicalTypeInfo=============>"+ vv)
+    println("logicalRowType=============>"+ schema.logicalRowType)
+    println("inputTypeInfo=============>"+ inputTypeInfo)
+
+    // validate that at least the field types of physical and logical type match
+    // we do that here to make sure that plan translation was correct
+    if (schema.logicalTypeInfo != inputTypeInfo) {
+      throw TableException(
+        s"The field types of physical and logical row types do not match. " +
+          s"Physical type is [${schema.physicalTypeInfo}], Logical type is [${inputTypeInfo}]. " +
+          s"This is a bug and should not happen. Please file an issue.")
     }
 
-    val fieldTypes = schema.physicalFieldTypeInfo
-    val fieldNames = schema.physicalFieldNames
+    val fieldTypes = schema.logicalFieldTypeInfo
+    val fieldNames = schema.logicalFieldNames
 
     // validate requested type
     if (requestedTypeInfo.getArity != fieldTypes.length) {
-      throw new TableException("Arity of result does not match requested type.")
+      throw new TableException(
+        s"Arity[${requestedTypeInfo.getArity}] of result[${requestedTypeInfo}] does not match " +
+          s"the number[${fieldTypes.length}] of requested type[${fieldTypes}].")
     }
 
     requestedTypeInfo match {
@@ -739,11 +750,11 @@ abstract class TableEnvironment(val config: TableConfig) {
             if (pojoIdx < 0) {
               throw new TableException(s"POJO does not define field name: $fName")
             }
-            val requestedTypeInfo = pt.getTypeAt(pojoIdx)
-            if (fType != requestedTypeInfo) {
-              throw new TableException(s"Result field does not match requested type. " +
-                s"requested: $requestedTypeInfo; Actual: $fType")
-            }
+//            val requestedTypeInfo = pt.getTypeAt(pojoIdx)
+//            if (fType != requestedTypeInfo) {
+//              throw new TableException(s"Result field does not match requested type. " +
+//                s"requested: $requestedTypeInfo; Actual: $fType")
+//            }
         }
 
       // Tuple/Case class/Row type requested
@@ -781,6 +792,8 @@ abstract class TableEnvironment(val config: TableConfig) {
       None,
       None)
 
+    println("\nTableEnvironment==> " +
+              "requestedTypeInfo["+requestedTypeInfo+"]\n fieldNames=["+fieldNames+"]\n")
     val conversion = generator.generateConverterResultExpression(
       requestedTypeInfo,
       fieldNames)

@@ -33,10 +33,15 @@ import scala.collection.JavaConversions._
 /**
   * Schema that describes both a logical and physical row.
   */
-class RowSchema(private val logicalRowType: RelDataType) {
+class RowSchema(private[flink] val logicalRowType: RelDataType) {
 
   private lazy val physicalRowFields: Seq[RelDataTypeField] = logicalRowType.getFieldList filter {
-    field => !FlinkTypeFactory.isTimeIndicatorType(field.getType)
+    field =>{
+      if(FlinkTypeFactory.isTimeIndicatorType(field.getType)){
+        println("physicalRowFields=---["+field+"]["+field.getType+"]")
+      }
+      !FlinkTypeFactory.isTimeIndicatorType(field.getType)
+    }
   }
 
   private lazy val physicalRowType: RelDataType = new RelRecordType(physicalRowFields)
@@ -45,10 +50,19 @@ class RowSchema(private val logicalRowType: RelDataType) {
     FlinkTypeFactory.toTypeInfo(f.getType)
   }
 
+  private lazy val logicalRowFieldTypes: Seq[TypeInformation[_]] = logicalRowType.getFieldList map {
+    f => FlinkTypeFactory.toTypeInfo(f.getType)
+  }
+
   private lazy val physicalRowFieldNames: Seq[String] = physicalRowFields.map(_.getName)
+
+  private lazy val logicalRowFieldNames: Seq[String] = logicalRowType.getFieldList.map(_.getName)
 
   private lazy val physicalRowTypeInfo: TypeInformation[Row] = new RowTypeInfo(
     physicalRowFieldTypes.toArray, physicalRowFieldNames.toArray)
+
+  private lazy val logicalRowTypeInfo: TypeInformation[Row] = new RowTypeInfo(
+    logicalRowFieldTypes.toArray, logicalRowFieldNames.toArray)
 
   private lazy val indexMapping: Array[Int] = generateIndexMapping
 
@@ -113,14 +127,25 @@ class RowSchema(private val logicalRowType: RelDataType) {
   def physicalTypeInfo: TypeInformation[Row] = physicalRowTypeInfo
 
   /**
+    * Returns a physical [[TypeInformation]] of row with no logical fields (i.e. time indicators).
+    */
+  def logicalTypeInfo: TypeInformation[Row] = logicalRowTypeInfo
+
+  /**
     * Returns [[TypeInformation]] of the row's fields with no logical fields (i.e. time indicators).
     */
   def physicalFieldTypeInfo: Seq[TypeInformation[_]] = physicalRowFieldTypes
 
   /**
+    * Returns [[TypeInformation]] of the row's fields with no logical fields (i.e. time indicators).
+    */
+  def logicalFieldTypeInfo: Seq[TypeInformation[_]] = logicalRowFieldTypes
+
+  /**
     * Returns the logical fields names including logical fields (i.e. time indicators).
     */
   def logicalFieldNames: Seq[String] = logicalRowType.getFieldNames
+
 
   /**
     * Returns the physical fields names with no logical fields (i.e. time indicators).
