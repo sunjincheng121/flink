@@ -871,11 +871,15 @@ class CodeGenerator(
       returnType: TypeInformation[_ <: Any],
       resultFieldNames: Seq[String])
     : GeneratedExpression = {
-    val input1AccessExprs = for (i <- 0 until input1.getArity if input1Mapping.contains(i))
+    val aa = input1
+    val bb = input1Mapping
+
+    val input1AccessExprs = for (i <- 0 until input1Mapping.length)
+
       yield generateInputAccess(input1, input1Term, i, input1Mapping)
 
     val input2AccessExprs = input2 match {
-      case Some(ti) => for (i <- 0 until ti.getArity if input2Mapping.contains(i))
+      case Some(ti) => for (i <- 0 until input2Mapping.length)
         yield generateInputAccess(ti, input2Term, i, input2Mapping)
       case None => Seq() // add nothing
     }
