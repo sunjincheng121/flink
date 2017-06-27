@@ -153,8 +153,7 @@ object BayesTableSourceUtils {
 
     override def checkAndGetNextWatermark(
         lastElement: Row,
-        extractedTimestamp: Long)
-    : Watermark = {
+        extractedTimestamp: Long): Watermark = {
       new Watermark(extractedTimestamp - offset)
     }
 
