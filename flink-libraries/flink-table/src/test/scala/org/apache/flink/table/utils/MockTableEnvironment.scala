@@ -19,7 +19,7 @@
 package org.apache.flink.table.utils
 
 import org.apache.calcite.tools.RuleSet
-import org.apache.flink.table.api.{QueryConfig, Table, TableConfig, TableEnvironment}
+import org.apache.flink.table.api._
 import org.apache.flink.table.sinks.TableSink
 import org.apache.flink.table.sources.TableSource
 
@@ -34,7 +34,10 @@ class MockTableEnvironment extends TableEnvironment(new TableConfig) {
 
   override def sql(query: String): Table = ???
 
-  override def registerTableSource(name: String, tableSource: TableSource[_]): Unit = ???
+  override def registerTableSource(
+      name: String,
+      tableSource: TableSource[_],
+      sourceConfig: SourceConfig): Unit = ???
 
   override protected def getBuiltInNormRuleSet: RuleSet = ???
 

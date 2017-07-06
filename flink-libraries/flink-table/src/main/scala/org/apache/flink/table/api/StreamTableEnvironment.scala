@@ -107,9 +107,15 @@ abstract class StreamTableEnvironment(
     * @param name        The name under which the [[TableSource]] is registered.
     * @param tableSource The [[TableSource]] to register.
     */
-  override def registerTableSource(name: String, tableSource: TableSource[_]): Unit = {
-    checkValidTableName(name)
+  def registerTableSource(name: String, tableSource: TableSource[_]): Unit = {
+    registerTableSource(name, tableSource, StreamSourceConfig.sourceConfig)
+  }
 
+  override def registerTableSource(
+      name: String,
+      tableSource: TableSource[_],
+      sourceConfig: SourceConfig): Unit = {
+    checkValidTableName(name)
     // check if event-time is enabled
     tableSource match {
       case dra: DefinedRowtimeAttribute if
@@ -124,6 +130,7 @@ abstract class StreamTableEnvironment(
     tableSource match {
       case streamTableSource: StreamTableSource[_] =>
         registerTableInternal(name, new StreamTableSourceTable(streamTableSource))
+        SourceConfig.registerSourceConfig(streamTableSource, sourceConfig)
       case _ =>
         throw new TableException("Only StreamTableSource can be registered in " +
             "StreamTableEnvironment")

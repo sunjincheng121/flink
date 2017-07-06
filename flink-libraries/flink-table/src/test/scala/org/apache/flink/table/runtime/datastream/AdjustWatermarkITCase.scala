@@ -33,13 +33,13 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceCont
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.table.api.scala.stream.utils.StreamingWithStateTestBase
-import org.apache.flink.table.api.{StreamQueryConfig, TableEnvironment, Types}
+import org.apache.flink.table.api.{StreamQueryConfig, StreamSourceConfig, TableEnvironment, Types}
 import org.apache.flink.table.api.java.utils.UserDefinedAggFunctions.WeightedAvgWithMerge
 import org.apache.flink.table.api.scala.Session
 import org.apache.flink.table.api.scala.stream.utils.StreamITCase
 import org.apache.flink.table.functions.aggfunctions.CountAggFunction
 import org.apache.flink.types.Row
-import org.apache.flink.table.runtime.datastream.AdjustWatermarkITCase.{TimestampAndWatermark, TestStreamTableSource}
+import org.apache.flink.table.runtime.datastream.AdjustWatermarkITCase.{TestStreamTableSource, TimestampAndWatermark}
 import org.apache.flink.table.sources.{DefinedRowtimeAttribute, StreamTableSource}
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -51,7 +51,7 @@ class AdjustWatermarkITCase extends StreamingWithStateTestBase {
 
   @Test
   def testDataStreamSource(): Unit = {
-    queryConfig = queryConfig.withLateDataTimeOffset(Time.milliseconds(10))
+    val sourceConfig = StreamSourceConfig.sourceConfig.withLateDataTimeOffset(Time.seconds(10))
     val sessionWindowTestData = List(
       (1L, 1, "Hello"),
       (2L, 2, "Hello"),
@@ -70,7 +70,7 @@ class AdjustWatermarkITCase extends StreamingWithStateTestBase {
     val weightAvgFun = new WeightedAvgWithMerge
 
     val stream = env
-      .fromCollection(sessionWindowTestData)
+      .fromCollection(sessionWindowTestData, sourceConfig)
       .assignTimestampsAndWatermarks(new TimestampAndWatermark)
     val table = stream.toTable(tEnv, 'long, 'int, 'string, 'rowtime.rowtime)
 
@@ -91,7 +91,7 @@ class AdjustWatermarkITCase extends StreamingWithStateTestBase {
 
   @Test
   def testStreamTableSource(): Unit = {
-    queryConfig = queryConfig.withLateDataTimeOffset(Time.seconds(10))
+    val sourceConfig = StreamSourceConfig.sourceConfig.withLateDataTimeOffset(Time.seconds(10))
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
     env.setStateBackend(getStateBackend)
@@ -113,7 +113,7 @@ class AdjustWatermarkITCase extends StreamingWithStateTestBase {
         "FROM MyTable " +
         "GROUP BY c, TUMBLE(rowtime, INTERVAL '5' SECOND)"
 
-    val result = tEnv.sql(sqlQuery).toAppendStream[Row](queryConfig)
+    val result = tEnv.sql(sqlQuery).toAppendStream[Row]
     result.addSink(new StreamITCase.StringSink[Row])
     env.execute()
 

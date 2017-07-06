@@ -93,12 +93,22 @@ abstract class BatchTableEnvironment(
     * @param name        The name under which the [[TableSource]] is registered.
     * @param tableSource The [[TableSource]] to register.
     */
-  override def registerTableSource(name: String, tableSource: TableSource[_]): Unit = {
+  def registerTableSource(
+      name: String,
+      tableSource: TableSource[_]): Unit = {
+    registerTableSource(name, tableSource, BatchSourceConfig.sourceConfig)
+  }
+
+  override def registerTableSource(
+      name: String,
+      tableSource: TableSource[_],
+      sourceConfig: SourceConfig): Unit = {
     checkValidTableName(name)
 
     tableSource match {
       case batchTableSource: BatchTableSource[_] =>
         registerTableInternal(name, new TableSourceTable(batchTableSource))
+        SourceConfig.registerSourceConfig(tableSource, sourceConfig)
       case _ =>
         throw new TableException("Only BatchTableSource can be registered in " +
             "BatchTableEnvironment")

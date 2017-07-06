@@ -23,7 +23,7 @@ import org.apache.calcite.rel.RelNode
 import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rel.core.TableScan
 import org.apache.flink.streaming.api.datastream.DataStream
-import org.apache.flink.table.api.{StreamQueryConfig, StreamTableEnvironment}
+import org.apache.flink.table.api.{SourceConfig, StreamQueryConfig, StreamSourceConfig, StreamTableEnvironment}
 import org.apache.flink.table.plan.schema.RowSchema
 import org.apache.flink.table.plan.schema.DataStreamTable
 import org.apache.flink.table.runtime.types.CRow
@@ -60,7 +60,11 @@ class DataStreamScan(
       queryConfig: StreamQueryConfig): DataStream[CRow] = {
 
     val config = tableEnv.getConfig
-    val offset = queryConfig.getLateDataTimeOffset
+    val offset =
+      SourceConfig
+      .getSourceConfig(dataStreamTable)
+      .getOrElse(StreamSourceConfig.sourceConfig).asInstanceOf[StreamSourceConfig]
+      .getLateDataTimeOffset
 
     val ds = dataStreamTable.dataStream
 

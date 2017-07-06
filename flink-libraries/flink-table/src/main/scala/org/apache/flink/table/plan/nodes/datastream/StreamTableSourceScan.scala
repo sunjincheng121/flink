@@ -18,11 +18,13 @@
 
 package org.apache.flink.table.plan.nodes.datastream
 
+import java.util
+
 import org.apache.calcite.plan._
 import org.apache.calcite.rel.RelNode
 import org.apache.calcite.rel.metadata.RelMetadataQuery
 import org.apache.flink.streaming.api.datastream.DataStream
-import org.apache.flink.table.api.{StreamQueryConfig, StreamTableEnvironment, TableEnvironment}
+import org.apache.flink.table.api._
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.plan.nodes.PhysicalTableSourceScan
 import org.apache.flink.table.plan.schema.RowSchema
@@ -77,7 +79,7 @@ class StreamTableSourceScan(
     planner.getCostFactory.makeCost(rowCnt, rowCnt, rowCnt * estimateRowSize(getRowType))
   }
 
-  override def copy(traitSet: RelTraitSet, inputs: java.util.List[RelNode]): RelNode = {
+  override def copy(traitSet: RelTraitSet, inputs: util.List[RelNode]): RelNode = {
     new StreamTableSourceScan(
       cluster,
       traitSet,
@@ -105,7 +107,11 @@ class StreamTableSourceScan(
 
     val config = tableEnv.getConfig
     val ds = tableSource.getDataStream(tableEnv.execEnv).asInstanceOf[DataStream[Any]]
-    val offset = queryConfig.getLateDataTimeOffset
+    val offset =
+      SourceConfig
+      .getSourceConfig(tableSource)
+      .getOrElse(StreamSourceConfig.sourceConfig).asInstanceOf[StreamSourceConfig]
+      .getLateDataTimeOffset
 
     // injecting an operator, which adjust watermark according queryConfig
     val inputDataStream: DataStream[Any] = if (offset != 0) {

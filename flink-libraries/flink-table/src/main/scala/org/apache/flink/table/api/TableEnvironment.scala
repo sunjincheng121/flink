@@ -402,7 +402,10 @@ abstract class TableEnvironment(val config: TableConfig) {
     * @param name        The name under which the [[TableSource]] is registered.
     * @param tableSource The [[TableSource]] to register.
     */
-  def registerTableSource(name: String, tableSource: TableSource[_]): Unit
+  def registerTableSource(
+      name: String,
+      tableSource: TableSource[_],
+      sourceConfig: SourceConfig): Unit
 
   /**
     * Replaces a registered Table with another Table under the same name.
