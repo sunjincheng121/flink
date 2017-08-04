@@ -264,6 +264,117 @@ class CustomTypeSplit extends TableFunction[Row] {
 
 {% top %}
 
+How to match the eval method
+----------------------------
+User-defined scalar function and User-defined table function can implement (one or more) eval methods. The flink framework uses the reflection mechanism and the implicit type conversion to match the eval method signature. i.e., try to look for methods that are strictly consistent between the input parameter type and the eval method signature type, if have not match any method, try to match the eval method according to whether the parameters can be implicitly converted.
+The implicit type conversion rule is numeric narrowest precedence, and the numeric widening precedence are as follows order:
+
+<table class="table table-bordered">
+	<tr>
+		<th>From/To</th>
+		<th>BYTE</th>
+		<th>SHORT</th>
+		<th>INT</th>
+		<th>LONG</th>
+		<th>FLOAT</th>
+		<th>DOUBLE</th>
+		<th>STRING</th>
+	</tr>
+	<tr>
+        <td>BYTE</td>
+        <td>-</td>
+        <td>Y</td>
+        <td>Y</td>
+        <td>Y</td>
+        <td>Y</td>
+        <td>Y</td>
+        <td>Y</td>
+	</tr>
+	<tr>
+	    <td>SHORT</td>
+	    <td>N</td>
+	    <td>-</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	</tr>
+	<tr>
+	    <td>INT</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>-</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	</tr>
+	<tr>
+	    <td>LONG</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>-</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	</tr>
+	<tr>
+	    <td>FLOAT</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>-</td>
+	    <td>Y</td>
+	    <td>Y</td>
+	</tr>
+	<tr>
+	    <td>DOUBLE</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>-</td>
+	    <td>Y</td>
+	</tr>
+	<tr>
+	    <td>STRING</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>N</td>
+	    <td>-</td>
+	</tr>
+
+</table>
+
+For example:
+
+<table class="table table-bordered">
+	<tr>
+		<th>eval method definition</th>
+		<th>input data type</th>
+		<th>matched eval method</th>
+	</tr>
+	<tr>
+	    <td>def eval(a: String, b: String): String = {...}<br>def eval(a: Int, b: Int): String = {...}|</td>
+	    <td>STRING_TYPE_INFO,STRING_TYPE_INFO</td>
+	    <td>def eval(a: String, b: String): String = {...}</td>
+	</tr>
+	<tr>
+	<td>def eval(a: String, b: String): String = {...}<br>def eval(a: Int, b: Int): String = {...}|</td>
+	<td>INT_TYPE_INFO, BYTE_TYPE_INFO</td>
+	<td>def eval(a: Int, b: Int): String = {...}</td>
+	</tr>
+</table>
+
+{% top %}
+
 Aggregation Functions
 ---------------------
 
