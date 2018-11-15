@@ -19,8 +19,11 @@
 package org.apache.flink.ml.pipeline
 
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.api.scala.DataSet
+import org.apache.flink.api.scala.{DataSet, createTypeInformation}
 import org.apache.flink.ml.common.ParameterMap
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 
 /** [[Predictor]] which represents a pipeline of possibly multiple [[Transformer]] and a trailing
   * [[Predictor]].
@@ -64,18 +67,18 @@ object ChainedPredictor{
       Intermediate,
       Prediction](
       implicit transformOperation: TransformDataSetOperation[T, Testing, Intermediate],
-      predictOperation: PredictDataSetOperation[P, Intermediate, Prediction])
+      predictOperation: PredictDataSetOperation[P, Intermediate, Prediction],
+      testingTypeInformation: TypeInformation[Testing],
+      intermediateTypeInformation: TypeInformation[Intermediate],
+      predictionTypeInformation: TypeInformation[Prediction])
     : PredictDataSetOperation[ChainedPredictor[T, P], Testing, Prediction] = {
-
     new PredictDataSetOperation[ChainedPredictor[T, P], Testing, Prediction] {
       override def predictDataSet(
           instance: ChainedPredictor[T, P],
           predictParameters: ParameterMap,
-          input: DataSet[Testing])
-        : DataSet[Prediction] = {
-
-        val testing = instance.transformer.transform(input, predictParameters)
-        instance.predictor.predict(testing, predictParameters)
+          input: Table): Table = {
+        val testing = instance.transformer.transform[Testing, Intermediate](input, predictParameters)
+        instance.predictor.predict[Intermediate, Prediction](testing, predictParameters)
       }
     }
   }
@@ -100,16 +103,17 @@ object ChainedPredictor{
   implicit def chainedFitOperation[L <: Transformer[L], R <: Predictor[R], I, T](implicit
     fitOperation: FitOperation[L, I],
     transformOperation: TransformDataSetOperation[L, I, T],
-    predictorFitOperation: FitOperation[R, T]): FitOperation[ChainedPredictor[L, R], I] = {
+    predictorFitOperation: FitOperation[R, T],
+    iTypeInformation: TypeInformation[I],
+    tTypeInformation: TypeInformation[T]): FitOperation[ChainedPredictor[L, R], I] = {
     new FitOperation[ChainedPredictor[L, R], I] {
       override def fit(
           instance: ChainedPredictor[L, R],
           fitParameters: ParameterMap,
-          input: DataSet[I])
-        : Unit = {
-        instance.transformer.fit(input, fitParameters)
-        val intermediateResult = instance.transformer.transform(input, fitParameters)
-        instance.predictor.fit(intermediateResult, fitParameters)
+          input: Table): Unit = {
+        instance.transformer.fit[I](input, fitParameters)
+        val intermediateResult = instance.transformer.transform[I, T](input, fitParameters)
+        instance.predictor.fit[T](intermediateResult, fitParameters)
       }
     }
   }
@@ -123,15 +127,18 @@ object ChainedPredictor{
       implicit transformOperation: TransformDataSetOperation[T, Testing, Intermediate],
       evaluateOperation: EvaluateDataSetOperation[P, Intermediate, PredictionValue],
       testingTypeInformation: TypeInformation[Testing],
+      intermediateTypeInformation: TypeInformation[Intermediate],
       predictionValueTypeInformation: TypeInformation[PredictionValue])
     : EvaluateDataSetOperation[ChainedPredictor[T, P], Testing, PredictionValue] = {
     new EvaluateDataSetOperation[ChainedPredictor[T, P], Testing, PredictionValue] {
       override def evaluateDataSet(
           instance: ChainedPredictor[T, P],
           evaluateParameters: ParameterMap,
-          testing: DataSet[Testing])
-        : DataSet[(PredictionValue, PredictionValue)] = {
-        val intermediate = instance.transformer.transform(testing, evaluateParameters)
+          testing: Table): Table = {
+
+        implicit val resultTypeInformation = createTypeInformation[(Testing, PredictionValue)]
+
+        val intermediate = instance.transformer.transform[Testing, Intermediate](testing, evaluateParameters)
         instance.predictor.evaluate(intermediate, evaluateParameters)
       }
     }

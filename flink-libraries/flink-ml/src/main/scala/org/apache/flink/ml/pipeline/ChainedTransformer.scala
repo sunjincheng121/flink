@@ -18,8 +18,12 @@
 
 package org.apache.flink.ml.pipeline
 
+import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala.DataSet
+import org.apache.flink.api.scala.codegen.TypeInformationGen
 import org.apache.flink.ml.common.ParameterMap
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
 
 /** [[Transformer]] which represents the chaining of two [[Transformer]].
   *
@@ -67,7 +71,7 @@ object ChainedTransformer{
       override def transformDataSet(
           chain: ChainedTransformer[L, R],
           transformParameters: ParameterMap,
-          input: DataSet[I]): DataSet[O] = {
+          input: Table): Table = {
         val intermediateResult = transformOpLeft.transformDataSet(
           chain.left,
           transformParameters,
@@ -95,14 +99,16 @@ object ChainedTransformer{
   implicit def chainedFitOperation[L <: Transformer[L], R <: Transformer[R], I, T](implicit
       leftFitOperation: FitOperation[L, I],
       leftTransformOperation: TransformDataSetOperation[L, I, T],
-      rightFitOperation: FitOperation[R, T]): FitOperation[ChainedTransformer[L, R], I] = {
+      rightFitOperation: FitOperation[R, T],
+      iTypeInformation: TypeInformation[I],
+      tTypeInformation: TypeInformation[T]): FitOperation[ChainedTransformer[L, R], I] = {
     new FitOperation[ChainedTransformer[L, R], I] {
       override def fit(
           instance: ChainedTransformer[L, R],
           fitParameters: ParameterMap,
-          input: DataSet[I]): Unit = {
+          input: Table): Unit = {
         instance.left.fit(input, fitParameters)
-        val intermediateResult = instance.left.transform(input, fitParameters)
+        val intermediateResult = instance.left.transform[I, T](input, fitParameters)
         instance.right.fit(intermediateResult, fitParameters)
       }
     }

@@ -18,11 +18,14 @@
 
 package org.apache.flink.ml.pipeline
 
+import org.apache.flink.api.common.typeinfo.TypeInformation
+
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
-
 import org.apache.flink.api.scala.DataSet
 import org.apache.flink.ml.common.{FlinkMLTools, ParameterMap, WithParameters}
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
 
 /** Base trait for Flink's pipeline operators.
   *
@@ -48,10 +51,11 @@ trait Estimator[Self] extends WithParameters {
     * @return
     */
   def fit[Training](
-      training: DataSet[Training],
+      training: Table,
       fitParameters: ParameterMap = ParameterMap.Empty)(implicit
-      fitOperation: FitOperation[Self, Training]): Unit = {
-    FlinkMLTools.registerFlinkMLTypes(training.getExecutionEnvironment)
+      fitOperation: FitOperation[Self, Training],
+      trainingTypeInformation: TypeInformation[Training]): Unit = {
+    FlinkMLTools.registerFlinkMLTypes(training.toDataSet[Training].getExecutionEnvironment)
     fitOperation.fit(this, fitParameters, training)
   }
 }
@@ -77,7 +81,7 @@ object Estimator{
       override def fit(
           instance: Self,
           fitParameters: ParameterMap,
-          input: DataSet[Training])
+          input: Table)
         : Unit = {
         val self = typeOf[Self]
         val training = typeOf[Training]
@@ -105,8 +109,8 @@ object Estimator{
       override def predictDataSet(
           instance: Self,
           predictParameters: ParameterMap,
-          input: DataSet[Testing])
-        : DataSet[Any] = {
+          input: Table)
+        : Table = {
         val self = typeOf[Self]
         val testing = typeOf[Testing]
 
@@ -136,8 +140,8 @@ object Estimator{
       override def transformDataSet(
         instance: Self,
         transformParameters: ParameterMap,
-        input: DataSet[IN])
-      : DataSet[Any] = {
+        input: Table)
+      : Table = {
         val self = typeOf[Self]
         val in = typeOf[IN]
 
@@ -177,5 +181,5 @@ object Estimator{
   * @tparam Training Type of the training data
   */
 trait FitOperation[Self, Training]{
-  def fit(instance: Self, fitParameters: ParameterMap,  input: DataSet[Training]): Unit
+  def fit(instance: Self, fitParameters: ParameterMap,  input: Table): Unit
 }

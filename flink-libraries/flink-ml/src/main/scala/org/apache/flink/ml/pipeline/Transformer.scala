@@ -23,6 +23,9 @@ import org.apache.flink.api.scala.DataSet
 import org.apache.flink.ml._
 import org.apache.flink.ml.common.{FlinkMLTools, ParameterMap, WithParameters}
 
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 import scala.reflect.ClassTag
 
 /** Transformer trait for Flink's pipeline operators.
@@ -61,11 +64,12 @@ trait Transformer[Self <: Transformer[Self]]
     * @return
     */
   def transform[Input, Output](
-      input: DataSet[Input],
+      input: Table,
       transformParameters: ParameterMap = ParameterMap.Empty)
-      (implicit transformOperation: TransformDataSetOperation[Self, Input, Output])
-    : DataSet[Output] = {
-    FlinkMLTools.registerFlinkMLTypes(input.getExecutionEnvironment)
+      (implicit transformOperation: TransformDataSetOperation[Self, Input, Output],
+        inputTypeInformation: TypeInformation[Input],
+        outputTypeInformation: TypeInformation[Output]): Table = {
+    FlinkMLTools.registerFlinkMLTypes(input.toDataSet[Input].getExecutionEnvironment)
     transformOperation.transformDataSet(that, transformParameters, input)
   }
 
@@ -97,6 +101,7 @@ object Transformer{
       Input,
       Output](
       implicit transformOperation: TransformOperation[Instance, Model, Input, Output],
+      inputTypeInformation: TypeInformation[Input],
       outputTypeInformation: TypeInformation[Output],
       outputClassTag: ClassTag[Output])
     : TransformDataSetOperation[Instance, Input, Output] = {
@@ -104,14 +109,14 @@ object Transformer{
       override def transformDataSet(
           instance: Instance,
           transformParameters: ParameterMap,
-          input: DataSet[Input])
-        : DataSet[Output] = {
+          input: Table)
+        : Table = {
         val resultingParameters = instance.parameters ++ transformParameters
         val model = transformOperation.getModel(instance, resultingParameters)
 
-        input.mapWithBcVariable(model){
+        input.toDataSet[Input].mapWithBcVariable(model){
           (element, model) => transformOperation.transform(element, model)
-        }
+        }.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
       }
     }
   }
@@ -131,8 +136,7 @@ trait TransformDataSetOperation[Instance, Input, Output] extends Serializable{
   def transformDataSet(
       instance: Instance,
       transformParameters: ParameterMap,
-      input: DataSet[Input])
-    : DataSet[Output]
+      input: Table): Table
 }
 
 /** Type class for a transform operation which works on a single element and the corresponding model
