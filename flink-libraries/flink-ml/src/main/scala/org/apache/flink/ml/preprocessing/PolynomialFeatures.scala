@@ -27,6 +27,9 @@ import org.apache.flink.ml.preprocessing.PolynomialFeatures.Degree
 
 import scala.reflect.ClassTag
 
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 /** Maps a vector into the polynomial feature space.
   *
   * This transformer takes a a vector of values `(x, y, z, ...)` and maps it into the
@@ -91,7 +94,7 @@ object PolynomialFeatures{
       override def fit(
           instance: PolynomialFeatures,
           fitParameters: ParameterMap,
-          input: DataSet[T])
+          input: Table)
         : Unit = {}
     }
   }
@@ -109,17 +112,17 @@ object PolynomialFeatures{
       override def transformDataSet(
           instance: PolynomialFeatures,
           transformParameters: ParameterMap,
-          input: DataSet[T])
-        : DataSet[T] = {
+          input: Table)
+        : Table = {
         val resultingParameters = instance.parameters ++ transformParameters
 
         val degree = resultingParameters(Degree)
 
-        input.map {
+        input.toDataSet[T].map {
           vector: T => {
             calculatePolynomial(degree, vector)
           }
-        }
+        }.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
       }
     }
   }
@@ -133,13 +136,12 @@ object PolynomialFeatures{
     override def transformDataSet(
         instance: PolynomialFeatures,
         transformParameters: ParameterMap,
-        input: DataSet[LabeledVector])
-      : DataSet[LabeledVector] = {
+        input: Table): Table = {
       val resultingParameters = instance.parameters ++ transformParameters
 
       val degree = resultingParameters(Degree)
 
-      input.map {
+      input.toDataSet[LabeledVector].map {
         labeledVector => {
           val vector = labeledVector.vector
           val label = labeledVector.label
@@ -149,7 +151,7 @@ object PolynomialFeatures{
           LabeledVector(label, transformedVector)
         }
       }
-    }
+    }.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
   }
 
 

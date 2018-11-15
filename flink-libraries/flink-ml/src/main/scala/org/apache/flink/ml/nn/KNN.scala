@@ -34,6 +34,9 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 /** Implements a `k`-nearest neighbor join.
   *
   * Calculates the `k`-nearest neighbor points in the training set for each point in the test set.
@@ -174,8 +177,9 @@ object KNN {
     override def fit(
       instance: KNN,
       fitParameters: ParameterMap,
-      input: DataSet[T]
+      inputTab: Table
     ): Unit = {
+      val input = inputTab.toDataSet[T]
       val resultParameters = instance.parameters ++ fitParameters
 
       require(resultParameters.get(K).isDefined, "K is needed for calculation")
@@ -199,8 +203,9 @@ object KNN {
       override def predictDataSet(
         instance: KNN,
         predictParameters: ParameterMap,
-        input: DataSet[T]
-      ): DataSet[(FlinkVector, Array[FlinkVector])] = {
+        inputTab: Table
+      ): Table = {
+        val input = inputTab.toDataSet[T]
         val resultParameters = instance.parameters ++ predictParameters
 
         instance.trainingSet match {
@@ -269,8 +274,7 @@ object KNN {
                 }
               }
             }
-
-            result
+            result.toTable(inputTab.tableEnv.asInstanceOf[BatchTableEnvironment])
           case None => throw new RuntimeException("The KNN model has not been trained." +
             "Call first fit before calling the predict operation.")
         }

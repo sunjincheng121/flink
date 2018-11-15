@@ -24,6 +24,9 @@ import org.apache.flink.ml.common._
 
 import org.apache.flink.api.scala._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 
 import org.apache.flink.ml.optimization._
 import org.apache.flink.ml.pipeline.{PredictOperation, FitOperation, Predictor}
@@ -95,7 +98,7 @@ class MultipleLinearRegression extends Predictor[MultipleLinearRegression] {
   import MultipleLinearRegression._
 
   // Stores the weights of the linear model after the fitting phase
-  var weightsOption: Option[DataSet[WeightVector]] = None
+  var weightsOption: Option[Table] = None
 
   def setIterations(iterations: Int): MultipleLinearRegression = {
     parameters.add(Iterations, iterations)
@@ -119,15 +122,16 @@ class MultipleLinearRegression extends Predictor[MultipleLinearRegression] {
     this
   }
 
-  def squaredResidualSum(input: DataSet[LabeledVector]): DataSet[Double] = {
+  def squaredResidualSum(input: Table): Table = {
     weightsOption match {
       case Some(weights) => {
-        input.mapWithBcVariable(weights){
-          (dataPoint, weights) => lossFunction.loss(dataPoint, weights)
+        input.toDataSet[LabeledVector].mapWithBcVariable(weights){
+          (dataPoint, weights) =>
+            lossFunction.loss(dataPoint, weights.getField(0).asInstanceOf[WeightVector])
         }.reduce {
           _ + _
         }
-      }
+      }.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
 
       case None => {
         throw new RuntimeException("The MultipleLinearRegression has not been fitted to the " +
@@ -178,7 +182,7 @@ object MultipleLinearRegression {
     override def fit(
       instance: MultipleLinearRegression,
       fitParameters: ParameterMap,
-      input: DataSet[LabeledVector])
+      input: Table)
     : Unit = {
       val map = instance.parameters ++ fitParameters
 
@@ -214,9 +218,7 @@ object MultipleLinearRegression {
       override def getModel(self: MultipleLinearRegression, predictParameters: ParameterMap)
         : DataSet[WeightVector] = {
         self.weightsOption match {
-          case Some(weights) => weights
-
-
+          case Some(weights) => weights.toDataSet[WeightVector]
           case None => {
             throw new RuntimeException("The MultipleLinearRegression has not been fitted to the " +
               "data. This is necessary to learn the weight vector of the linear function.")

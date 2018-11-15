@@ -28,6 +28,10 @@ import org.apache.flink.ml.math.Breeze._
 import org.apache.flink.ml.math.{BreezeVectorConverter, Vector}
 import org.apache.flink.ml.pipeline.{TransformOperation, FitOperation,
 Transformer}
+
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 import org.apache.flink.ml.preprocessing.StandardScaler.{Mean, Std}
 
 import scala.reflect.ClassTag
@@ -60,9 +64,7 @@ import scala.reflect.ClassTag
   */
 class StandardScaler extends Transformer[StandardScaler] {
 
-  private[preprocessing] var metricsOption: Option[
-      DataSet[(linalg.Vector[Double], linalg.Vector[Double])]
-    ] = None
+  private[preprocessing] var metricsOption: Option[Table] = None
 
   /** Sets the target mean of the transformed data
     *
@@ -117,7 +119,7 @@ object StandardScaler {
     * @return
     */
   implicit def fitVectorStandardScaler[T <: Vector] = new FitOperation[StandardScaler, T] {
-    override def fit(instance: StandardScaler, fitParameters: ParameterMap, input: DataSet[T])
+    override def fit(instance: StandardScaler, fitParameters: ParameterMap, input: Table)
       : Unit = {
       val metrics = extractFeatureMetrics(input)
 
@@ -135,9 +137,10 @@ object StandardScaler {
       override def fit(
           instance: StandardScaler,
           fitParameters: ParameterMap,
-          input: DataSet[LabeledVector])
+          input: Table)
         : Unit = {
-        val vectorDS = input.map(_.vector)
+        val vectorDS = input.toDataSet[LabeledVector].map(_.vector)
+          .toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
         val metrics = extractFeatureMetrics(vectorDS)
 
         instance.metricsOption = Some(metrics)
@@ -156,10 +159,11 @@ object StandardScaler {
       override def fit(
           instance: StandardScaler,
           fitParameters: ParameterMap,
-          input: DataSet[(T, Double)])
+          input: Table)
       : Unit = {
-        val vectorDS = input.map( (i: (T, Double)) => i._1)
-        val metrics = extractFeatureMetrics(vectorDS)
+        val vectorDS = input.toDataSet[(T, Double)].map( (i: (T, Double)) => i._1)
+        val metrics = extractFeatureMetrics[T](
+          vectorDS.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment]))
 
         instance.metricsOption = Some(metrics)
       }
@@ -177,9 +181,8 @@ object StandardScaler {
     *          The first vector represents the mean vector and the second is the standard
     *          deviation vector.
     */
-  private def extractFeatureMetrics[T <: Vector](dataSet: DataSet[T])
-  : DataSet[(linalg.Vector[Double], linalg.Vector[Double])] = {
-    val metrics = dataSet.map{
+  private def extractFeatureMetrics[T <: Vector: TypeInformation](dataSet: Table): Table = {
+    val metrics = dataSet.toDataSet[T].map{
       v: T => (1.0, v.asBreeze, linalg.Vector.zeros[Double](v.size))
     }.reduce{
       (metrics1, metrics2) => {
@@ -207,7 +210,7 @@ object StandardScaler {
         (metric._2 / metric._1, varianceVector)
       }
     }
-    metrics
+    metrics.toTable(dataSet.tableEnv.asInstanceOf[BatchTableEnvironment])
   }
 
   /** Base class for StandardScaler's [[TransformOperation]]. This class has to be extended for
@@ -233,7 +236,7 @@ object StandardScaler {
       std = transformParameters(Std)
 
       instance.metricsOption match {
-        case Some(metrics) => metrics
+        case Some(metrics) => metrics.toDataSet[(linalg.Vector[Double], linalg.Vector[Double])]
         case None =>
           throw new RuntimeException("The StandardScaler has not been fitted to the data. " +
             "This is necessary to estimate the mean and standard deviation of the data.")

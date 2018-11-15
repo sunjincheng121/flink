@@ -20,10 +20,13 @@ package org.apache.flink.ml.optimization
 
 import org.apache.flink.api.scala.DataSet
 import org.apache.flink.ml.common._
-import org.apache.flink.ml.math.{SparseVector, DenseVector}
+import org.apache.flink.ml.math.{DenseVector, SparseVector}
 import org.apache.flink.api.scala._
 import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
+
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
 
 /** Base class for optimization algorithms
  *
@@ -38,9 +41,9 @@ abstract class Solver extends Serializable with WithParameters {
     * @return A Vector of weights optimized to the given problem
     */
   def optimize(
-      data: DataSet[LabeledVector],
-      initialWeights: Option[DataSet[WeightVector]])
-    : DataSet[WeightVector]
+      data: Table,
+      initialWeights: Option[Table])
+    : Table
 
   /** Creates initial weights vector, creating a DataSet with a WeightVector element
     *
@@ -48,15 +51,16 @@ abstract class Solver extends Serializable with WithParameters {
     * @param data The data for which we optimize the weights
     * @return A DataSet containing a single WeightVector element
     */
-  def createInitialWeightsDS(initialWeights: Option[DataSet[WeightVector]],
-                             data: DataSet[LabeledVector]): DataSet[WeightVector] = {
+  def createInitialWeightsDS(initialWeights: Option[Table], data: Table): Table = {
+
     // TODO: Faster way to do this?
-    val dimensionsDS = data.map(_.vector.size).reduce((a, b) => b)
+    val dimensionsDS = data.toDataSet[LabeledVector].map(_.vector.size).reduce((a, b) => b)
+        .toTable(data.tableEnv.asInstanceOf[BatchTableEnvironment])
 
     initialWeights match {
       // Ensure provided weight vector is a DenseVector
       case Some(wvDS) =>
-        wvDS.map {
+          wvDS.toDataSet[WeightVector].map {
           wv => {
             val denseWeights = wv.weights match {
               case dv: DenseVector => dv
@@ -64,7 +68,7 @@ abstract class Solver extends Serializable with WithParameters {
           }
           WeightVector(denseWeights, wv.intercept)
           }
-        }
+        }.toTable(data.tableEnv.asInstanceOf[BatchTableEnvironment])
       case None => createInitialWeightVector(dimensionsDS)
     }
   }
@@ -76,12 +80,12 @@ abstract class Solver extends Serializable with WithParameters {
     *                    vector
     * @return DataSet of a zero vector of dimension d
     */
-  def createInitialWeightVector(dimensionDS: DataSet[Int]): DataSet[WeightVector] = {
-    dimensionDS.map {
+  def createInitialWeightVector(dimensionDS: Table): Table = {
+    dimensionDS.toDataSet[Int].map {
       dimension =>
         val values = Array.fill(dimension)(0.0)
         WeightVector(DenseVector(values), 0.0)
-    }
+    }.toTable(dimensionDS.tableEnv.asInstanceOf[BatchTableEnvironment])
   }
 
   //Setters for parameters

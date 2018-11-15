@@ -29,6 +29,9 @@ import org.apache.flink.ml.pipeline.{TransformDataSetOperation, FitOperation,
 Transformer}
 import org.apache.flink.ml.preprocessing.MinMaxScaler.{Max, Min}
 
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 import scala.reflect.ClassTag
 
 /** Scales observations, so that all features are in a user-specified range.
@@ -58,9 +61,7 @@ import scala.reflect.ClassTag
   */
 class MinMaxScaler extends Transformer[MinMaxScaler] {
 
-  private [preprocessing] var metricsOption: Option[
-      DataSet[(linalg.Vector[Double], linalg.Vector[Double])]
-    ] = None
+  private [preprocessing] var metricsOption: Option[Table] = None
 
   /** Sets the minimum for the range of the transformed data
     *
@@ -110,7 +111,7 @@ object MinMaxScaler {
     * @return [[FitOperation]] training the [[MinMaxScaler]] on subtypes of [[Vector]]
     */
   implicit def fitVectorMinMaxScaler[T <: Vector] = new FitOperation[MinMaxScaler, T] {
-    override def fit(instance: MinMaxScaler, fitParameters: ParameterMap, input: DataSet[T])
+    override def fit(instance: MinMaxScaler, fitParameters: ParameterMap, input: Table)
     : Unit = {
       val metrics = extractFeatureMinMaxVectors(input)
 
@@ -128,9 +129,10 @@ object MinMaxScaler {
       override def fit(
         instance: MinMaxScaler,
         fitParameters: ParameterMap,
-        input: DataSet[LabeledVector])
+        input: Table)
       : Unit = {
-        val vectorDS = input.map(_.vector)
+        val vectorDS = input.toDataSet[LabeledVector].map(_.vector)
+          .toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
         val metrics = extractFeatureMinMaxVectors(vectorDS)
 
         instance.metricsOption = Some(metrics)
@@ -145,10 +147,10 @@ object MinMaxScaler {
     *          The first vector represents the minimum values vector and the second is the maximum
     *          values vector.
     */
-  private def extractFeatureMinMaxVectors[T <: Vector](dataSet: DataSet[T])
-  : DataSet[(linalg.Vector[Double], linalg.Vector[Double])] = {
+  private def extractFeatureMinMaxVectors[T <: Vector: TypeInformation](dataSet: Table)
+  : Table = {
 
-    val minMax = dataSet.map {
+    val minMax = dataSet.toDataSet[T].map {
       v: T => (v.asBreeze, v.asBreeze)
     }.reduce {
       (minMax1, minMax2) => {
@@ -159,7 +161,7 @@ object MinMaxScaler {
         (tempMinimum, tempMaximum)
       }
     }
-    minMax
+    minMax.toTable(dataSet.tableEnv.asInstanceOf[BatchTableEnvironment])
   }
 
   /** [[TransformDataSetOperation]] which scales input data of subtype of [[Vector]] with respect to
@@ -176,22 +178,26 @@ object MinMaxScaler {
       override def transformDataSet(
         instance: MinMaxScaler,
         transformParameters: ParameterMap,
-        input: DataSet[T])
-      : DataSet[T] = {
+        input: Table)
+      : Table = {
 
         val resultingParameters = instance.parameters ++ transformParameters
         val min = resultingParameters(Min)
         val max = resultingParameters(Max)
 
+
         instance.metricsOption match {
           case Some(metrics) => {
-            input.mapWithBcVariable(metrics) {
+
+            input.toDataSet[T]
+              .mapWithBcVariable(
+                metrics.toDataSet[(linalg.Vector[Double], linalg.Vector[Double])]) {
               (vector, metrics) => {
                 val (broadcastMin, broadcastMax) = metrics
                 scaleVector(vector, broadcastMin, broadcastMax, min, max)
               }
             }
-          }
+          }.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
 
           case None =>
             throw new RuntimeException("The MinMaxScaler has not been fitted to the data. " +
@@ -205,14 +211,15 @@ object MinMaxScaler {
     new TransformDataSetOperation[MinMaxScaler, LabeledVector, LabeledVector] {
       override def transformDataSet(instance: MinMaxScaler,
         transformParameters: ParameterMap,
-        input: DataSet[LabeledVector]): DataSet[LabeledVector] = {
+        input: Table): Table = {
         val resultingParameters = instance.parameters ++ transformParameters
         val min = resultingParameters(Min)
         val max = resultingParameters(Max)
 
         instance.metricsOption match {
           case Some(metrics) => {
-            input.mapWithBcVariable(metrics) {
+            input.toDataSet[LabeledVector].mapWithBcVariable(
+              metrics.toDataSet[(linalg.Vector[Double], linalg.Vector[Double])]) {
               (labeledVector, metrics) => {
                 val (broadcastMin, broadcastMax) = metrics
                 val LabeledVector(label, vector) = labeledVector
@@ -220,7 +227,7 @@ object MinMaxScaler {
                 LabeledVector(label, scaleVector(vector, broadcastMin, broadcastMax, min, max))
               }
             }
-          }
+          }.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
 
           case None =>
             throw new RuntimeException("The MinMaxScaler has not been fitted to the data. " +

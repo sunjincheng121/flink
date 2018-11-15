@@ -60,7 +60,7 @@ trait FlinkTestBase extends BeforeAndAfter {
         .setNumberTaskManagers(1)
         .setNumberSlotsPerTaskManager(parallelism)
         .build())
-    
+
     cl.before()
 
     cluster = Some(cl)

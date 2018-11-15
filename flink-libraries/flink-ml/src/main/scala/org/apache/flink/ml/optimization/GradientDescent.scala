@@ -19,13 +19,16 @@
 
 package org.apache.flink.ml.optimization
 
-import org.apache.flink.api.scala._
+import org.apache.flink.api.scala.{DataSet, _}
 import org.apache.flink.ml.common._
 import org.apache.flink.ml.math._
 import org.apache.flink.ml.optimization.IterativeSolver._
 import org.apache.flink.ml.optimization.LearningRateMethod.LearningRateMethodTrait
 import org.apache.flink.ml.optimization.Solver._
 import org.apache.flink.ml._
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+import org.apache.flink.types.Row
 
 /** Base class which performs Stochastic Gradient Descent optimization using mini batches.
   *
@@ -57,8 +60,8 @@ class GradientDescent extends IterativeSolver {
     * @return The weights, optimized for the provided data.
     */
   override def optimize(
-    data: DataSet[LabeledVector],
-    initialWeights: Option[DataSet[WeightVector]]): DataSet[WeightVector] = {
+    data: Table,
+    initialWeights: Option[Table]): Table = {
 
     val numberOfIterations: Int = parameters(Iterations)
     val convergenceThresholdOption: Option[Double] = parameters.get(ConvergenceThreshold)
@@ -69,7 +72,7 @@ class GradientDescent extends IterativeSolver {
     val learningRateMethod = parameters(LearningRateMethodValue)
 
     // Initialize weights
-    val initialWeightsDS: DataSet[WeightVector] = createInitialWeightsDS(initialWeights, data)
+    val initialWeightsDS = createInitialWeightsDS(initialWeights, data)
 
     // Perform the iterations
     convergenceThresholdOption match {
@@ -99,8 +102,8 @@ class GradientDescent extends IterativeSolver {
   }
 
   def optimizeWithConvergenceCriterion(
-      dataPoints: DataSet[LabeledVector],
-      initialWeightsDS: DataSet[WeightVector],
+      dataPoints: Table,
+      initialWeightsDS: Table,
       numberOfIterations: Int,
       regularizationPenalty: RegularizationPenalty,
       regularizationConstant: Double,
@@ -108,13 +111,14 @@ class GradientDescent extends IterativeSolver {
       convergenceThreshold: Double,
       lossFunction: LossFunction,
       learningRateMethod: LearningRateMethodTrait)
-    : DataSet[WeightVector] = {
+    : Table = {
     // We have to calculate for each weight vector the sum of squared residuals,
     // and then sum them and apply regularization
     val initialLossSumDS = calculateLoss(dataPoints, initialWeightsDS, lossFunction)
 
     // Combine weight vector with the current loss
-    val initialWeightsWithLossSum = initialWeightsDS.mapWithBcVariable(initialLossSumDS){
+    val initialWeightsWithLossSum =
+      initialWeightsDS.toDataSet[WeightVector].mapWithBcVariable(initialLossSumDS){
       (weights, loss) => (weights, loss)
     }
 
@@ -123,6 +127,7 @@ class GradientDescent extends IterativeSolver {
 
         // Extract weight vector and loss
         val previousWeightsDS = weightsWithPreviousLossSum.map{_._1}
+          .toTable(dataPoints.tableEnv.asInstanceOf[BatchTableEnvironment])
         val previousLossSumDS = weightsWithPreviousLossSum.map{_._2}
 
         val currentWeightsDS = SGDStep(
@@ -149,33 +154,34 @@ class GradientDescent extends IterativeSolver {
         }
 
         // Result for new iteration
-        (currentWeightsDS.mapWithBcVariable(currentLossSumDS)((w, l) => (w, l)), termination)
+        (currentWeightsDS.toDataSet[WeightVector]
+          .mapWithBcVariable(currentLossSumDS)((w, l) => (w, l)), termination)
     }
     // Return just the weights
-    resultWithLoss.map{_._1}
+    resultWithLoss.map{_._1}.toTable(dataPoints.tableEnv.asInstanceOf[BatchTableEnvironment])
   }
 
   def optimizeWithoutConvergenceCriterion(
-      data: DataSet[LabeledVector],
-      initialWeightsDS: DataSet[WeightVector],
+      data: Table,
+      initialWeightsDS: Table,
       numberOfIterations: Int,
       regularizationPenalty: RegularizationPenalty,
       regularizationConstant: Double,
       learningRate: Double,
       lossFunction: LossFunction,
       optimizationMethod: LearningRateMethodTrait)
-    : DataSet[WeightVector] = {
+    : Table = {
     initialWeightsDS.iterate(numberOfIterations) {
       weightVectorDS => {
         SGDStep(data,
-                weightVectorDS,
+                weightVectorDS.toTable(data.tableEnv.asInstanceOf[BatchTableEnvironment]),
                 lossFunction,
                 regularizationPenalty,
                 regularizationConstant,
                 learningRate,
                 optimizationMethod)
-      }
-    }
+      }.toDataSet[Row]
+    }.toTable(data.tableEnv.asInstanceOf[BatchTableEnvironment])
   }
 
   /** Performs one iteration of Stochastic Gradient Descent using mini batches
@@ -191,17 +197,18 @@ class GradientDescent extends IterativeSolver {
     * @return A Dataset containing the weights after one stochastic gradient descent step
     */
   private def SGDStep(
-    data: DataSet[(LabeledVector)],
-    currentWeights: DataSet[WeightVector],
+    data: Table,
+    currentWeights: Table,
     lossFunction: LossFunction,
     regularizationPenalty: RegularizationPenalty,
     regularizationConstant: Double,
     learningRate: Double,
     learningRateMethod: LearningRateMethodTrait)
-  : DataSet[WeightVector] = {
+  : Table = {
 
-    data.mapWithBcVariable(currentWeights){
-      (data, weightVector) => (lossFunction.gradient(data, weightVector), 1)
+    data.toDataSet[(LabeledVector)].mapWithBcVariable(currentWeights){
+      (data, weightVector) => (
+        lossFunction.gradient(data, weightVector.getField(0).asInstanceOf[WeightVector]), 1)
     }.reduce{
       (left, right) =>
         val (leftGradVector, leftCount) = left
@@ -234,7 +241,7 @@ class GradientDescent extends IterativeSolver {
           regularizationConstant)
 
         val newWeights = takeStep(
-          weightVector.weights,
+          weightVector.getField(0).asInstanceOf[WeightVector].weights,
           gradient.weights,
           regularizationPenalty,
           regularizationConstant,
@@ -242,9 +249,11 @@ class GradientDescent extends IterativeSolver {
 
         WeightVector(
           newWeights,
-          weightVector.intercept - effectiveLearningRate * gradient.intercept)
+          weightVector.getField(0)
+          .asInstanceOf[WeightVector].intercept - effectiveLearningRate * gradient.intercept)
       }
-    }
+    }.toTable(data.tableEnv.asInstanceOf[BatchTableEnvironment])
+
   }
 
   /** Calculates the new weights based on the gradient
@@ -274,11 +283,11 @@ class GradientDescent extends IterativeSolver {
     * @return A Dataset with the regularized loss as its only element
     */
   private def calculateLoss(
-      data: DataSet[LabeledVector],
-      weightDS: DataSet[WeightVector],
+      data: Table,
+      weightDS: Table,
       lossFunction: LossFunction)
     : DataSet[Double] = {
-    data.mapWithBcVariable(weightDS){
+    data.toDataSet[LabeledVector].mapWithBcVariable(weightDS.toDataSet[WeightVector]){
       (data, weightVector) => (lossFunction.loss(data, weightVector), 1)
     }.reduce{
       (left, right) => (left._1 + right._1, left._2 + right._2)

@@ -84,6 +84,9 @@ import org.apache.flink.ml.pipeline.{TransformDataSetOperation, Transformer}
 import scala.language.implicitConversions
 import scala.reflect.ClassTag
 
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 class StochasticOutlierSelection extends Transformer[StochasticOutlierSelection] {
 
   import StochasticOutlierSelection._
@@ -165,17 +168,18 @@ object StochasticOutlierSelection extends WithParameters {
         */
       override def transformDataSet(instance: StochasticOutlierSelection,
                                     transformParameters: ParameterMap,
-                                    input: DataSet[LabeledVector]): DataSet[(Int, Double)] = {
+                                    input: Table): Table = {
 
         val resultingParameters = instance.parameters ++ transformParameters
 
-        val vectorsWithIndex = input.map(labeledVector => {
+        val vectorsWithIndex = input.toDataSet[LabeledVector].map(labeledVector => {
           BreezeLabeledVector(labeledVector.label.toInt, labeledVector.vector.asBreeze)
         })
 
         // Don't map back to a labeled-vector since the output of the algorithm is
         // a single double instead of vector
         outlierSelection(vectorsWithIndex, resultingParameters)
+        .toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
       }
     }
   }
@@ -192,16 +196,17 @@ object StochasticOutlierSelection extends WithParameters {
     new TransformDataSetOperation[StochasticOutlierSelection, T, Double] {
       override def transformDataSet(instance: StochasticOutlierSelection,
                                     transformParameters: ParameterMap,
-                                    input: DataSet[T]): DataSet[Double] = {
+                                    input: Table): Table = {
 
         val resultingParameters = instance.parameters ++ transformParameters
 
         // Map to the right format
-        val vectorsWithIndex = input.zipWithUniqueId.map((vector: (Long, T)) => {
+        val vectorsWithIndex = input.toDataSet[T].zipWithUniqueId.map((vector: (Long, T)) => {
           BreezeLabeledVector(vector._1.toInt, vector._2.asBreeze)
         })
 
         outlierSelection(vectorsWithIndex, resultingParameters).map(_._2)
+          .toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
       }
     }
   }

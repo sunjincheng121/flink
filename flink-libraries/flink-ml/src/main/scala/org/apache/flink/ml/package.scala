@@ -23,7 +23,9 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.DataSink
 import org.apache.flink.api.scala.{DataSet, ExecutionEnvironment}
 import org.apache.flink.configuration.Configuration
-import org.apache.flink.ml.common.LabeledVector
+import org.apache.flink.ml.common.{BroadcastSingleElementFilterFunction, BroadcastSingleElementMapperFunction, LabeledVector, UUIDGenerateFunction}
+import org.apache.flink.table.api.scala._
+import org.apache.flink.table.api.Table
 
 import scala.reflect.ClassTag
 
@@ -114,6 +116,31 @@ package object ml {
 
     override def filter(value: T): Boolean = {
       fun(value, broadcastVariable)
+    }
+  }
+
+  implicit class RichTable(table: Table) {
+    def mapWithBcVariable[T, B, O: TypeInformation: ClassTag](
+        broadcastVariable: Table
+    )(fun: (T, B) => O): Table = {
+      val func = new BroadcastSingleElementMapperFunction(fun)
+      table.as('value).join(broadcastVariable.as('broadcast))
+        .select(func('value, 'broadcast))
+    }
+
+    def filterWithBcVariable[T, B, O](broadcastVariable: Table)(fun: (T, B) => Boolean): Table = {
+      val func = new BroadcastSingleElementFilterFunction(fun)
+      table.as('value).join(broadcastVariable.as('broadcast))
+        .where(func('value, 'broadcast))
+    }
+
+    def zipWithUUID[ID: TypeInformation, T: TypeInformation](): Table = {
+      val func = new UUIDGenerateFunction[ID, T]
+      table.as('t).select(func('t))
+    }
+
+    def mapPartition(func: Any): Table = { //fake
+      table
     }
   }
 }

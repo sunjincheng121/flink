@@ -30,6 +30,9 @@ import org.apache.flink.ml.pipeline.{FitOperation, PredictOperation, Predictor}
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Random
 
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 import breeze.linalg.{DenseVector => BreezeDenseVector, Vector => BreezeVector}
 
 /** Implements a soft-margin SVM using the communication-efficient distributed dual coordinate
@@ -321,8 +324,9 @@ object SVM{
       override def fit(
           instance: SVM,
           fitParameters: ParameterMap,
-          input: DataSet[LabeledVector])
+          inputTab: Table)
         : Unit = {
+        val input = inputTab.toDataSet[LabeledVector]
         val resultingParameters = instance.parameters ++ fitParameters
 
         // Check if the number of blocks/partitions has been specified

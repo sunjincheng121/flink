@@ -30,6 +30,9 @@ import org.apache.flink.types.Value
 import org.apache.flink.util.Collector
 import org.apache.flink.api.common.functions.{Partitioner => FlinkPartitioner, GroupReduceFunction, CoGroupFunction}
 
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala._
+
 import com.github.fommil.netlib.BLAS.{ getInstance => blas }
 import com.github.fommil.netlib.LAPACK.{ getInstance => lapack }
 import org.netlib.util.intW
@@ -208,7 +211,8 @@ class ALS extends Predictor[ALS] {
     factorsOption match {
       case Some((userFactors, itemFactors)) => {
         val predictions = data.join(userFactors, JoinHint.REPARTITION_HASH_SECOND).where(0)
-          .equalTo(0).join(itemFactors, JoinHint.REPARTITION_HASH_SECOND).where("_1._2")
+          .equalTo(0)
+          .join(itemFactors, JoinHint.REPARTITION_HASH_SECOND).where("_1._2")
           .equalTo(0).map {
           triple => {
             val (((uID, iID), uFactors), iFactors) = triple
@@ -229,7 +233,8 @@ class ALS extends Predictor[ALS] {
               iFactorsVector,
               1)
 
-            val prediction = blas.ddot(uFactorsVector.length, uFactorsVector, 1, iFactorsVector, 1)
+            val prediction =
+              blas.ddot(uFactorsVector.length, uFactorsVector, 1, iFactorsVector, 1)
 
             (uID, iID, prediction, squaredUNorm2, squaredINorm2)
           }
@@ -397,13 +402,15 @@ object ALS {
     override def predictDataSet(
         instance: ALS,
         predictParameters: ParameterMap,
-        input: DataSet[(Long, Long)])
-      : DataSet[(Long, Long, Double)] = {
+        input: Table)
+      : Table = {
 
       instance.factorsOption match {
         case Some((userFactors, itemFactors)) => {
-          input.join(userFactors, JoinHint.REPARTITION_HASH_SECOND).where(0).equalTo(0)
-            .join(itemFactors, JoinHint.REPARTITION_HASH_SECOND).where("_1._2").equalTo(0).map {
+          input.toDataSet[(Long, Long)]
+            .join(userFactors, JoinHint.REPARTITION_HASH_SECOND).where(0).equalTo(0)
+            .join(itemFactors, JoinHint.REPARTITION_HASH_SECOND)
+            .where("_1._2").equalTo(0).map {
             triple => {
               val (((uID, iID), uFactors), iFactors) = triple
 
@@ -419,7 +426,7 @@ object ALS {
 
               (uID, iID, prediction)
             }
-          }
+          }.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
         }
 
         case None => throw new RuntimeException("The ALS model has not been fitted to data. " +
@@ -432,17 +439,19 @@ object ALS {
     override def predictDataSet(
       instance: ALS,
       predictParameters: ParameterMap,
-      input: DataSet[(Int, Int)])
-    : DataSet[(Int, Int, Double)] = {
-      val longInput = input.map { x => (x._1.toLong, x._2.toLong)}
+      input: Table): Table = {
+
+      val longInput = input.toDataSet[(Int, Int)].map { x => (x._1.toLong, x._2.toLong)}
 
       val longResult = implicitly[PredictDataSetOperation[ALS, (Long, Long), (Long, Long, Double)]]
         .predictDataSet(
           instance,
           predictParameters,
-          longInput)
+          longInput.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment]))
 
-      longResult.map{ x => (x._1.toInt, x._2.toInt, x._3)}
+      val result =
+        longResult.toDataSet[(Int, Int, Double)].map{ x => (x._1.toInt, x._2.toInt, x._3)}
+      result.toTable(input.tableEnv.asInstanceOf[BatchTableEnvironment])
     }
   }
 
@@ -455,10 +464,11 @@ object ALS {
     override def fit(
         instance: ALS,
         fitParameters: ParameterMap,
-        input: DataSet[(Long, Long, Double)])
+        inputTab: Table)
       : Unit = {
       val resultParameters = instance.parameters ++ fitParameters
 
+      val input = inputTab.toDataSet[(Long, Long, Double)]
       val userBlocks = resultParameters.get(Blocks).getOrElse(input.count.toInt)
       val itemBlocks = userBlocks
       val persistencePath = resultParameters.get(TemporaryPath)
@@ -543,10 +553,12 @@ object ALS {
     override def fit(
       instance: ALS,
       fitParameters: ParameterMap,
-      input: DataSet[(Int, Int, Double)])
+      inputTab: Table)
     : Unit = {
 
+      val input = inputTab.toDataSet[(Int, Int, Double)]
       val longInput = input.map { x => (x._1.toLong, x._2.toLong, x._3)}
+          .toTable(inputTab.tableEnv.asInstanceOf[BatchTableEnvironment])
 
       implicitly[FitOperation[ALS, (Long, Long, Double)]].fit(instance, fitParameters, longInput)
     }
@@ -602,7 +614,8 @@ object ALS {
     }
 
     // collect the partial update messages and calculate for each user block the new user vectors
-    partialBlockMsgs.coGroup(userIn).where(0).equalTo(0).sortFirstGroup(1, Order.ASCENDING).
+    partialBlockMsgs.coGroup(userIn)
+      .where(0).equalTo(0).sortFirstGroup(1, Order.ASCENDING).
       withPartitioner(blockIDPartitioner).apply{
       new CoGroupFunction[(Int, Int, Array[Array[Double]]), (Int,
         InBlockInformation), (Int, Array[Array[Double]])](){
@@ -856,8 +869,8 @@ object ALS {
     // Aggregate all ratings for items belonging to the same item block. Sort ascending with
     // respect to the itemID, because later the item vectors of the update message are sorted
     // accordingly.
-    val collectedPartialInfos = partialInInfos.groupBy(0, 1).sortGroup(2, Order.ASCENDING).
-      reduceGroup {
+    val collectedPartialInfos =
+    partialInInfos.groupBy(0, 1).sortGroup(2, Order.ASCENDING).reduceGroup {
       new GroupReduceFunction[(Int, Int, Long, (Array[Long], Array[Double])), (Int,
         Int, Array[(Array[Long], Array[Double])])](){
         val buffer = new ArrayBuffer[(Array[Long], Array[Double])]
