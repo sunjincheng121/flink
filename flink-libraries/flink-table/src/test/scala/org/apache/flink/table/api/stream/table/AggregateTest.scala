@@ -21,6 +21,7 @@ package org.apache.flink.table.api.stream.table
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.scala._
+import org.apache.flink.table.plan.expressions.ScalaExpressionParser
 import org.apache.flink.table.plan.logical.{SessionGroupWindow, SlidingGroupWindow, TumblingGroupWindow}
 import org.apache.flink.table.runtime.utils.JavaUserDefinedAggFunctions.WeightedAvg
 import org.apache.flink.table.utils.TableTestUtil._
@@ -257,7 +258,10 @@ class AggregateTest extends TableTestBase {
         streamTableNode(0),
         term("select", "a", "rowtime")
       ),
-      term("window", TumblingGroupWindow('w, 'rowtime, 900000.millis)),
+      term("window", TumblingGroupWindow(
+        ScalaExpressionParser.parse('w),
+        ScalaExpressionParser.parse('rowtime),
+        ScalaExpressionParser.parse(900000.millis))),
       term("select", "COUNT(DISTINCT a) AS TMP_0", "SUM(a) AS TMP_1")
     )
 
@@ -281,7 +285,11 @@ class AggregateTest extends TableTestBase {
         streamTableNode(0),
         term("select", "a", "rowtime")
       ),
-      term("window", SlidingGroupWindow('w, 'rowtime, 3600000.millis, 900000.millis)),
+      term("window", SlidingGroupWindow(
+        ScalaExpressionParser.parse('w),
+        ScalaExpressionParser.parse('rowtime),
+        ScalaExpressionParser.parse(3600000.millis),
+        ScalaExpressionParser.parse(900000.millis))),
       term("select", "COUNT(DISTINCT a) AS TMP_0", "SUM(DISTINCT a) AS TMP_1",
            "MAX(DISTINCT a) AS TMP_2")
     )
@@ -307,7 +315,10 @@ class AggregateTest extends TableTestBase {
         term("select", "a", "c", "rowtime")
       ),
       term("groupBy", "a"),
-      term("window", SessionGroupWindow('w, 'rowtime, 900000.millis)),
+      term("window", SessionGroupWindow(
+        ScalaExpressionParser.parse('w),
+        ScalaExpressionParser.parse('rowtime),
+        ScalaExpressionParser.parse(900000.millis))),
       term("select", "a", "COUNT(a) AS TMP_0", "COUNT(DISTINCT c) AS TMP_1")
     )
 

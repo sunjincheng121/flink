@@ -31,8 +31,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
 import org.apache.flink.table.api.{StreamTableEnvironment, TableEnvironment, Types, UnresolvedException}
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
-import org.apache.flink.table.expressions.ExpressionUtils.isRowCountLiteral
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions.ExpressionUtils.isRowCountLiteral
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.TableFunction
 import org.apache.flink.table.functions.utils.TableSqlFunction
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
@@ -55,12 +55,13 @@ case class Project(
     val newProjectList =
       afterResolve.projectList.zipWithIndex.map { case (e, i) =>
         e match {
-          case u @ UnresolvedAlias(c) => c match {
+          case u @ PlannerUnresolvedAlias(c) => c match {
             case ne: NamedExpression => ne
             case expr if !expr.valid => u
-            case c @ Cast(ne: NamedExpression, tp) => Alias(c, s"${ne.name}-$tp")
-            case gcf: GetCompositeField => Alias(gcf, gcf.aliasName().getOrElse(s"_c$i"))
-            case other => Alias(other, s"_c$i")
+            case c @ PlannerCast(ne: NamedExpression, tp) => PlannerAlias(c, s"${ne.name}-$tp")
+            case gcf: PlannerGetCompositeField =>
+              PlannerAlias(gcf, gcf.aliasName().getOrElse(s"_c$i"))
+            case other => PlannerAlias(other, s"_c$i")
           }
           case _ =>
             throw new RuntimeException("This should never be called and probably points to a bug.")
@@ -82,10 +83,10 @@ case class Project(
     }
 
     resolvedProject.projectList.foreach {
-      case n: Alias =>
+      case n: PlannerAlias =>
         // explicit name
         checkName(n.name)
-      case r: ResolvedFieldReference =>
+      case r: PlannerResolvedFieldReference =>
         // simple field forwarding
         checkName(r.name)
       case _ => // Do nothing
@@ -101,8 +102,8 @@ case class Project(
     } else {
       // remove AS expressions, according to Calcite they should not be in a final RexNode
       projectList.map {
-        case Alias(e: Expression, _, _) => e
-        case e: Expression => e
+        case PlannerAlias(e: PlannerExpression, _, _) => e
+        case e: PlannerExpression => e
       }
     }
 
@@ -113,7 +114,7 @@ case class Project(
   }
 }
 
-case class AliasNode(aliasList: Seq[Expression], child: LogicalNode) extends UnaryNode {
+case class AliasNode(aliasList: Seq[PlannerExpression], child: LogicalNode) extends UnaryNode {
   override def output: Seq[Attribute] =
     throw UnresolvedException("Invalid call to output on AliasNode")
 
@@ -123,16 +124,16 @@ case class AliasNode(aliasList: Seq[Expression], child: LogicalNode) extends Una
   override def resolveExpressions(tableEnv: TableEnvironment): LogicalNode = {
     if (aliasList.length > child.output.length) {
       failValidation("Aliasing more fields than we actually have")
-    } else if (!aliasList.forall(_.isInstanceOf[UnresolvedFieldReference])) {
+    } else if (!aliasList.forall(_.isInstanceOf[PlannerUnresolvedFieldReference])) {
       failValidation("Alias only accept name expressions as arguments")
-    } else if (!aliasList.forall(_.asInstanceOf[UnresolvedFieldReference].name != "*")) {
+    } else if (!aliasList.forall(_.asInstanceOf[PlannerUnresolvedFieldReference].name != "*")) {
       failValidation("Alias can not accept '*' as name")
     } else {
-      val names = aliasList.map(_.asInstanceOf[UnresolvedFieldReference].name)
+      val names = aliasList.map(_.asInstanceOf[PlannerUnresolvedFieldReference].name)
       val input = child.output
       Project(
         names.zip(input).map { case (name, attr) =>
-          Alias(attr, name)} ++ input.drop(names.length),
+          PlannerAlias(attr, name)} ++ input.drop(names.length),
         child,
         explicitAlias = true)
     }
@@ -186,7 +187,7 @@ case class Limit(offset: Int, fetch: Int = -1, child: LogicalNode) extends Unary
   }
 }
 
-case class Filter(condition: Expression, child: LogicalNode) extends UnaryNode {
+case class Filter(condition: PlannerExpression, child: LogicalNode) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 
   override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = {
@@ -205,14 +206,14 @@ case class Filter(condition: Expression, child: LogicalNode) extends UnaryNode {
 }
 
 case class Aggregate(
-    groupingExpressions: Seq[Expression],
-    aggregateExpressions: Seq[NamedExpression],
-    child: LogicalNode) extends UnaryNode {
+                      groupingExpressions: Seq[PlannerExpression],
+                      aggregateExpressions: Seq[NamedExpression],
+                      child: LogicalNode) extends UnaryNode {
 
   override def output: Seq[Attribute] = {
     (groupingExpressions ++ aggregateExpressions) map {
       case ne: NamedExpression => ne.toAttribute
-      case e => Alias(e, e.toString).toAttribute
+      case e => PlannerAlias(e, e.toString).toAttribute
     }
   }
 
@@ -221,7 +222,7 @@ case class Aggregate(
     relBuilder.aggregate(
       relBuilder.groupKey(groupingExpressions.map(_.toRexNode(relBuilder)).asJava),
       aggregateExpressions.map {
-        case Alias(agg: Aggregation, name, _) => agg.toAggCall(name)(relBuilder)
+        case PlannerAlias(agg: Aggregation, name, _) => agg.toAggCall(name)(relBuilder)
         case _ => throw new RuntimeException("This should never happen.")
       }.asJava)
   }
@@ -234,10 +235,10 @@ case class Aggregate(
     aggregateExprs.foreach(validateAggregateExpression)
     groupingExprs.foreach(validateGroupingExpression)
 
-    def validateAggregateExpression(expr: Expression): Unit = expr match {
-      case distinctExpr: DistinctAgg =>
+    def validateAggregateExpression(expr: PlannerExpression): Unit = expr match {
+      case distinctExpr: PlannerDistinctAgg =>
         distinctExpr.child match {
-          case _: DistinctAgg => failValidation(
+          case _: PlannerDistinctAgg => failValidation(
             "Chained distinct operators are not supported!")
           case aggExpr: Aggregation => validateAggregateExpression(aggExpr)
           case _ => failValidation(
@@ -266,7 +267,7 @@ case class Aggregate(
       case e => e.children.foreach(validateAggregateExpression)
     }
 
-    def validateGroupingExpression(expr: Expression): Unit = {
+    def validateGroupingExpression(expr: PlannerExpression): Unit = {
       if (!expr.resultType.isKeyType) {
         failValidation(
           s"expression $expr cannot be used as a grouping expression " +
@@ -372,11 +373,11 @@ case class Intersect(left: LogicalNode, right: LogicalNode, all: Boolean) extend
 }
 
 case class Join(
-    left: LogicalNode,
-    right: LogicalNode,
-    joinType: JoinType,
-    condition: Option[Expression],
-    correlated: Boolean) extends BinaryNode {
+                 left: LogicalNode,
+                 right: LogicalNode,
+                 joinType: JoinType,
+                 condition: Option[PlannerExpression],
+                 correlated: Boolean) extends BinaryNode {
 
   override def output: Seq[Attribute] = {
     left.output ++ right.output
@@ -418,8 +419,8 @@ case class Join(
 
   override def resolveExpressions(tableEnv: TableEnvironment): LogicalNode = {
     val node = super.resolveExpressions(tableEnv).asInstanceOf[Join]
-    val partialFunction: PartialFunction[Expression, Expression] = {
-      case field: ResolvedFieldReference => JoinFieldReference(
+    val partialFunction: PartialFunction[PlannerExpression, PlannerExpression] = {
+      case field: PlannerResolvedFieldReference => JoinFieldReference(
         field.name,
         field.resultType,
         left,
@@ -467,7 +468,7 @@ case class Join(
     resolvedJoin
   }
 
-  private def testJoinCondition(expression: Expression): Unit = {
+  private def testJoinCondition(expression: PlannerExpression): Unit = {
 
     def checkIfJoinCondition(exp: BinaryComparison) = exp.children match {
       case (x: JoinFieldReference) :: (y: JoinFieldReference) :: Nil
@@ -485,11 +486,11 @@ case class Join(
     var equiJoinPredicateFound = false
     // Whether the predicate is literal true.
     val alwaysTrue = expression match {
-      case x: Literal if x.value.equals(true) => true
+      case x: PlannerLiteral if x.value.equals(true) => true
       case _ => false
     }
 
-    def validateConditions(exp: Expression, isAndBranch: Boolean): Unit = exp match {
+    def validateConditions(exp: PlannerExpression, isAndBranch: Boolean): Unit = exp match {
       case x: And => x.children.foreach(validateConditions(_, isAndBranch))
       case x: Or => x.children.foreach(validateConditions(_, isAndBranch = false))
       case x: EqualTo =>
@@ -498,7 +499,7 @@ case class Join(
         }
       case x: BinaryComparison =>
       // The boolean literal should be a valid condition type.
-      case x: Literal if x.resultType == Types.BOOLEAN =>
+      case x: PlannerLiteral if x.resultType == Types.BOOLEAN =>
       case x => failValidation(
         s"Unsupported condition type: ${x.getClass.getSimpleName}. Condition: $x")
     }
@@ -525,7 +526,7 @@ case class CatalogNode(
     rowType: RelDataType) extends LeafNode {
 
   val output: Seq[Attribute] = rowType.getFieldList.asScala.map { field =>
-    ResolvedFieldReference(field.getName, FlinkTypeFactory.toTypeInfo(field.getType))
+    PlannerResolvedFieldReference(field.getName, FlinkTypeFactory.toTypeInfo(field.getType))
   }
 
   override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = {
@@ -542,7 +543,7 @@ case class LogicalRelNode(
     relNode: RelNode) extends LeafNode {
 
   val output: Seq[Attribute] = relNode.getRowType.getFieldList.asScala.map { field =>
-    ResolvedFieldReference(field.getName, FlinkTypeFactory.toTypeInfo(field.getType))
+    PlannerResolvedFieldReference(field.getName, FlinkTypeFactory.toTypeInfo(field.getType))
   }
 
   override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = {
@@ -553,7 +554,7 @@ case class LogicalRelNode(
 }
 
 case class WindowAggregate(
-    groupingExpressions: Seq[Expression],
+    groupingExpressions: Seq[PlannerExpression],
     window: LogicalWindow,
     propertyExpressions: Seq[NamedExpression],
     aggregateExpressions: Seq[NamedExpression],
@@ -563,7 +564,7 @@ case class WindowAggregate(
   override def output: Seq[Attribute] = {
     (groupingExpressions ++ aggregateExpressions ++ propertyExpressions) map {
       case ne: NamedExpression => ne.toAttribute
-      case e => Alias(e, e.toString).toAttribute
+      case e => PlannerAlias(e, e.toString).toAttribute
     }
   }
 
@@ -581,21 +582,21 @@ case class WindowAggregate(
       } else {
         // resolve type of window reference
         val resolvedType = window.timeAttribute match {
-          case UnresolvedFieldReference(n) =>
+          case PlannerUnresolvedFieldReference(n) =>
             super.resolveReference(tableEnv, n) match {
-              case Some(ResolvedFieldReference(_, tpe)) => Some(tpe)
+              case Some(PlannerResolvedFieldReference(_, tpe)) => Some(tpe)
               case _ => None
             }
           case _ => None
         }
         // let validation phase throw an error if type could not be resolved
-        Some(WindowReference(name, resolvedType))
+        Some(PlannerWindowReference(name, resolvedType))
       }
     }
 
     window.aliasAttribute match {
       // resolve reference to this window's name
-      case UnresolvedFieldReference(alias) if name == alias =>
+      case PlannerUnresolvedFieldReference(alias) if name == alias =>
         resolveAlias(alias)
 
       case _ =>
@@ -611,11 +612,11 @@ case class WindowAggregate(
       window,
       relBuilder.groupKey(groupingExpressions.map(_.toRexNode(relBuilder)).asJava),
       propertyExpressions.map {
-        case Alias(prop: WindowProperty, name, _) => prop.toNamedWindowProperty(name)
+        case PlannerAlias(prop: WindowProperty, name, _) => prop.toNamedWindowProperty(name)
         case _ => throw new RuntimeException("This should never happen.")
       },
       aggregateExpressions.map {
-        case Alias(agg: Aggregation, name, _) => agg.toAggCall(name)(relBuilder)
+        case PlannerAlias(agg: Aggregation, name, _) => agg.toAggCall(name)(relBuilder)
         case _ => throw new RuntimeException("This should never happen.")
       }.asJava)
   }
@@ -628,12 +629,12 @@ case class WindowAggregate(
     aggregateExprs.foreach(validateAggregateExpression)
     groupingExprs.foreach(validateGroupingExpression)
 
-    def validateAggregateExpression(expr: Expression): Unit = expr match {
+    def validateAggregateExpression(expr: PlannerExpression): Unit = expr match {
       // check aggregate function
       case aggExpr: Aggregation
         if aggExpr.getSqlAggFunction.requiresOver =>
         failValidation(s"OVER clause is necessary for window functions: [${aggExpr.getClass}].")
-      case aggExpr: DistinctAgg =>
+      case aggExpr: PlannerDistinctAgg =>
         validateAggregateExpression(aggExpr.child)
       // check no nested aggregation exists.
       case aggExpr: Aggregation =>
@@ -654,7 +655,7 @@ case class WindowAggregate(
       case e => e.children.foreach(validateAggregateExpression)
     }
 
-    def validateGroupingExpression(expr: Expression): Unit = {
+    def validateGroupingExpression(expr: PlannerExpression): Unit = {
       if (!expr.resultType.isKeyType) {
         failValidation(
           s"Expression $expr cannot be used as a grouping expression " +
@@ -689,8 +690,8 @@ case class WindowAggregate(
 }
 
 case class TemporalTable(
-    timeAttribute: Expression,
-    primaryKey: Expression,
+    timeAttribute: PlannerExpression,
+    primaryKey: PlannerExpression,
     child: LogicalNode)
   extends UnaryNode {
 
@@ -714,7 +715,7 @@ case class TemporalTable(
 case class LogicalTableFunctionCall(
     functionName: String,
     tableFunction: TableFunction[_],
-    parameters: Seq[Expression],
+    parameters: Seq[PlannerExpression],
     resultType: TypeInformation[_],
     fieldNames: Array[String],
     child: LogicalNode)
@@ -726,11 +727,11 @@ case class LogicalTableFunctionCall(
   override def output: Seq[Attribute] = {
     if (fieldNames.isEmpty) {
       generatedNames.zip(fieldTypes).map {
-        case (n, t) => ResolvedFieldReference(n, t)
+        case (n, t) => PlannerResolvedFieldReference(n, t)
       }
     } else {
       fieldNames.zip(fieldTypes).map {
-        case (n, t) => ResolvedFieldReference(n, t)
+        case (n, t) => PlannerResolvedFieldReference(n, t)
       }
     }
   }

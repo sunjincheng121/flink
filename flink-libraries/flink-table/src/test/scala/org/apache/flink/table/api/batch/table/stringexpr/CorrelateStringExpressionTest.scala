@@ -21,7 +21,7 @@ package org.apache.flink.table.api.batch.table.stringexpr
 import org.apache.flink.api.java.typeutils.RowTypeInfo
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.api.{Table, Types}
+import org.apache.flink.table.api.{TableImpl, Types}
 import org.apache.flink.table.utils.{PojoTableFunc, TableFunc2, _}
 import org.apache.flink.table.utils._
 import org.apache.flink.types.Row
@@ -41,17 +41,17 @@ class CorrelateStringExpressionTest extends TableTestBase {
     val func1 = new TableFunc1
     util.javaTableEnv.registerFunction("func1", func1)
     var scalaTable = sTab.join(func1('c) as 's).select('c, 's)
-    var javaTable = jTab.join(new Table(util.javaTableEnv, "func1(c).as(s)")).select("c, s")
+    var javaTable = jTab.join(util.javaTableEnv.scan("func1(c).as(s)")).select("c, s")
     verifyTableEquals(scalaTable, javaTable)
 
     // test left outer join
     scalaTable = sTab.leftOuterJoin(func1('c) as 's).select('c, 's)
-    javaTable = jTab.leftOuterJoin(new Table(util.javaTableEnv, "as(func1(c), s)")).select("c, s")
+    javaTable = jTab.leftOuterJoin(util.javaTableEnv.scan("as(func1(c), s)")).select("c, s")
     verifyTableEquals(scalaTable, javaTable)
 
     // test overloading
     scalaTable = sTab.join(func1('c, "$") as 's).select('c, 's)
-    javaTable = jTab.join(new Table(util.javaTableEnv, "func1(c, '$') as (s)")).select("c, s")
+    javaTable = jTab.join(util.javaTableEnv.scan("func1(c, '$') as (s)")).select("c, s")
     verifyTableEquals(scalaTable, javaTable)
 
     // test custom result type
@@ -59,14 +59,14 @@ class CorrelateStringExpressionTest extends TableTestBase {
     util.javaTableEnv.registerFunction("func2", func2)
     scalaTable = sTab.join(func2('c) as('name, 'len)).select('c, 'name, 'len)
     javaTable = jTab.join(
-      new Table(util.javaTableEnv, "func2(c).as(name, len)")).select("c, name, len")
+      util.javaTableEnv.scan("func2(c).as(name, len)")).select("c, name, len")
     verifyTableEquals(scalaTable, javaTable)
 
     // test hierarchy generic type
     val hierarchy = new HierarchyTableFunction
     util.javaTableEnv.registerFunction("hierarchy", hierarchy)
     scalaTable = sTab.join(hierarchy('c) as('name, 'adult, 'len)).select('c, 'name, 'len, 'adult)
-    javaTable = jTab.join(new Table(util.javaTableEnv, "AS(hierarchy(c), name, adult, len)"))
+    javaTable = jTab.join(util.javaTableEnv.scan("AS(hierarchy(c), name, adult, len)"))
       .select("c, name, len, adult")
     verifyTableEquals(scalaTable, javaTable)
 
@@ -74,19 +74,19 @@ class CorrelateStringExpressionTest extends TableTestBase {
     val pojo = new PojoTableFunc
     util.javaTableEnv.registerFunction("pojo", pojo)
     scalaTable = sTab.join(pojo('c)).select('c, 'name, 'age)
-    javaTable = jTab.join(new Table(util.javaTableEnv, "pojo(c)")).select("c, name, age")
+    javaTable = jTab.join(util.javaTableEnv.scan("pojo(c)")).select("c, name, age")
     verifyTableEquals(scalaTable, javaTable)
 
     // test with filter
     scalaTable = sTab.join(func2('c) as('name, 'len)).select('c, 'name, 'len).filter('len > 2)
-    javaTable = jTab.join(new Table(util.javaTableEnv, "func2(c) as (name, len)"))
+    javaTable = jTab.join(util.javaTableEnv.scan("func2(c) as (name, len)"))
       .select("c, name, len").filter("len > 2")
     verifyTableEquals(scalaTable, javaTable)
 
     // test with scalar function
     scalaTable = sTab.join(func1('c.substring(2)) as 's).select('a, 'c, 's)
     javaTable = jTab.join(
-      new Table(util.javaTableEnv, "func1(substring(c, 2)) as (s)")).select("a, c, s")
+      util.javaTableEnv.scan("func1(substring(c, 2)) as (s)")).select("a, c, s")
     verifyTableEquals(scalaTable, javaTable)
   }
 }

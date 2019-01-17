@@ -21,8 +21,9 @@ import org.apache.calcite.rel.logical.LogicalJoin
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.Types
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.calcite.RelTimeIndicatorConverter
 import org.apache.flink.table.expressions.Null
+import org.apache.flink.table.calcite.RelTimeIndicatorConverter
+import org.apache.flink.table.plan.expressions.{ScalaExpressionParser, PlannerNull}
 import org.apache.flink.table.plan.logical.TumblingGroupWindow
 import org.apache.flink.table.runtime.join.WindowJoinUtil
 import org.apache.flink.table.utils.TableTestUtil.{term, _}
@@ -332,7 +333,10 @@ class JoinTest extends TableTestBase {
           term("select", "c", "b", "a0", "b0")
         ),
         term("groupBy", "b"),
-        term("window", TumblingGroupWindow('w$, 'c, 21600000.millis)),
+        term("window", TumblingGroupWindow(
+          ScalaExpressionParser.parse('w$),
+          ScalaExpressionParser.parse('c),
+          ScalaExpressionParser.parse(21600000.millis))),
         term("select", "b", "SUM(a0) AS aSum", "COUNT(b0) AS bCnt")
       )
 
@@ -377,7 +381,10 @@ class JoinTest extends TableTestBase {
           term("select", "c0", "b0", "a", "b")
         ),
         term("groupBy", "b0"),
-        term("window", TumblingGroupWindow('w$, 'c0, 21600000.millis)),
+        term("window", TumblingGroupWindow(
+          ScalaExpressionParser.parse('w$),
+          ScalaExpressionParser.parse('c0),
+          ScalaExpressionParser.parse(21600000.millis))),
         term("select", "b0", "SUM(a) AS aSum", "COUNT(b) AS bCnt")
       )
 

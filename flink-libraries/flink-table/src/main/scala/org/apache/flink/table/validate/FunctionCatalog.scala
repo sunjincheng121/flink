@@ -23,7 +23,7 @@ import org.apache.calcite.sql.fun.SqlStdOperatorTable
 import org.apache.calcite.sql.util.{ChainedSqlOperatorTable, ListSqlOperatorTable, ReflectiveSqlOperatorTable}
 import org.apache.calcite.sql._
 import org.apache.flink.table.api._
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.sql.ScalarSqlFunctions
 import org.apache.flink.table.functions.utils.{AggSqlFunction, ScalarSqlFunction, TableSqlFunction}
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
@@ -62,7 +62,7 @@ class FunctionCatalog {
   /**
     * Lookup and create an expression if we find a match.
     */
-  def lookupFunction(name: String, children: Seq[Expression]): Expression = {
+  def lookupFunction(name: String, children: Seq[PlannerExpression]): PlannerExpression = {
     val funcClass = functionBuilders
       .getOrElse(name.toLowerCase, throw new ValidationException(s"Undefined function: $name"))
 
@@ -75,7 +75,7 @@ class FunctionCatalog {
           .find(f => f.getName.equalsIgnoreCase(name) && f.isInstanceOf[ScalarSqlFunction])
           .getOrElse(throw new ValidationException(s"Undefined scalar function: $name"))
           .asInstanceOf[ScalarSqlFunction]
-        ScalarFunctionCall(scalarSqlFunction.getScalarFunction, children)
+        PlannerScalarFunctionCall(scalarSqlFunction.getScalarFunction, children)
 
       // user-defined table function call
       case tf if classOf[TableFunction[_]].isAssignableFrom(tf) =>
@@ -85,7 +85,7 @@ class FunctionCatalog {
           .asInstanceOf[TableSqlFunction]
         val typeInfo = tableSqlFunction.getRowTypeInfo
         val function = tableSqlFunction.getTableFunction
-        TableFunctionCall(name, function, children, typeInfo)
+        PlannerTableFunctionCall(name, function, children, typeInfo)
 
       // user-defined aggregate function call
       case af if classOf[AggregateFunction[_, _]].isAssignableFrom(af) =>
@@ -96,30 +96,32 @@ class FunctionCatalog {
         val function = aggregateFunction.getFunction
         val returnType = aggregateFunction.returnType
         val accType = aggregateFunction.accType
-        AggFunctionCall(function, returnType, accType, children)
+        PlannerAggFunctionCall(function, returnType, accType, children)
 
       // general expression call
-      case expression if classOf[Expression].isAssignableFrom(expression) =>
+      case expression if classOf[PlannerExpression].isAssignableFrom(expression) =>
         // try to find a constructor accepts `Seq[Expression]`
         Try(funcClass.getDeclaredConstructor(classOf[Seq[_]])) match {
           case Success(seqCtor) =>
-            Try(seqCtor.newInstance(children).asInstanceOf[Expression]) match {
+            Try(seqCtor.newInstance(children).asInstanceOf[PlannerExpression]) match {
               case Success(expr) => expr
               case Failure(e) => throw new ValidationException(e.getMessage)
             }
           case Failure(_) =>
-            Try(funcClass.getDeclaredConstructor(classOf[Expression], classOf[Seq[_]])) match {
+            Try(funcClass.getDeclaredConstructor(
+              classOf[PlannerExpression], classOf[Seq[_]])) match {
               case Success(ctor) =>
-                Try(ctor.newInstance(children.head, children.tail).asInstanceOf[Expression]) match {
+                Try(ctor.newInstance(
+                  children.head, children.tail).asInstanceOf[PlannerExpression]) match {
                   case Success(expr) => expr
                   case Failure(e) => throw new ValidationException(e.getMessage)
                 }
               case Failure(_) =>
-                val childrenClass = Seq.fill(children.length)(classOf[Expression])
+                val childrenClass = Seq.fill(children.length)(classOf[PlannerExpression])
                 // try to find a constructor matching the exact number of children
                 Try(funcClass.getDeclaredConstructor(childrenClass: _*)) match {
                   case Success(ctor) =>
-                    Try(ctor.newInstance(children: _*).asInstanceOf[Expression]) match {
+                    Try(ctor.newInstance(children: _*).asInstanceOf[PlannerExpression]) match {
                       case Success(expr) => expr
                       case Failure(exception) => throw new ValidationException(exception.getMessage)
                     }
@@ -160,7 +162,7 @@ object FunctionCatalog {
     "lessThan" -> classOf[LessThan],
     "lessThanOrEqual" -> classOf[LessThanOrEqual],
     "notEquals" -> classOf[NotEqualTo],
-    "in" -> classOf[In],
+    "in" -> classOf[PlannerIn],
     "isNull" -> classOf[IsNull],
     "isNotNull" -> classOf[IsNotNull],
     "isTrue" -> classOf[IsTrue],
@@ -263,6 +265,8 @@ object FunctionCatalog {
     "dateTimePlus" -> classOf[Plus],
     "dateFormat" -> classOf[DateFormat],
     "timestampDiff" -> classOf[TimestampDiff],
+    "temporalFloor" -> classOf[TemporalFloor],
+    "temporalCeil" -> classOf[TemporalCeil],
 
     // item
     "at" -> classOf[ItemAt],

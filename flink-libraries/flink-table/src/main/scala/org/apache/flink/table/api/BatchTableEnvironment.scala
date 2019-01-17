@@ -33,7 +33,7 @@ import org.apache.flink.api.java.typeutils.GenericTypeInfo
 import org.apache.flink.api.java.{DataSet, ExecutionEnvironment}
 import org.apache.flink.table.descriptors.{BatchTableDescriptor, ConnectorDescriptor}
 import org.apache.flink.table.explain.PlanJsonParser
-import org.apache.flink.table.expressions.{Expression, TimeAttribute}
+import org.apache.flink.table.plan.expressions.{PlannerExpression, PlannerTimeAttribute}
 import org.apache.flink.table.plan.nodes.FlinkConventions
 import org.apache.flink.table.plan.nodes.dataset.DataSetRel
 import org.apache.flink.table.plan.rules.FlinkRuleSets
@@ -356,7 +356,7 @@ abstract class BatchTableEnvironment(
     * @param extended Flag to include detailed optimizer estimates.
     */
   private[flink] def explain(table: Table, extended: Boolean): String = {
-    val ast = table.getRelNode
+    val ast = table.asInstanceOf[InnerTable].getRelNode
     val optimizedPlan = optimize(ast)
     val dataSet = translate[Row](optimizedPlan, ast.getRowType, queryConfig) (
       new GenericTypeInfo (classOf[Row]))
@@ -414,7 +414,7 @@ abstract class BatchTableEnvironment(
     * @tparam T The type of the [[DataSet]].
     */
   protected def registerDataSetInternal[T](
-      name: String, dataSet: DataSet[T], fields: Array[Expression]): Unit = {
+      name: String, dataSet: DataSet[T], fields: Array[PlannerExpression]): Unit = {
 
     val inputType = dataSet.getType
 
@@ -422,7 +422,7 @@ abstract class BatchTableEnvironment(
       inputType,
       fields)
 
-    if (fields.exists(_.isInstanceOf[TimeAttribute])) {
+    if (fields.exists(_.isInstanceOf[PlannerTimeAttribute])) {
       throw new ValidationException(
         ".rowtime and .proctime time indicators are not allowed in a batch environment.")
     }
@@ -471,7 +471,7 @@ abstract class BatchTableEnvironment(
   protected def translate[A](
       table: Table,
       queryConfig: BatchQueryConfig)(implicit tpe: TypeInformation[A]): DataSet[A] = {
-    val relNode = table.getRelNode
+    val relNode = table.asInstanceOf[InnerTable].getRelNode
     val dataSetPlan = optimize(relNode)
     translate(dataSetPlan, relNode.getRowType, queryConfig)
   }

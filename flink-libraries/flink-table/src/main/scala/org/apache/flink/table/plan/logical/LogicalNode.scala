@@ -21,7 +21,7 @@ import org.apache.calcite.rel.RelNode
 import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.table.plan.TreeNode
 import org.apache.flink.table.api.{TableEnvironment, ValidationException}
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.typeutils.TypeCoercion
 import org.apache.flink.table.validate._
 
@@ -32,15 +32,15 @@ import org.apache.flink.table.validate._
   *
   * Expressions' resolution and transformation ([[resolveExpressions]]):
   *
-  * - translate [[UnresolvedFieldReference]] into [[ResolvedFieldReference]]
+  * - translate [[PlannerUnresolvedFieldReference]] into [[PlannerResolvedFieldReference]]
   *     using child operator's output
-  * - translate [[Call]](UnresolvedFunction) into solid Expression
+  * - translate [[PlannerCall]](UnresolvedFunction) into solid Expression
   * - generate alias names for query output
   * - ....
   *
   * LogicalNode validation ([[validate]]):
   *
-  * - check no [[UnresolvedFieldReference]] exists any more
+  * - check no [[PlannerUnresolvedFieldReference]] exists any more
   * - check if all expressions have children of needed type
   * - check each logical operator have desired input
   *
@@ -52,10 +52,10 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
   def resolveExpressions(tableEnv: TableEnvironment): LogicalNode = {
     // resolve references and function calls
     val exprResolved = expressionPostOrderTransform {
-      case u @ UnresolvedFieldReference(name) =>
+      case u @ PlannerUnresolvedFieldReference(name) =>
         // try resolve a field
         resolveReference(tableEnv, name).getOrElse(u)
-      case c @ Call(name, children) if c.childrenValid =>
+      case c @ PlannerCall(name, children) if c.childrenValid =>
         tableEnv.getFunctionCatalog.lookupFunction(name, children)
     }
 
@@ -66,7 +66,7 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
           val childType = child.resultType
           if (childType != tpe && TypeCoercion.canSafelyCast(childType, tpe)) {
             changed = true
-            Cast(child, tpe)
+            PlannerCast(child, tpe)
           } else {
             child
           }
@@ -93,7 +93,7 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
           failValidation(s"Cannot resolve field [${a.name}] given input [$from].")
         }
 
-      case e: Expression if e.validateInput().isFailure =>
+      case e: PlannerExpression if e.validateInput().isFailure =>
         failValidation(s"Expression $e failed on input check: " +
           s"${e.validateInput().asInstanceOf[ValidationFailure].message}")
     }
@@ -115,7 +115,7 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
 
     // try to resolve a table
     tableEnv.scanInternal(Array(name)) match {
-      case Some(table) => Some(TableReference(name, table))
+      case Some(table) => Some(PlannerTableReference(name, table))
       case None => None
     }
   }
@@ -125,10 +125,11 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
     *
     * @param rule the rule to be applied to every expression in this logical node.
     */
-  def expressionPostOrderTransform(rule: PartialFunction[Expression, Expression]): LogicalNode = {
+  def expressionPostOrderTransform(
+      rule: PartialFunction[PlannerExpression, PlannerExpression]): LogicalNode = {
     var changed = false
 
-    def expressionPostOrderTransform(e: Expression): Expression = {
+    def expressionPostOrderTransform(e: PlannerExpression): PlannerExpression = {
       val newExpr = e.postOrderTransform(rule)
       if (newExpr.fastEquals(e)) {
         e
@@ -139,10 +140,10 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
     }
 
     val newArgs = productIterator.map {
-      case e: Expression => expressionPostOrderTransform(e)
-      case Some(e: Expression) => Some(expressionPostOrderTransform(e))
+      case e: PlannerExpression => expressionPostOrderTransform(e)
+      case Some(e: PlannerExpression) => Some(expressionPostOrderTransform(e))
       case seq: Traversable[_] => seq.map {
-        case e: Expression => expressionPostOrderTransform(e)
+        case e: PlannerExpression => expressionPostOrderTransform(e)
         case other => other
       }
       case r: Resolvable[_] => r.resolveExpressions(e => expressionPostOrderTransform(e))

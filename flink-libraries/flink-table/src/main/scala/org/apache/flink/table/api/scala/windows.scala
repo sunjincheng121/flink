@@ -18,8 +18,8 @@
 
 package org.apache.flink.table.api.scala
 
-import org.apache.flink.table.api.{OverWindow, TumbleWithSize, OverWindowWithPreceding, SlideWithSize, SessionWithGap}
-import org.apache.flink.table.expressions.{Expression, ExpressionParser}
+import org.apache.flink.table.api._
+import org.apache.flink.table.expressions.{Expression, LeafExpression}
 
 /**
   * Helper object for creating a tumbling window. Tumbling windows are consecutive, non-overlapping
@@ -36,8 +36,9 @@ object Tumble {
     * @param size the size of the window as time or row-count interval.
     * @return a partially defined tumbling window
     */
-  def over(size: Expression): TumbleWithSize = new TumbleWithSize(size)
+  def over(size: Expression): ScalaTumbleWithSize = new ScalaTumbleWithSize(size)
 }
+
 
 /**
   * Helper object for creating a sliding window. Sliding windows have a fixed size and slide by
@@ -62,7 +63,7 @@ object Slide {
     * @param size the size of the window as time or row-count interval
     * @return a partially specified sliding window
     */
-  def over(size: Expression): SlideWithSize = new SlideWithSize(size)
+  def over(size: Expression): ScalaSlideWithSize = new ScalaSlideWithSize(size)
 }
 
 /**
@@ -81,7 +82,7 @@ object Session {
     *            closing the session window.
     * @return a partially defined session window
     */
-  def withGap(gap: Expression): SessionWithGap = new SessionWithGap(gap)
+  def withGap(gap: Expression): ScalaSessionWithGap = new ScalaSessionWithGap(gap)
 }
 
 /**
@@ -96,8 +97,8 @@ object Over {
     *
     * For batch tables, refer to a timestamp or long attribute.
     */
-  def orderBy(orderBy: Expression): OverWindowWithOrderBy = {
-    new OverWindowWithOrderBy(Seq[Expression](), orderBy)
+  def orderBy(orderBy: Expression): ScalaOverWindowWithOrderBy = {
+    new ScalaOverWindowWithOrderBy(Seq[Expression](), orderBy)
   }
 
   /**
@@ -106,12 +107,13 @@ object Over {
     * @param partitionBy some partition keys.
     * @return A partitionedOver instance that only contains the orderBy method.
     */
-  def partitionBy(partitionBy: Expression*): PartitionedOver = {
-    PartitionedOver(partitionBy.toArray)
+  def partitionBy(partitionBy: Expression*): ScalaPartitionedOver = {
+    ScalaPartitionedOver(partitionBy.toArray)
   }
 }
 
-case class PartitionedOver(partitionBy: Array[Expression]) {
+
+case class ScalaPartitionedOver(partitionBy: Array[Expression]) {
 
   /**
     * Specifies the time attribute on which rows are grouped.
@@ -120,12 +122,13 @@ case class PartitionedOver(partitionBy: Array[Expression]) {
     *
     * For batch tables, refer to a timestamp or long attribute.
     */
-  def orderBy(orderBy: Expression): OverWindowWithOrderBy = {
-    OverWindowWithOrderBy(partitionBy, orderBy)
+  def orderBy(orderBy: Expression): ScalaOverWindowWithOrderBy = {
+    ScalaOverWindowWithOrderBy(partitionBy, orderBy)
   }
 }
 
-case class OverWindowWithOrderBy(partitionBy: Seq[Expression], orderBy: Expression) {
+
+case class ScalaOverWindowWithOrderBy(partitionBy: Seq[Expression], orderBy: Expression) {
 
   /**
     * Set the preceding offset (based on time or row-count intervals) for over window.
@@ -133,8 +136,8 @@ case class OverWindowWithOrderBy(partitionBy: Seq[Expression], orderBy: Expressi
     * @param preceding preceding offset relative to the current row.
     * @return this over window
     */
-  def preceding(preceding: Expression): OverWindowWithPreceding = {
-    new OverWindowWithPreceding(partitionBy, orderBy, preceding)
+  def preceding(preceding: Expression): ScalaOverWindowWithPreceding = {
+    new ScalaOverWindowWithPreceding(partitionBy, orderBy, preceding)
   }
 
   /**
@@ -143,15 +146,249 @@ case class OverWindowWithOrderBy(partitionBy: Seq[Expression], orderBy: Expressi
     * @param alias alias for this over window
     * @return over window
     */
-  def as(alias: String): OverWindow = as(ExpressionParser.parseExpression(alias))
-
-  /**
-    * Assigns an alias for this window that the following `select()` clause can refer to.
-    *
-    * @param alias alias for this over window
-    * @return over window
-    */
-  def as(alias: Expression): OverWindow = {
-    OverWindow(alias, partitionBy, orderBy, UNBOUNDED_RANGE, CURRENT_RANGE)
+  def as(alias: Expression): ScalaOverWindow = {
+    ScalaOverWindow(alias, partitionBy, orderBy, UNBOUNDED_RANGE, CURRENT_RANGE)
   }
 }
+
+/**
+  * Over window is similar to the traditional OVER SQL.
+  */
+case class ScalaOverWindow(
+    private[flink] val alias: Expression,
+    private[flink] val partitionBy: Seq[Expression],
+    private[flink] val orderBy: Expression,
+    private[flink] val preceding: Expression,
+    private[flink] val following: Expression) extends UnresolvedOverWindow
+
+case class CurrentRow() extends LeafExpression
+
+case class CurrentRange() extends LeafExpression
+
+case class UnboundedRow() extends LeafExpression
+
+case class UnboundedRange() extends LeafExpression
+
+/**
+  * A partially defined over window.
+  */
+class ScalaOverWindowWithPreceding(
+    private val partitionBy: Seq[Expression],
+    private val orderBy: Expression,
+    private val preceding: Expression) {
+
+  private[flink] var following: Expression = _
+
+  /**
+    * Assigns an alias for this window that the following `select()` clause can refer to.
+    *
+    * @param alias alias for this over window
+    * @return over window
+    */
+  def as(alias: Expression): ScalaOverWindow = {
+    ScalaOverWindow(alias, partitionBy, orderBy, preceding, following)
+  }
+
+  /**
+    * Set the following offset (based on time or row-count intervals) for over window.
+    *
+    * @param following following offset that relative to the current row.
+    * @return this over window
+    */
+  def following(following: Expression): ScalaOverWindowWithPreceding = {
+    this.following = following
+    this
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tumbling windows
+// ------------------------------------------------------------------------------------------------
+
+/**
+  * Tumbling window.
+  *
+  * For streaming tables you can specify grouping by a event-time or processing-time attribute.
+  *
+  * For batch tables you can specify grouping on a timestamp or long attribute.
+  *
+  * @param size the size of the window either as time or row-count interval.
+  */
+class ScalaTumbleWithSize(size: Expression) {
+
+  /**
+    * Specifies the time attribute on which rows are grouped.
+    *
+    * For streaming tables you can specify grouping by a event-time or processing-time attribute.
+    *
+    * For batch tables you can specify grouping on a timestamp or long attribute.
+    *
+    * @param timeField time attribute for streaming and batch tables
+    * @return a tumbling window on event-time
+    */
+  def on(timeField: Expression): ScalaTumbleWithSizeOnTime =
+    new ScalaTumbleWithSizeOnTime(timeField, size)
+}
+
+/**
+  * Tumbling window on time.
+  */
+class ScalaTumbleWithSizeOnTime(time: Expression, size: Expression) {
+
+  /**
+    * Assigns an alias for this window that the following `groupBy()` and `select()` clause can
+    * refer to. `select()` statement can access window properties such as window start or end time.
+    *
+    * @param alias alias for this window
+    * @return this window
+    */
+  def as(alias: Expression): ScalaTumbleWithSizeOnTimeWithAlias = {
+    new ScalaTumbleWithSizeOnTimeWithAlias(alias, time, size)
+  }
+}
+
+/**
+  * Tumbling window on time with alias. Fully specifies a window.
+  */
+case class ScalaTumbleWithSizeOnTimeWithAlias(
+    alias: Expression,
+    timeField: Expression,
+    size: Expression) extends Window
+
+// ------------------------------------------------------------------------------------------------
+// Sliding windows
+// ------------------------------------------------------------------------------------------------
+
+
+/**
+  * Partially specified sliding window.
+  *
+  * @param size the size of the window either as time or row-count interval.
+  */
+class ScalaSlideWithSize(size: Expression) {
+
+  /**
+    * Specifies the window's slide as time or row-count interval.
+    *
+    * The slide determines the interval in which windows are started. Hence, sliding windows can
+    * overlap if the slide is smaller than the size of the window.
+    *
+    * For example, you could have windows of size 15 minutes that slide by 3 minutes. With this
+    * 15 minutes worth of elements are grouped every 3 minutes and each row contributes to 5
+    * windows.
+    *
+    * @param slide the slide of the window either as time or row-count interval.
+    * @return a sliding window
+    */
+  def every(slide: Expression): ScalaSlideWithSizeAndSlide =
+    new ScalaSlideWithSizeAndSlide(size, slide)
+}
+
+/**
+  * Sliding window.
+  *
+  * For streaming tables you can specify grouping by a event-time or processing-time attribute.
+  *
+  * For batch tables you can specify grouping on a timestamp or long attribute.
+  *
+  * @param size the size of the window either as time or row-count interval.
+  */
+class ScalaSlideWithSizeAndSlide(size: Expression, slide: Expression) {
+
+  /**
+    * Specifies the time attribute on which rows are grouped.
+    *
+    * For streaming tables you can specify grouping by a event-time or processing-time attribute.
+    *
+    * For batch tables you can specify grouping on a timestamp or long attribute.
+    *
+    * @param timeField time attribute for streaming and batch tables
+    * @return a tumbling window on event-time
+    */
+  def on(timeField: Expression): ScalaSlideWithSizeAndSlideOnTime =
+    new ScalaSlideWithSizeAndSlideOnTime(timeField, size, slide)
+}
+
+/**
+  * Sliding window on time.
+  */
+class ScalaSlideWithSizeAndSlideOnTime(
+    timeField: Expression,
+    size: Expression,
+    slide: Expression) {
+
+  /**
+    * Assigns an alias for this window that the following `groupBy()` and `select()` clause can
+    * refer to. `select()` statement can access window properties such as window start or end time.
+    *
+    * @param alias alias for this window
+    * @return this window
+    */
+  def as(alias: Expression): ScalaSlideWithSizeAndSlideOnTimeWithAlias = {
+    ScalaSlideWithSizeAndSlideOnTimeWithAlias(alias, timeField, size, slide)
+  }
+}
+
+/**
+  * Sliding window on time with alias. Fully specifies a window.
+  */
+case class ScalaSlideWithSizeAndSlideOnTimeWithAlias(
+    alias: Expression,
+    timeField: Expression,
+    size: Expression,
+    slide: Expression) extends Window
+
+// ------------------------------------------------------------------------------------------------
+// Session windows
+// ------------------------------------------------------------------------------------------------
+
+
+/**
+  * Session window.
+  *
+  * For streaming tables you can specify grouping by a event-time or processing-time attribute.
+  *
+  * For batch tables you can specify grouping on a timestamp or long attribute.
+  *
+  * @param gap the time interval of inactivity before a window is closed.
+  */
+class ScalaSessionWithGap(gap: Expression) {
+
+  /**
+    * Specifies the time attribute on which rows are grouped.
+    *
+    * For streaming tables you can specify grouping by a event-time or processing-time attribute.
+    *
+    * For batch tables you can specify grouping on a timestamp or long attribute.
+    *
+    * @param timeField time attribute for streaming and batch tables
+    * @return a tumbling window on event-time
+    */
+  def on(timeField: Expression): ScalaSessionWithGapOnTime =
+    new ScalaSessionWithGapOnTime(timeField, gap)
+}
+
+/**
+  * Session window on time.
+  */
+class ScalaSessionWithGapOnTime(timeField: Expression, gap: Expression) {
+
+  /**
+    * Assigns an alias for this window that the following `groupBy()` and `select()` clause can
+    * refer to. `select()` statement can access window properties such as window start or end time.
+    *
+    * @param alias alias for this window
+    * @return this window
+    */
+  def as(alias: Expression): ScalaSessionWithGapOnTimeWithAlias = {
+    ScalaSessionWithGapOnTimeWithAlias(alias, timeField, gap)
+  }
+}
+
+/**
+  * Session window on time with alias. Fully specifies a window.
+  */
+case class ScalaSessionWithGapOnTimeWithAlias(
+    alias: Expression,
+    timeField: Expression,
+    gap: Expression) extends Window

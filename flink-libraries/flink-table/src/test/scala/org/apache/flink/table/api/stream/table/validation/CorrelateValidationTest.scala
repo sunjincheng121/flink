@@ -21,7 +21,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.expressions.utils._
+import org.apache.flink.table.plan.expressions.utils._
 import org.apache.flink.table.runtime.stream.table.TestAppendSink
 import org.apache.flink.table.utils.{ObjectTableFunction, TableFunc1, TableFunc2, TableTestBase}
 import org.junit.Assert.{assertTrue, fail}
@@ -80,7 +80,8 @@ class CorrelateValidationTest extends TableTestBase {
     // table function call filter
     expectExceptionThrown(
       func1('c).filter('f0 === "?"),
-      "TableFunction can only be used in join and leftOuterJoin."
+      null,
+      classOf[NullPointerException]
     )
 
     // table function call filter
@@ -122,7 +123,8 @@ class CorrelateValidationTest extends TableTestBase {
     // table function call where
     expectExceptionThrown(
       func1('c).where('f0 === "?"),
-      "TableFunction can only be used in join and leftOuterJoin."
+      null,
+      classOf[NullPointerException]
     )
 
   }
@@ -145,7 +147,7 @@ class CorrelateValidationTest extends TableTestBase {
     //============ throw exception when table function is not registered =========
     // Java Table API call
     expectExceptionThrown(
-      t.join(new Table(util.tableEnv, "nonexist(a)")
+      t.join(util.tableEnv.scan("nonexist(a)")
       ), "Undefined function: NONEXIST")
     // SQL API call
     expectExceptionThrown(
@@ -158,7 +160,7 @@ class CorrelateValidationTest extends TableTestBase {
 
     // Java Table API call
     expectExceptionThrown(
-      t.join(new Table(util.tableEnv, "func0(a)")),
+      t.join(util.tableEnv.scan("func0(a)")),
       "only accept String that define table function",
       classOf[TableException])
     // SQL API call
@@ -172,7 +174,7 @@ class CorrelateValidationTest extends TableTestBase {
     // Java Table API call
     util.addFunction("func2", new TableFunc2)
     expectExceptionThrown(
-      t.join(new Table(util.tableEnv, "func2(c, c)")),
+      t.join(util.tableEnv.scan("func2(c, c)")),
       "Given parameters of function 'FUNC2' do not match any signature")
     // SQL API call
     expectExceptionThrown(

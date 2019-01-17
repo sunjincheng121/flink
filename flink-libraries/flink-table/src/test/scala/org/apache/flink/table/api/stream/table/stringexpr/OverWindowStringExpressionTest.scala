@@ -23,7 +23,7 @@ import org.apache.flink.table.runtime.utils.JavaUserDefinedAggFunctions.Weighted
 import org.apache.flink.table.runtime.utils.JavaUserDefinedAggFunctions.WeightedAvg
 import org.apache.flink.table.api.java.{Over => JOver}
 import org.apache.flink.table.api.scala.{Over => SOver, _}
-import org.apache.flink.table.expressions.utils.Func1
+import org.apache.flink.table.plan.expressions.utils.Func1
 import org.apache.flink.table.utils.TableTestBase
 import org.junit.Test
 

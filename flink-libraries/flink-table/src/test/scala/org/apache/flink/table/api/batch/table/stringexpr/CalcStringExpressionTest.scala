@@ -26,6 +26,7 @@ import org.apache.flink.table.api.Types
 import org.apache.flink.table.api.Types._
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.expressions.Literal
+import org.apache.flink.table.plan.expressions.PlannerLiteral
 import org.apache.flink.table.utils.TableTestBase
 import org.junit._
 

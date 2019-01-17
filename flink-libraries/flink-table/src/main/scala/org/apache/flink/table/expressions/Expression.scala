@@ -15,62 +15,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.table.expressions
 
-import org.apache.calcite.rex.RexNode
-import org.apache.calcite.tools.RelBuilder
+import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Integer => JInteger, Long => JLong, Short => JShort}
+import java.math.{BigDecimal => JBigDecimal}
+import java.sql.{Date, Time, Timestamp}
 
-import org.apache.flink.api.common.typeinfo.TypeInformation
+import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
+import org.apache.flink.table.api.{Table, ValidationException}
+import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
 import org.apache.flink.table.plan.TreeNode
-import org.apache.flink.table.validate.{ValidationResult, ValidationSuccess}
+import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeInfo}
 
-abstract class Expression extends TreeNode[Expression] {
-  /**
-    * Returns the [[TypeInformation]] for evaluating this expression.
-    * It is sometimes not available until the expression is valid.
-    */
-  private[flink] def resultType: TypeInformation[_]
-
-  /**
-    * One pass validation of the expression tree in post order.
-    */
-  private[flink] lazy val valid: Boolean = childrenValid && validateInput().isSuccess
-
-  private[flink] def childrenValid: Boolean = children.forall(_.valid)
-
-  /**
-    * Check input data types, inputs number or other properties specified by this expression.
-    * Return `ValidationSuccess` if it pass the check,
-    * or `ValidationFailure` with supplement message explaining the error.
-    * Note: we should only call this method until `childrenValid == true`
-    */
-  private[flink] def validateInput(): ValidationResult = ValidationSuccess
-
-  /**
-    * Convert Expression to its counterpart in Calcite, i.e. RexNode
-    */
-  private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
-    throw new UnsupportedOperationException(
-      s"${this.getClass.getName} cannot be transformed to RexNode"
-    )
-
-  private[flink] def checkEquals(other: Expression): Boolean = {
-    if (this.getClass != other.getClass) {
-      false
-    } else {
-      def checkEquality(elements1: Seq[Any], elements2: Seq[Any]): Boolean = {
-        elements1.length == elements2.length && elements1.zip(elements2).forall {
-          case (e1: Expression, e2: Expression) => e1.checkEquals(e2)
-          case (t1: Seq[_], t2: Seq[_]) => checkEquality(t1, t2)
-          case (i1, i2) => i1 == i2
-        }
-      }
-      val elements1 = this.productIterator.toSeq
-      val elements2 = other.productIterator.toSeq
-      checkEquality(elements1, elements2)
-    }
-  }
-}
+abstract class Expression extends TreeNode[Expression]
 
 abstract class BinaryExpression extends Expression {
   private[flink] def left: Expression
@@ -86,3 +44,195 @@ abstract class UnaryExpression extends Expression {
 abstract class LeafExpression extends Expression {
   private[flink] val children = Nil
 }
+
+case class DistinctAgg(child: Expression) extends UnaryExpression
+
+case class AggFunctionCall(
+    aggregateFunction: AggregateFunction[_, _],
+    resultTypeInfo: TypeInformation[_],
+    accTypeInfo: TypeInformation[_],
+    args: Seq[Expression])
+  extends Expression {
+  override def children: Seq[Expression] = args
+}
+
+case class Call(functionName: String, args: Seq[Expression]) extends Expression {
+  override def children: Seq[Expression] = args
+}
+
+case class UnresolvedOverCall(agg: Expression, alias: Expression)
+  extends Expression {
+  override private[flink] def children: Seq[Expression] = Seq(agg, alias)
+}
+
+case class ScalarFunctionCall(
+    scalarFunction: ScalarFunction,
+    parameters: Seq[Expression])
+  extends Expression {
+  override private[flink] def children: Seq[Expression] = parameters
+}
+
+case class TableFunctionCall(
+    functionName: String,
+    tableFunction: TableFunction[_],
+    parameters: Seq[Expression],
+    resultType: TypeInformation[_])
+  extends Expression {
+  override private[flink] def children: Seq[Expression] = parameters
+}
+
+case class Cast(child: Expression, resultType: TypeInformation[_]) extends UnaryExpression
+
+case class Flattening(child: Expression) extends UnaryExpression
+
+case class GetCompositeField(child: Expression, key: Any) extends UnaryExpression
+
+case class UnresolvedFieldReference(name: String) extends LeafExpression
+
+case class Alias(child: Expression, name: String, extraNames: Seq[String] = Seq())
+  extends UnaryExpression
+
+case class TableReference(name: String, table: Table) extends LeafExpression
+
+case class RowtimeAttribute(expr: Expression) extends UnaryExpression {
+  override private[flink] def child: Expression = expr
+}
+
+case class ProctimeAttribute(expr: Expression) extends UnaryExpression {
+  override private[flink] def child: Expression = expr
+}
+
+case class StreamRecordTimestamp() extends LeafExpression
+
+case class Literal(l: Any, t: Option[TypeInformation[_]] = None) extends LeafExpression
+
+case class Null(resultType: TypeInformation[_]) extends LeafExpression
+
+case class In(expression: Expression, elements: Seq[Expression]) extends Expression {
+  override private[flink] def children: Seq[Expression] = expression +: elements.distinct
+}
+
+case class SymbolExpression(symbol: TableSymbol) extends LeafExpression
+
+trait TableSymbol
+
+abstract class TableSymbols extends Enumeration {
+  class TableSymbolValue extends Val() with TableSymbol
+
+  protected final def SymbolValue = new TableSymbolValue
+
+  implicit def symbolToExpression(symbol: TableSymbolValue): SymbolExpression =
+    SymbolExpression(symbol)
+}
+
+object TimeIntervalUnit extends TableSymbols {
+  type TimeIntervalUnit = TableSymbolValue
+
+  val YEAR, YEAR_TO_MONTH, QUARTER, MONTH,
+  WEEK, DAY, DAY_TO_HOUR, DAY_TO_MINUTE, DAY_TO_SECOND,
+  HOUR, HOUR_TO_MINUTE, HOUR_TO_SECOND, MINUTE, MINUTE_TO_SECOND, SECOND = SymbolValue
+
+}
+
+object TimePointUnit extends TableSymbols {
+  type TimePointUnit= TableSymbolValue
+
+  val YEAR, MONTH, DAY,
+    HOUR, MINUTE, SECOND,
+    QUARTER, WEEK, MILLISECOND, MICROSECOND = SymbolValue
+}
+
+object TrimMode extends TableSymbols {
+  type TrimMode = TableSymbolValue
+
+  val BOTH, LEADING, TRAILING = SymbolValue
+}
+
+object TrimConstants {
+  val TRIM_DEFAULT_CHAR = Literal(" ")
+}
+
+object ExpressionUtils {
+  private[flink] def toMonthInterval(expr: Expression, multiplier: Int): Expression =
+    expr match {
+      case Literal(value: Int, None) =>
+        Literal(value * multiplier, Some(TimeIntervalTypeInfo.INTERVAL_MONTHS))
+      case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
+        Literal(value * multiplier, Some(TimeIntervalTypeInfo.INTERVAL_MONTHS))
+      case _ =>
+        Cast(
+          Call("times", Seq(expr, Literal(multiplier))),
+          TimeIntervalTypeInfo.INTERVAL_MONTHS)
+  }
+
+  private[flink] def toMilliInterval(expr: Expression, multiplier: Long): Expression =
+    expr match {
+      case Literal(value: Int, None) =>
+        Literal(value * multiplier, Some(TimeIntervalTypeInfo.INTERVAL_MILLIS))
+      case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
+        Literal(value * multiplier, Some(TimeIntervalTypeInfo.INTERVAL_MILLIS))
+      case Literal(value: Long, None) =>
+        Literal(value * multiplier, Some(TimeIntervalTypeInfo.INTERVAL_MILLIS))
+      case Literal(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
+        Literal(value * multiplier, Some(TimeIntervalTypeInfo.INTERVAL_MILLIS))
+      case _ =>
+        Cast(
+          Call("times", Seq(expr, Literal(multiplier))),
+          TimeIntervalTypeInfo.INTERVAL_MILLIS)
+    }
+
+  private[flink] def toRowInterval(expr: Expression): Expression =
+    expr match {
+      case Literal(value: Int, None) =>
+        Literal(value.toLong, Some(RowIntervalTypeInfo.INTERVAL_ROWS))
+      case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
+        Literal(value.toLong, Some(RowIntervalTypeInfo.INTERVAL_ROWS))
+      case Literal(value: Long, None) =>
+        Literal(value, Some(RowIntervalTypeInfo.INTERVAL_ROWS))
+      case Literal(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
+        Literal(value, Some(RowIntervalTypeInfo.INTERVAL_ROWS))
+    }
+
+  private[flink] def convertArray(array: Array[_]): Expression = {
+    def createArray(): Expression = {
+      Call("array", array.map(Literal(_)))
+    }
+
+    array match {
+      // primitives
+      case _: Array[Boolean] => createArray()
+      case _: Array[Byte] => createArray()
+      case _: Array[Short] => createArray()
+      case _: Array[Int] => createArray()
+      case _: Array[Long] => createArray()
+      case _: Array[Float] => createArray()
+      case _: Array[Double] => createArray()
+
+      // boxed types
+      case _: Array[JBoolean] => createArray()
+      case _: Array[JByte] => createArray()
+      case _: Array[JShort] => createArray()
+      case _: Array[JInteger] => createArray()
+      case _: Array[JLong] => createArray()
+      case _: Array[JFloat] => createArray()
+      case _: Array[JDouble] => createArray()
+
+      // others
+      case _: Array[String] => createArray()
+      case _: Array[JBigDecimal] => createArray()
+      case _: Array[Date] => createArray()
+      case _: Array[Time] => createArray()
+      case _: Array[Timestamp] => createArray()
+      case bda: Array[BigDecimal] => Call("array", bda.map { bd => Literal(bd.bigDecimal) })
+
+      case _ =>
+        // nested
+        if (array.length > 0 && array.head.isInstanceOf[Array[_]]) {
+          Call("array", array.map { na => convertArray(na.asInstanceOf[Array[_]]) })
+        } else {
+          throw new ValidationException("Unsupported array type.")
+        }
+    }
+  }
+}
+

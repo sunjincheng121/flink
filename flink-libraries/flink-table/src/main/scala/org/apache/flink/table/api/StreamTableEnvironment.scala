@@ -39,7 +39,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
 import org.apache.flink.table.calcite.{FlinkTypeFactory, RelTimeIndicatorConverter}
 import org.apache.flink.table.descriptors.{ConnectorDescriptor, StreamTableDescriptor}
 import org.apache.flink.table.explain.PlanJsonParser
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.plan.nodes.FlinkConventions
 import org.apache.flink.table.plan.nodes.datastream.{DataStreamRel, UpdateAsRetractionTrait}
 import org.apache.flink.table.plan.rules.FlinkRuleSets
@@ -323,6 +323,8 @@ abstract class StreamTableEnvironment(
       sink: TableSink[T],
       queryConfig: QueryConfig): Unit = {
 
+    val innerTable = table.asInstanceOf[InnerTable]
+
     // Check query configuration
     val streamQueryConfig = queryConfig match {
       case streamConfig: StreamQueryConfig => streamConfig
@@ -348,7 +350,7 @@ abstract class StreamTableEnvironment(
 
       case upsertSink: UpsertStreamTableSink[_] =>
         // optimize plan
-        val optimizedPlan = optimize(table.getRelNode, updatesAsRetraction = false)
+        val optimizedPlan = optimize(innerTable.getRelNode, updatesAsRetraction = false)
         // check for append only table
         val isAppendOnlyTable = UpdatingPlanChecker.isAppendOnly(optimizedPlan)
         upsertSink.setIsAppendOnly(isAppendOnlyTable)
@@ -362,7 +364,7 @@ abstract class StreamTableEnvironment(
             "UpsertStreamTableSink requires that Table has full primary keys if it is updated.")
         }
         val outputType = sink.getOutputType
-        val resultType = getResultType(table.getRelNode, optimizedPlan)
+        val resultType = getResultType(innerTable.getRelNode, optimizedPlan)
         // translate the Table into a DataStream and provide the type that the TableSink expects.
         val result: DataStream[T] =
           translate(
@@ -376,14 +378,14 @@ abstract class StreamTableEnvironment(
 
       case appendSink: AppendStreamTableSink[_] =>
         // optimize plan
-        val optimizedPlan = optimize(table.getRelNode, updatesAsRetraction = false)
+        val optimizedPlan = optimize(innerTable.getRelNode, updatesAsRetraction = false)
         // verify table is an insert-only (append-only) table
         if (!UpdatingPlanChecker.isAppendOnly(optimizedPlan)) {
           throw new TableException(
             "AppendStreamTableSink requires that Table has only insert changes.")
         }
         val outputType = sink.getOutputType
-        val resultType = getResultType(table.getRelNode, optimizedPlan)
+        val resultType = getResultType(innerTable.getRelNode, optimizedPlan)
         // translate the Table into a DataStream and provide the type that the TableSink expects.
         val result: DataStream[T] =
           translate(
@@ -537,7 +539,7 @@ abstract class StreamTableEnvironment(
   protected def registerDataStreamInternal[T](
       name: String,
       dataStream: DataStream[T],
-      fields: Array[Expression])
+      fields: Array[PlannerExpression])
     : Unit = {
 
     val streamType = dataStream.getType
@@ -575,7 +577,7 @@ abstract class StreamTableEnvironment(
     */
   private def validateAndExtractTimeAttributes(
     streamType: TypeInformation[_],
-    exprs: Array[Expression])
+    exprs: Array[PlannerExpression])
   : (Option[(Int, String)], Option[(Int, String)]) = {
 
     val (isRefByPos, fieldTypes) = streamType match {
@@ -666,21 +668,24 @@ abstract class StreamTableEnvironment(
     }
 
     exprs.zipWithIndex.foreach {
-      case (RowtimeAttribute(UnresolvedFieldReference(name)), idx) =>
+      case (PlannerRowtimeAttribute(PlannerUnresolvedFieldReference(name)), idx) =>
         extractRowtime(idx, name, None)
 
-      case (Alias(RowtimeAttribute(UnresolvedFieldReference(origName)), name, _), idx) =>
+      case (PlannerAlias(
+      PlannerRowtimeAttribute(PlannerUnresolvedFieldReference(origName)), name, _), idx) =>
         extractRowtime(idx, name, Some(origName))
 
-      case (ProctimeAttribute(UnresolvedFieldReference(name)), idx) =>
+      case (PlannerProctimeAttribute(PlannerUnresolvedFieldReference(name)), idx) =>
         extractProctime(idx, name)
 
-      case (Alias(ProctimeAttribute(UnresolvedFieldReference(_)), name, _), idx) =>
+      case (PlannerAlias(PlannerProctimeAttribute(
+      PlannerUnresolvedFieldReference(_)), name, _), idx) =>
         extractProctime(idx, name)
 
-      case (UnresolvedFieldReference(name), _) => fieldNames = name :: fieldNames
+      case (PlannerUnresolvedFieldReference(name), _) => fieldNames = name :: fieldNames
 
-      case (Alias(UnresolvedFieldReference(_), name, _), _) => fieldNames = name :: fieldNames
+      case (PlannerAlias(PlannerUnresolvedFieldReference(_), name, _), _) =>
+        fieldNames = name :: fieldNames
 
       case (e, _) =>
         throw new TableException(s"Time attributes can only be defined on field references. " +
@@ -858,7 +863,7 @@ abstract class StreamTableEnvironment(
       queryConfig: StreamQueryConfig,
       updatesAsRetraction: Boolean,
       withChangeFlag: Boolean)(implicit tpe: TypeInformation[A]): DataStream[A] = {
-    val relNode = table.getRelNode
+    val relNode = table.asInstanceOf[InnerTable].getRelNode
     val dataStreamPlan = optimize(relNode, updatesAsRetraction)
 
     val rowType = getResultType(relNode, dataStreamPlan)
@@ -999,7 +1004,7 @@ abstract class StreamTableEnvironment(
     * @param table The table for which the AST and execution plan will be returned.
     */
   def explain(table: Table): String = {
-    val ast = table.getRelNode
+    val ast = table.asInstanceOf[InnerTable].getRelNode
     val optimizedPlan = optimize(ast, updatesAsRetraction = false)
     val dataStream = translateToCRow(optimizedPlan, queryConfig)
 

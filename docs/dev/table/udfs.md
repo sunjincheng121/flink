@@ -171,9 +171,9 @@ Table myTable = ...         // table schema: [a: String]
 tableEnv.registerFunction("split", new Split("#"));
 
 // Use the table function in the Java Table API. "as" specifies the field names of the table.
-myTable.join(new Table(tableEnv, "split(a) as (word, length)"))
+myTable.join(tableEnv.scan("split(a) as (word, length)"))
     .select("a, word, length");
-myTable.leftOuterJoin(new Table(tableEnv, "split(a) as (word, length)"))
+myTable.leftOuterJoin(tableEnv.scan("split(a) as (word, length)"))
     .select("a, word, length");
 
 // Use the table function in SQL with LATERAL and TABLE keywords.

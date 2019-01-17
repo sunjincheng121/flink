@@ -20,7 +20,7 @@ package org.apache.flink.table.api.stream.table
 
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.expressions.{Upper, WindowReference}
+import org.apache.flink.table.plan.expressions.{ScalaExpressionParser, Upper, PlannerWindowReference}
 import org.apache.flink.table.plan.logical.TumblingGroupWindow
 import org.apache.flink.table.utils.TableTestUtil._
 import org.apache.flink.table.utils.TableTestBase
@@ -41,7 +41,7 @@ class CalcTest extends TableTestBase {
     val resultTable = sourceTable
         .window(Tumble over 5.millis on 'rowtime as 'w)
         .groupBy('w)
-        .select(Upper('c).count, 'a.sum)
+        .select('c.upperCase().count, 'a.sum)
 
     val expected =
       unaryNode(
@@ -53,9 +53,9 @@ class CalcTest extends TableTestBase {
         ),
         term("window",
           TumblingGroupWindow(
-            WindowReference("w"),
-            'rowtime,
-            5.millis)),
+            PlannerWindowReference("w"),
+            ScalaExpressionParser.parse('rowtime),
+            ScalaExpressionParser.parse(5.millis))),
         term("select", "COUNT($f3) AS TMP_0", "SUM(a) AS TMP_1")
       )
 
@@ -70,7 +70,7 @@ class CalcTest extends TableTestBase {
     val resultTable = sourceTable
         .window(Tumble over 5.millis on 'rowtime as 'w)
         .groupBy('w, 'b)
-        .select(Upper('c).count, 'a.sum, 'b)
+        .select('c.upperCase().count, 'a.sum, 'b)
 
     val expected = unaryNode(
         "DataStreamCalc",
@@ -84,9 +84,9 @@ class CalcTest extends TableTestBase {
           term("groupBy", "b"),
           term("window",
             TumblingGroupWindow(
-              WindowReference("w"),
-              'rowtime,
-              5.millis)),
+              PlannerWindowReference("w"),
+              ScalaExpressionParser.parse('rowtime),
+              ScalaExpressionParser.parse(5.millis))),
           term("select", "b", "COUNT($f4) AS TMP_0", "SUM(a) AS TMP_1")
         ),
         term("select", "TMP_0", "TMP_1", "b")

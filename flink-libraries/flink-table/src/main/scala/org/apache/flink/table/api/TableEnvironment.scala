@@ -50,7 +50,8 @@ import org.apache.flink.table.calcite.{FlinkPlannerImpl, FlinkRelBuilder, FlinkT
 import org.apache.flink.table.catalog.{ExternalCatalog, ExternalCatalogSchema}
 import org.apache.flink.table.codegen.{ExpressionReducer, FunctionCodeGenerator, GeneratedFunction}
 import org.apache.flink.table.descriptors.{ConnectorDescriptor, TableDescriptor}
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
 import org.apache.flink.table.plan.cost.DataSetCostFactory
@@ -519,13 +520,13 @@ abstract class TableEnvironment(val config: TableConfig) {
   def registerTable(name: String, table: Table): Unit = {
 
     // check that table belongs to this table environment
-    if (table.tableEnv != this) {
+    if (table.asInstanceOf[InnerTable].tableEnv != this) {
       throw new TableException(
         "Only tables that belong to this TableEnvironment can be registered.")
     }
 
     checkValidTableName(name)
-    val tableTable = new RelTable(table.getRelNode)
+    val tableTable = new RelTable(table.asInstanceOf[InnerTable].getRelNode)
     registerTableInternal(name, tableTable)
   }
 
@@ -620,7 +621,12 @@ abstract class TableEnvironment(val config: TableConfig) {
   def scan(tablePath: String*): Table = {
     scanInternal(tablePath.toArray) match {
       case Some(table) => table
-      case None => throw new TableException(s"Table '${tablePath.mkString(".")}' was not found.")
+      case None =>
+        assert(tablePath.length == 1)
+        new TableImpl(this, UserDefinedFunctionUtils.createLogicalFunctionCall(this, tablePath
+          .head))
+      case _ =>
+        throw new TableException(s"Table '${tablePath.mkString(".")}' was not found.")
     }
   }
 
@@ -663,7 +669,7 @@ abstract class TableEnvironment(val config: TableConfig) {
       val tableName = tablePath(tablePath.length - 1)
       val table = schema.getTable(tableName)
       if (table != null) {
-        return Some(new Table(this, CatalogNode(tablePath, table.getRowType(typeFactory))))
+        return Some(new TableImpl(this, CatalogNode(tablePath, table.getRowType(typeFactory))))
       }
     }
     None
@@ -746,7 +752,7 @@ abstract class TableEnvironment(val config: TableConfig) {
       val validated = planner.validate(parsed)
       // transform to a relational tree
       val relational = planner.rel(validated)
-      new Table(this, LogicalRelNode(relational.rel))
+      new TableImpl(this, LogicalRelNode(relational.rel))
     } else {
       throw new TableException(
         "Unsupported SQL query! sqlQuery() only accepts SQL queries of type " +
@@ -808,7 +814,7 @@ abstract class TableEnvironment(val config: TableConfig) {
         val validatedQuery = planner.validate(query)
 
         // get query result as Table
-        val queryResult = new Table(this, LogicalRelNode(planner.rel(validatedQuery).rel))
+        val queryResult = new TableImpl(this, LogicalRelNode(planner.rel(validatedQuery).rel))
 
         // get name of sink table
         val targetTableName = insert.getTargetTable.asInstanceOf[SqlIdentifier].names.get(0)
@@ -1001,7 +1007,8 @@ abstract class TableEnvironment(val config: TableConfig) {
     * used if the input type has a defined field order (tuple, case class, Row) and no of fields
     * references a field of the input type.
     */
-  protected def isReferenceByPosition(ct: CompositeType[_], fields: Array[Expression]): Boolean = {
+  protected def isReferenceByPosition(
+      ct: CompositeType[_], fields: Array[PlannerExpression]): Boolean = {
     if (!ct.isInstanceOf[TupleTypeInfoBase[_]]) {
       return false
     }
@@ -1012,7 +1019,7 @@ abstract class TableEnvironment(val config: TableConfig) {
     // This prevents confusing cases like ('f2, 'f0, 'myName) for a Tuple3 where fields are renamed
     // by position but the user might assume reordering instead of renaming.
     fields.forall {
-      case UnresolvedFieldReference(name) => !inputNames.contains(name)
+      case PlannerUnresolvedFieldReference(name) => !inputNames.contains(name)
       case _ => true
     }
   }
@@ -1038,16 +1045,17 @@ abstract class TableEnvironment(val config: TableConfig) {
 
   /**
     * Returns field names and field positions for a given [[TypeInformation]] and [[Array]] of
-    * [[Expression]]. It does not handle time attributes but considers them in indices.
+    * [[PlannerExpression]]. It does not handle time attributes but considers them in indices.
     *
-    * @param inputType The [[TypeInformation]] against which the [[Expression]]s are evaluated.
+    * @param inputType The [[TypeInformation]] against which the [[PlannerExpression]]s are
+    *                  evaluated.
     * @param exprs     The expressions that define the field names.
     * @tparam A The type of the TypeInformation.
     * @return A tuple of two arrays holding the field names and corresponding field positions.
     */
   protected def getFieldInfo[A](
       inputType: TypeInformation[A],
-      exprs: Array[Expression])
+      exprs: Array[PlannerExpression])
     : (Array[String], Array[Int]) = {
 
     TableEnvironment.validateType(inputType)
@@ -1076,20 +1084,20 @@ abstract class TableEnvironment(val config: TableConfig) {
         val isRefByPos = isReferenceByPosition(t, exprs)
 
         exprs.zipWithIndex flatMap {
-          case (UnresolvedFieldReference(name: String), idx) =>
+          case (PlannerUnresolvedFieldReference(name: String), idx) =>
             if (isRefByPos) {
               Some((idx, name))
             } else {
               referenceByName(name, t).map((_, name))
             }
-          case (Alias(UnresolvedFieldReference(origName), name: String, _), _) =>
+          case (PlannerAlias(PlannerUnresolvedFieldReference(origName), name: String, _), _) =>
             if (isRefByPos) {
               throw new TableException(
                 s"Alias '$name' is not allowed if other fields are referenced by position.")
             } else {
               referenceByName(origName, t).map((_, name))
             }
-          case (_: TimeAttribute, _) | (Alias(_: TimeAttribute, _, _), _) =>
+          case (_: PlannerTimeAttribute, _) | (PlannerAlias(_: PlannerTimeAttribute, _, _), _) =>
             None
           case _ => throw new TableException(
             "Field reference expression or alias on field expression expected.")
@@ -1097,11 +1105,11 @@ abstract class TableEnvironment(val config: TableConfig) {
 
       case p: PojoTypeInfo[A] =>
         exprs flatMap {
-          case (UnresolvedFieldReference(name: String)) =>
+          case (PlannerUnresolvedFieldReference(name: String)) =>
             referenceByName(name, p).map((_, name))
-          case Alias(UnresolvedFieldReference(origName), name: String, _) =>
+          case PlannerAlias(PlannerUnresolvedFieldReference(origName), name: String, _) =>
             referenceByName(origName, p).map((_, name))
-          case _: TimeAttribute | Alias(_: TimeAttribute, _, _) =>
+          case _: PlannerTimeAttribute | PlannerAlias(_: PlannerTimeAttribute, _, _) =>
             None
           case _ => throw new TableException(
             "Field reference expression or alias on field expression expected.")
@@ -1110,12 +1118,12 @@ abstract class TableEnvironment(val config: TableConfig) {
       case _: TypeInformation[_] => // atomic or other custom type information
         var referenced = false
         exprs flatMap {
-          case _: TimeAttribute =>
+          case _: PlannerTimeAttribute =>
             None
-          case UnresolvedFieldReference(_) if referenced =>
+          case PlannerUnresolvedFieldReference(_) if referenced =>
             // only accept the first field for an atomic type
             throw new TableException("Only the first field can reference an atomic type.")
-          case UnresolvedFieldReference(name: String) =>
+          case PlannerUnresolvedFieldReference(name: String) =>
             referenced = true
             // first field reference is mapped to atomic type
             Some((0, name))
