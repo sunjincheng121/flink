@@ -61,9 +61,13 @@ import _root_.scala.collection.JavaConverters._
   * @param tableEnv The [[TableEnvironment]] to which the table is bound.
   * @param logicalPlan logical representation
   */
-class Table(
-    private[flink] val tableEnv: TableEnvironment,
-    private[flink] val logicalPlan: LogicalNode) {
+private[flink] class TableImpl(
+    val tableEnv: TableEnvironment,
+    val logicalPlan: LogicalNode) extends InnerTable {
+
+  private def toInnerTable(tab: Table): InnerTable = {
+    tab.asInstanceOf[InnerTable]
+  }
 
   // Check if the plan has an unbounded TableFunctionCall as child node.
   //   A TableFunctionCall is tolerated as root node because the Table holds the initial call.
@@ -126,16 +130,16 @@ class Table(
         expandedFields, tableEnv, aggNames, propNames)
       val projectFields = extractFieldReferences(expandedFields)
 
-      new Table(tableEnv,
-        Project(projectsOnAgg,
-          Aggregate(Nil, aggNames.map(a => Alias(a._1, a._2)).toSeq,
-            Project(projectFields, logicalPlan).validate(tableEnv)
-          ).validate(tableEnv)
-        ).validate(tableEnv)
+      new TableImpl(tableEnv,
+                    Project(projectsOnAgg,
+                            Aggregate(Nil, aggNames.map(a => Alias(a._1, a._2)).toSeq,
+                                      Project(projectFields, logicalPlan).validate(tableEnv)
+                            ).validate(tableEnv)
+                    ).validate(tableEnv)
       )
     } else {
-      new Table(tableEnv,
-        Project(expandedFields.map(UnresolvedAlias), logicalPlan).validate(tableEnv))
+      new TableImpl(tableEnv,
+                    Project(expandedFields.map(UnresolvedAlias), logicalPlan).validate(tableEnv))
     }
   }
 
@@ -206,8 +210,8 @@ class Table(
       timeAttribute: Expression,
       primaryKey: Expression): TemporalTableFunction = {
     val temporalTable = TemporalTable(timeAttribute, primaryKey, logicalPlan)
-      .validate(tableEnv)
-      .asInstanceOf[TemporalTable]
+                        .validate(tableEnv)
+                        .asInstanceOf[TemporalTable]
 
     TemporalTableFunction.create(
       this,
@@ -250,7 +254,7 @@ class Table(
             "Alias field must be an instance of UnresolvedFieldReference"
           )
         }
-        new Table(
+        new TableImpl(
           tableEnv,
           LogicalTableFunctionCall(
             functionCall.functionName,
@@ -262,7 +266,7 @@ class Table(
         )
       case _ =>
         // prepend an AliasNode
-        new Table(tableEnv, AliasNode(fields, logicalPlan).validate(tableEnv))
+        new TableImpl(tableEnv, AliasNode(fields, logicalPlan).validate(tableEnv))
     }
   }
 
@@ -292,7 +296,7 @@ class Table(
     * }}}
     */
   def filter(predicate: Expression): Table = {
-    new Table(tableEnv, Filter(predicate, logicalPlan).validate(tableEnv))
+    new TableImpl(tableEnv, Filter(predicate, logicalPlan).validate(tableEnv))
   }
 
   /**
@@ -349,7 +353,7 @@ class Table(
     * }}}
     */
   def groupBy(fields: Expression*): GroupedTable = {
-    new GroupedTable(this, fields)
+    new GroupedTableImpl(this, fields)
   }
 
   /**
@@ -377,7 +381,7 @@ class Table(
     * }}}
     */
   def distinct(): Table = {
-    new Table(tableEnv, Distinct(logicalPlan).validate(tableEnv))
+    new TableImpl(tableEnv, Distinct(logicalPlan).validate(tableEnv))
   }
 
   /**
@@ -457,7 +461,7 @@ class Table(
     *
     *   TableFunction<String> split = new MySplitUDTF();
     *   tableEnv.registerFunction("split", split);
-    *   table.leftOuterJoin(new Table(tableEnv, "split(c)").as("s"))).select("a, b, c, s");
+    *   table.leftOuterJoin(tableEnv.scan("split(c)").as("s"))).select("a, b, c, s");
     * }}}
     */
   def leftOuterJoin(right: Table): Table = {
@@ -572,21 +576,21 @@ class Table(
   }
 
   private def join(right: Table, joinPredicate: Option[Expression], joinType: JoinType): Table = {
-
+     val innerRight = toInnerTable(right)
     // check if we join with a table or a table function
-    if (!containsUnboundedUDTFCall(right.logicalPlan)) {
+    if (!containsUnboundedUDTFCall(innerRight.logicalPlan)) {
       // regular table-table join
 
       // check that the TableEnvironment of right table is not null
       // and right table belongs to the same TableEnvironment
-      if (right.tableEnv != this.tableEnv) {
+      if (innerRight.tableEnv != this.tableEnv) {
         throw new ValidationException("Only tables from the same TableEnvironment can be joined.")
       }
 
-      new Table(
+      new TableImpl(
         tableEnv,
-        Join(this.logicalPlan, right.logicalPlan, joinType, joinPredicate, correlated = false)
-          .validate(tableEnv))
+        Join(this.logicalPlan, innerRight.logicalPlan, joinType, joinPredicate, correlated = false)
+        .validate(tableEnv))
 
     } else {
       // join with a table function
@@ -597,7 +601,7 @@ class Table(
           "TableFunctions are currently supported for join and leftOuterJoin.")
       }
 
-      val udtf = right.logicalPlan.asInstanceOf[LogicalTableFunctionCall]
+      val udtf = innerRight.logicalPlan.asInstanceOf[LogicalTableFunctionCall]
       val udtfCall = LogicalTableFunctionCall(
         udtf.functionName,
         udtf.tableFunction,
@@ -607,10 +611,10 @@ class Table(
         this.logicalPlan
       ).validate(tableEnv)
 
-      new Table(
+      new TableImpl(
         tableEnv,
         Join(this.logicalPlan, udtfCall, joinType, joinPredicate, correlated = true)
-          .validate(tableEnv))
+        .validate(tableEnv))
     }
   }
 
@@ -629,13 +633,14 @@ class Table(
     * }}}
     */
   def minus(right: Table): Table = {
+    val innerRight = toInnerTable(right)
     // check that right table belongs to the same TableEnvironment
-    if (right.tableEnv != this.tableEnv) {
+    if (innerRight.tableEnv != this.tableEnv) {
       throw new ValidationException("Only tables from the same TableEnvironment can be " +
-        "subtracted.")
+                                      "subtracted.")
     }
-    new Table(tableEnv, Minus(logicalPlan, right.logicalPlan, all = false)
-      .validate(tableEnv))
+    new TableImpl(tableEnv, Minus(logicalPlan, innerRight.logicalPlan, all = false)
+                            .validate(tableEnv))
   }
 
   /**
@@ -654,13 +659,14 @@ class Table(
     * }}}
     */
   def minusAll(right: Table): Table = {
+    val innerRight = toInnerTable(right)
     // check that right table belongs to the same TableEnvironment
-    if (right.tableEnv != this.tableEnv) {
+    if (innerRight.tableEnv != this.tableEnv) {
       throw new ValidationException("Only tables from the same TableEnvironment can be " +
-        "subtracted.")
+                                      "subtracted.")
     }
-    new Table(tableEnv, Minus(logicalPlan, right.logicalPlan, all = true)
-      .validate(tableEnv))
+    new TableImpl(tableEnv, Minus(logicalPlan, innerRight.logicalPlan, all = true)
+                            .validate(tableEnv))
   }
 
   /**
@@ -676,11 +682,12 @@ class Table(
     * }}}
     */
   def union(right: Table): Table = {
+    val innerRight = toInnerTable(right)
     // check that right table belongs to the same TableEnvironment
-    if (right.tableEnv != this.tableEnv) {
+    if (innerRight.tableEnv != this.tableEnv) {
       throw new ValidationException("Only tables from the same TableEnvironment can be unioned.")
     }
-    new Table(tableEnv, Union(logicalPlan, right.logicalPlan, all = false).validate(tableEnv))
+    new TableImpl(tableEnv, Union(logicalPlan, innerRight.logicalPlan, all = false).validate(tableEnv))
   }
 
   /**
@@ -696,11 +703,12 @@ class Table(
     * }}}
     */
   def unionAll(right: Table): Table = {
+    val innerRight = toInnerTable(right)
     // check that right table belongs to the same TableEnvironment
-    if (right.tableEnv != this.tableEnv) {
+    if (innerRight.tableEnv != this.tableEnv) {
       throw new ValidationException("Only tables from the same TableEnvironment can be unioned.")
     }
-    new Table(tableEnv, Union(logicalPlan, right.logicalPlan, all = true).validate(tableEnv))
+    new TableImpl(tableEnv, Union(logicalPlan, innerRight.logicalPlan, all = true).validate(tableEnv))
   }
 
   /**
@@ -718,12 +726,13 @@ class Table(
     * }}}
     */
   def intersect(right: Table): Table = {
+    val innerRight = toInnerTable(right)
     // check that right table belongs to the same TableEnvironment
-    if (right.tableEnv != this.tableEnv) {
+    if (innerRight.tableEnv != this.tableEnv) {
       throw new ValidationException(
         "Only tables from the same TableEnvironment can be intersected.")
     }
-    new Table(tableEnv, Intersect(logicalPlan, right.logicalPlan, all = false).validate(tableEnv))
+    new TableImpl(tableEnv, Intersect(logicalPlan, innerRight.logicalPlan, all = false).validate(tableEnv))
   }
 
   /**
@@ -741,12 +750,13 @@ class Table(
     * }}}
     */
   def intersectAll(right: Table): Table = {
+    val innerRight = toInnerTable(right)
     // check that right table belongs to the same TableEnvironment
-    if (right.tableEnv != this.tableEnv) {
+    if (innerRight.tableEnv != this.tableEnv) {
       throw new ValidationException(
         "Only tables from the same TableEnvironment can be intersected.")
     }
-    new Table(tableEnv, Intersect(logicalPlan, right.logicalPlan, all = true).validate(tableEnv))
+    new TableImpl(tableEnv, Intersect(logicalPlan, innerRight.logicalPlan, all = true).validate(tableEnv))
   }
 
   /**
@@ -764,7 +774,7 @@ class Table(
       case o: Ordering => o
       case e => Asc(e)
     }
-    new Table(tableEnv, Sort(order, logicalPlan).validate(tableEnv))
+    new TableImpl(tableEnv, Sort(order, logicalPlan).validate(tableEnv))
   }
 
   /**
@@ -800,7 +810,7 @@ class Table(
     * @param offset number of records to skip
     */
   def offset(offset: Int): Table = {
-    new Table(tableEnv, Limit(offset, -1, logicalPlan).validate(tableEnv))
+    new TableImpl(tableEnv, Limit(offset, -1, logicalPlan).validate(tableEnv))
   }
 
   /**
@@ -827,11 +837,11 @@ class Table(
     this.logicalPlan match {
       case Limit(o, -1, c) =>
         // replace LIMIT without FETCH by LIMIT with FETCH
-        new Table(tableEnv, Limit(o, fetch, c).validate(tableEnv))
+        new TableImpl(tableEnv, Limit(o, fetch, c).validate(tableEnv))
       case Limit(_, _, _) =>
         throw new ValidationException("FETCH is already defined.")
       case _ =>
-        new Table(tableEnv, Limit(0, fetch, logicalPlan).validate(tableEnv))
+        new TableImpl(tableEnv, Limit(0, fetch, logicalPlan).validate(tableEnv))
     }
   }
 
@@ -851,7 +861,7 @@ class Table(
     *             Table.insertInto().
     */
   @deprecated("This method will be removed. Please register the TableSink and use " +
-    "Table.insertInto().", "1.7.0")
+                "Table.insertInto().", "1.7.0")
   @Deprecated
   def writeToSink[T](sink: TableSink[T]): Unit = {
     val queryConfig = Option(this.tableEnv) match {
@@ -878,19 +888,19 @@ class Table(
     *             Table.insertInto().
     */
   @deprecated("This method will be removed. Please register the TableSink and use " +
-    "Table.insertInto().", "1.7.0")
+                "Table.insertInto().", "1.7.0")
   @Deprecated
   def writeToSink[T](sink: TableSink[T], conf: QueryConfig): Unit = {
     // get schema information of table
     val rowType = getRelNode.getRowType
     val fieldNames: Array[String] = rowType.getFieldNames.asScala.toArray
     val fieldTypes: Array[TypeInformation[_]] = rowType.getFieldList.asScala
-      .map(field => FlinkTypeFactory.toTypeInfo(field.getType))
-      .map {
-        // replace time indicator types by SQL_TIMESTAMP
-        case t: TypeInformation[_] if FlinkTypeFactory.isTimeIndicatorType(t) => Types.SQL_TIMESTAMP
-        case t: TypeInformation[_] => t
-      }.toArray
+                                                .map(field => FlinkTypeFactory.toTypeInfo(field.getType))
+                                                .map {
+                                                  // replace time indicator types by SQL_TIMESTAMP
+                                                  case t: TypeInformation[_] if FlinkTypeFactory.isTimeIndicatorType(t) => Types.SQL_TIMESTAMP
+                                                  case t: TypeInformation[_] => t
+                                                }.toArray
 
     // configure the table sink
     val configuredSink = sink.configure(fieldNames, fieldTypes)
@@ -958,7 +968,7 @@ class Table(
     * @return A windowed table.
     */
   def window(window: Window): WindowedTable = {
-    new WindowedTable(this, window)
+    new WindowedTableImpl(this, window)
   }
 
   /**
@@ -996,7 +1006,7 @@ class Table(
       throw new TableException("Over-Windows are currently only supported single window.")
     }
 
-    new OverWindowedTable(this, overWindows.toArray)
+    new OverWindowedTableImpl(this, overWindows.toArray)
   }
 
   var tableName: String = _
@@ -1031,9 +1041,9 @@ class Table(
 /**
   * A table that has been grouped on a set of grouping keys.
   */
-class GroupedTable(
-  private[flink] val table: Table,
-  private[flink] val groupKey: Seq[Expression]) {
+class GroupedTableImpl(
+    private[flink] val innerable: InnerTable,
+    private[flink] val groupKey: Seq[Expression]) extends GroupedTable {
 
   /**
     * Performs a selection operation on a grouped table. Similar to an SQL SELECT statement.
@@ -1046,22 +1056,22 @@ class GroupedTable(
     * }}}
     */
   def select(fields: Expression*): Table = {
-    val expandedFields = expandProjectList(fields, table.logicalPlan, table.tableEnv)
-    val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, table.tableEnv)
+    val expandedFields = expandProjectList(fields, innerable.logicalPlan, innerable.tableEnv)
+    val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, innerable.tableEnv)
     if (propNames.nonEmpty) {
       throw new ValidationException("Window properties can only be used on windowed tables.")
     }
 
     val projectsOnAgg = replaceAggregationsAndProperties(
-      expandedFields, table.tableEnv, aggNames, propNames)
+      expandedFields, innerable.tableEnv, aggNames, propNames)
     val projectFields = extractFieldReferences(expandedFields ++ groupKey)
 
-    new Table(table.tableEnv,
-      Project(projectsOnAgg,
-        Aggregate(groupKey, aggNames.map(a => Alias(a._1, a._2)).toSeq,
-          Project(projectFields, table.logicalPlan).validate(table.tableEnv)
-        ).validate(table.tableEnv)
-      ).validate(table.tableEnv))
+    new TableImpl(innerable.tableEnv,
+                  Project(projectsOnAgg,
+                          Aggregate(groupKey, aggNames.map(a => Alias(a._1, a._2)).toSeq,
+                                    Project(projectFields, innerable.logicalPlan).validate(innerable.tableEnv)
+                          ).validate(innerable.tableEnv)
+                  ).validate(innerable.tableEnv))
   }
 
   /**
@@ -1077,14 +1087,14 @@ class GroupedTable(
   def select(fields: String): Table = {
     val fieldExprs = ExpressionParser.parseExpressionList(fields)
     //get the correct expression for AggFunctionCall
-    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, table.tableEnv))
+    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, innerable.tableEnv))
     select(withResolvedAggFunctionCall: _*)
   }
 }
 
-class WindowedTable(
-    private[flink] val table: Table,
-    private[flink] val window: Window) {
+class WindowedTableImpl(
+    private[flink] val table: InnerTable,
+    private[flink] val window: Window) extends WindowedTable {
 
   /**
     * Groups the elements by a mandatory window and one or more optional grouping attributes.
@@ -1108,7 +1118,7 @@ class WindowedTable(
       throw new ValidationException("GroupBy must contain exactly one window alias.")
     }
 
-    new WindowGroupedTable(table, fieldsWithoutWindow, window)
+    new WindowGroupedTableImpl(table, fieldsWithoutWindow, window)
   }
 
   /**
@@ -1134,46 +1144,46 @@ class WindowedTable(
 
 }
 
-class OverWindowedTable(
-    private[flink] val table: Table,
-    private[flink] val overWindows: Array[OverWindow]) {
+class OverWindowedTableImpl(
+    private[flink] val innerTable: InnerTable,
+    private[flink] val overWindows: Array[OverWindow]) extends OverWindowedTable  {
 
   def select(fields: Expression*): Table = {
     val expandedFields = expandProjectList(
       fields,
-      table.logicalPlan,
-      table.tableEnv)
+      innerTable.logicalPlan,
+      innerTable.tableEnv)
 
     if(fields.exists(_.isInstanceOf[WindowProperty])){
       throw new ValidationException(
         "Window start and end properties are not available for Over windows.")
     }
 
-    val expandedOverFields = resolveOverWindows(expandedFields, overWindows, table.tableEnv)
+    val expandedOverFields = resolveOverWindows(expandedFields, overWindows, innerTable.tableEnv)
 
-    new Table(
-      table.tableEnv,
+    new TableImpl(
+      innerTable.tableEnv,
       Project(
         expandedOverFields.map(UnresolvedAlias),
-        table.logicalPlan,
+        innerTable.logicalPlan,
         // required for proper projection push down
         explicitAlias = true)
-        .validate(table.tableEnv)
+      .validate(innerTable.tableEnv)
     )
   }
 
   def select(fields: String): Table = {
     val fieldExprs = ExpressionParser.parseExpressionList(fields)
     //get the correct expression for AggFunctionCall
-    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, table.tableEnv))
+    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, innerTable.tableEnv))
     select(withResolvedAggFunctionCall: _*)
   }
 }
 
-class WindowGroupedTable(
-    private[flink] val table: Table,
+class WindowGroupedTableImpl(
+    private[flink] val table: InnerTable,
     private[flink] val groupKeys: Seq[Expression],
-    private[flink] val window: Window) {
+    private[flink] val window: Window) extends WindowGroupedTable {
 
   /**
     * Performs a selection operation on a window grouped table. Similar to an SQL SELECT statement.
@@ -1194,19 +1204,19 @@ class WindowGroupedTable(
 
     val projectFields = extractFieldReferences(expandedFields ++ groupKeys :+ window.timeField)
 
-    new Table(table.tableEnv,
-      Project(
-        projectsOnAgg,
-        WindowAggregate(
-          groupKeys,
-          window.toLogicalWindow,
-          propNames.map(a => Alias(a._1, a._2)).toSeq,
-          aggNames.map(a => Alias(a._1, a._2)).toSeq,
-          Project(projectFields, table.logicalPlan).validate(table.tableEnv)
-        ).validate(table.tableEnv),
-        // required for proper resolution of the time attribute in multi-windows
-        explicitAlias = true
-      ).validate(table.tableEnv))
+    new TableImpl(table.tableEnv,
+                  Project(
+                    projectsOnAgg,
+                    WindowAggregate(
+                      groupKeys,
+                      window.toLogicalWindow,
+                      propNames.map(a => Alias(a._1, a._2)).toSeq,
+                      aggNames.map(a => Alias(a._1, a._2)).toSeq,
+                      Project(projectFields, table.logicalPlan).validate(table.tableEnv)
+                    ).validate(table.tableEnv),
+                    // required for proper resolution of the time attribute in multi-windows
+                    explicitAlias = true
+                  ).validate(table.tableEnv))
   }
 
   /**

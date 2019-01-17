@@ -22,15 +22,14 @@ import java.sql.{Date, Time, Timestamp}
 
 import org.apache.calcite.avatica.util.DateTimeUtils._
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
-import org.apache.flink.table.api.{CurrentRange, CurrentRow, TableException, UnboundedRange, UnboundedRow}
+import org.apache.flink.table.api._
 import org.apache.flink.table.expressions.ExpressionUtils.{convertArray, toMilliInterval, toMonthInterval, toRowInterval}
-import org.apache.flink.table.api.Table
 import org.apache.flink.table.expressions.TimeIntervalUnit.TimeIntervalUnit
 import org.apache.flink.table.expressions.TimePointUnit.TimePointUnit
 import org.apache.flink.table.expressions._
 import org.apache.flink.table.functions.{AggregateFunction, DistinctAggregateFunction, ScalarFunction}
 
-import scala.language.implicitConversions
+import _root_.scala.language.implicitConversions
 
 /**
  * These are all the operations that can be used to construct an [[Expression]] AST for expression
@@ -998,12 +997,12 @@ trait ImplicitExpressionConversions {
     def expr = Literal(bool)
   }
 
-  implicit class LiteralJavaDecimalExpression(javaDecimal: java.math.BigDecimal)
+  implicit class LiteralJavaDecimalExpression(javaDecimal: JBigDecimal)
       extends ImplicitExpressionOperations {
     def expr = Literal(javaDecimal)
   }
 
-  implicit class LiteralScalaDecimalExpression(scalaDecimal: scala.math.BigDecimal)
+  implicit class LiteralScalaDecimalExpression(scalaDecimal: BigDecimal)
       extends ImplicitExpressionOperations {
     def expr = Literal(scalaDecimal.bigDecimal)
   }
@@ -1050,6 +1049,9 @@ trait ImplicitExpressionConversions {
   implicit def toDistinct[T: TypeInformation, ACC: TypeInformation]
       (agg: AggregateFunction[T, ACC]): DistinctAggregateFunction[T, ACC] =
     DistinctAggregateFunction(agg)
+
+  // just for test pass
+  implicit def toInnerTable(table: Table): InnerTable = table.asInstanceOf[InnerTable]
 }
 
 // ------------------------------------------------------------------------------------------------
