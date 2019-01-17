@@ -39,7 +39,7 @@ import org.apache.flink.api.java.{DataSet => JDataSet}
 import org.apache.flink.api.scala.{DataSet, ExecutionEnvironment}
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.core.fs.Path
-import org.apache.flink.table.api.{BatchTableEnvironment, TableConfig, TableEnvironment}
+import org.apache.flink.table.api.{BatchTableEnvironment, InnerTable, TableConfig, TableEnvironment}
 import org.apache.flink.table.calcite.FlinkPlannerImpl
 import org.apache.flink.table.codegen.{Compiler, FunctionCodeGenerator, GeneratedFunction}
 import org.apache.flink.table.expressions.{Expression, ExpressionParser}
@@ -150,7 +150,7 @@ abstract class ExpressionTestBase {
     if (isRichFunction) {
       val richMapper = mapper.asInstanceOf[RichMapFunction[_, _]]
       val t = new RuntimeUDFContext(
-        new TaskInfo("ExpressionTest", 1, 0, 1, 1),
+        new TaskInfo("ExpressinTest", 1, 0, 1, 1),
         null,
         context._3.getConfig,
         new util.HashMap[String, Future[Path]](),
@@ -202,7 +202,7 @@ abstract class ExpressionTestBase {
     val env = context._2.asInstanceOf[BatchTableEnvironment]
     val converted = env
       .scan(tableName)
-      .select(tableApiExpr)
+      .select(tableApiExpr).asInstanceOf[InnerTable]
       .getRelNode
 
     val optimized = env.optimize(converted)
