@@ -16,8 +16,8 @@ public class FlinkRexNodeConverterSet {
     private static Map<Class<? extends Expression>, RexNodeConverter> expressionClass2ConverterMap
         = new HashMap<>();
 
-    public static void registerConverter(
-        Class<? extends Expression> expressionClass, RexNodeConverter converter) {
+    public static <T extends Expression> void registerConverter(
+        Class<T> expressionClass, RexNodeConverter<T> converter) {
         expressionClass2ConverterMap.put(expressionClass, converter);
     }
 
@@ -39,7 +39,8 @@ public class FlinkRexNodeConverterSet {
                     return converter.toRexNode(expr, relBuilder);
                 }
             }
-            throw new RuntimeException(expr.getClass().getCanonicalName() + " is not supported!");
+            //throw new RuntimeException(expr.getClass().getCanonicalName() + " is not supported!");
+            return expr.toRexNode(relBuilder);
         }
     }
 }

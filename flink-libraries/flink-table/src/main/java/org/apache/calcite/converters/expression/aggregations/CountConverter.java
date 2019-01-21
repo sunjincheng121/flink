@@ -18,27 +18,26 @@
 
 package org.apache.calcite.converters.expression.aggregations;
 
-import org.apache.calcite.converters.FlinkAggCallConverterSet;
 import org.apache.calcite.converters.expression.AggregationConverter;
 import org.apache.calcite.sql.SqlAggFunction;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.tools.RelBuilder;
-import org.apache.flink.table.expressions.Aggregation;
-import org.apache.flink.table.expressions.DistinctAgg;
+import org.apache.flink.table.expressions.Count;
 
-public class DistinctAggConverter implements AggregationConverter<DistinctAgg> {
-
-    public static DistinctAggConverter INSTANCE = new DistinctAggConverter();
-
+public class CountConverter implements AggregationConverter<Count> {
     @Override
-    public RelBuilder.AggCall toAggCall(
-        DistinctAgg agg, String name, boolean isDistinct, RelBuilder relBuilder) {
-        Aggregation child = (Aggregation) agg.child();
-        return FlinkAggCallConverterSet.toAggCall(child, name, true, relBuilder);
+    public RelBuilder.AggCall toAggCall(Count agg, String name, boolean isDistinct, RelBuilder relBuilder) {
+        return relBuilder.aggregateCall(
+            SqlStdOperatorTable.COUNT,
+            isDistinct,
+            false,
+            null,
+            name,
+            agg.child().toRexNode(relBuilder));
     }
 
     @Override
-    public SqlAggFunction getSqlAggFunction(DistinctAgg agg, RelBuilder relBuilder) {
-        Aggregation child = (Aggregation) agg.child();
-        return FlinkAggCallConverterSet.getSqlAggFunction(child, relBuilder);
+    public SqlAggFunction getSqlAggFunction(Count agg, RelBuilder relBuilder) {
+        return SqlStdOperatorTable.COUNT;
     }
 }

@@ -18,27 +18,35 @@
 
 package org.apache.calcite.converters.expression.aggregations;
 
-import org.apache.calcite.converters.FlinkAggCallConverterSet;
 import org.apache.calcite.converters.expression.AggregationConverter;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlAggFunction;
+import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.sql.fun.SqlSumAggFunction;
 import org.apache.calcite.tools.RelBuilder;
-import org.apache.flink.table.expressions.Aggregation;
-import org.apache.flink.table.expressions.DistinctAgg;
+import org.apache.flink.table.calcite.FlinkTypeFactory;
+import org.apache.flink.table.expressions.Sum;
 
-public class DistinctAggConverter implements AggregationConverter<DistinctAgg> {
+public class SumConverter implements AggregationConverter<Sum> {
 
-    public static DistinctAggConverter INSTANCE = new DistinctAggConverter();
+    public static SumConverter INSTANCE = new SumConverter();
 
     @Override
-    public RelBuilder.AggCall toAggCall(
-        DistinctAgg agg, String name, boolean isDistinct, RelBuilder relBuilder) {
-        Aggregation child = (Aggregation) agg.child();
-        return FlinkAggCallConverterSet.toAggCall(child, name, true, relBuilder);
+    public RelBuilder.AggCall toAggCall(Sum agg, String name, boolean isDistinct, RelBuilder relBuilder) {
+        return relBuilder.aggregateCall(
+            SqlStdOperatorTable.SUM,
+            isDistinct,
+            false,
+            null,
+            name,
+            agg.child().toRexNode(relBuilder));
     }
 
     @Override
-    public SqlAggFunction getSqlAggFunction(DistinctAgg agg, RelBuilder relBuilder) {
-        Aggregation child = (Aggregation) agg.child();
-        return FlinkAggCallConverterSet.getSqlAggFunction(child, relBuilder);
+    public SqlAggFunction getSqlAggFunction(Sum agg, RelBuilder relBuilder) {
+        RelDataType returnType = ((FlinkTypeFactory)relBuilder
+            .getTypeFactory())
+            .createTypeFromTypeInfo(agg.resultType(), true);
+        return new SqlSumAggFunction(returnType);
     }
 }
