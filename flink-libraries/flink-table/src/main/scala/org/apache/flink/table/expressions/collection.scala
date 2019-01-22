@@ -18,13 +18,10 @@
 
 package org.apache.flink.table.expressions
 
-import org.apache.calcite.rex.RexNode
-import org.apache.calcite.sql.fun.SqlStdOperatorTable
-import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo.INT_TYPE_INFO
 import org.apache.flink.api.common.typeinfo.{BasicArrayTypeInfo, BasicTypeInfo, PrimitiveArrayTypeInfo, TypeInformation}
-import org.apache.flink.api.java.typeutils.{GenericTypeInfo, MapTypeInfo, ObjectArrayTypeInfo, RowTypeInfo}
-import org.apache.flink.table.calcite.FlinkRelBuilder
+import org.apache.flink.api.java.typeutils.{MapTypeInfo, ObjectArrayTypeInfo, RowTypeInfo}
+import org.apache.flink.table.api.base.visitor.ExpressionVisitor
 import org.apache.flink.table.typeutils.TypeCheckUtils.{isArray, isMap}
 import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, ValidationSuccess}
 
@@ -33,17 +30,6 @@ import scala.collection.JavaConverters._
 case class RowConstructor(elements: Seq[Expression]) extends Expression {
 
   override private[flink] def children: Seq[Expression] = elements
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    val relDataType = relBuilder
-      .asInstanceOf[FlinkRelBuilder]
-      .getTypeFactory
-      .createTypeFromTypeInfo(resultType, isNullable = false)
-    val values = elements.map(_.toRexNode).toList.asJava
-    relBuilder
-      .getRexBuilder
-      .makeCall(relDataType, SqlStdOperatorTable.ROW, values)
-  }
 
   override def toString = s"row(${elements.mkString(", ")})"
 
@@ -57,22 +43,14 @@ case class RowConstructor(elements: Seq[Expression]) extends Expression {
     }
     ValidationSuccess
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class ArrayConstructor(elements: Seq[Expression]) extends Expression {
 
   override private[flink] def children: Seq[Expression] = elements
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    val relDataType = relBuilder
-      .asInstanceOf[FlinkRelBuilder]
-      .getTypeFactory
-      .createTypeFromTypeInfo(resultType, isNullable = false)
-    val values = elements.map(_.toRexNode).toList.asJava
-    relBuilder
-      .getRexBuilder
-      .makeCall(relDataType, SqlStdOperatorTable.ARRAY_VALUE_CONSTRUCTOR, values)
-  }
 
   override def toString = s"array(${elements.mkString(", ")})"
 
@@ -89,22 +67,13 @@ case class ArrayConstructor(elements: Seq[Expression]) extends Expression {
       ValidationSuccess
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class MapConstructor(elements: Seq[Expression]) extends Expression {
   override private[flink] def children: Seq[Expression] = elements
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    val typeFactory = relBuilder.asInstanceOf[FlinkRelBuilder].getTypeFactory
-    val relDataType = typeFactory.createMapType(
-      typeFactory.createTypeFromTypeInfo(elements.head.resultType, isNullable = true),
-      typeFactory.createTypeFromTypeInfo(elements.last.resultType, isNullable = true)
-    )
-    val values = elements.map(_.toRexNode).toList.asJava
-    relBuilder
-      .getRexBuilder
-      .makeCall(relDataType, SqlStdOperatorTable.MAP_VALUE_CONSTRUCTOR, values)
-  }
 
   override def toString = s"map(${elements
     .grouped(2)
@@ -130,17 +99,14 @@ case class MapConstructor(elements: Seq[Expression]) extends Expression {
     }
     ValidationSuccess
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class ArrayElement(array: Expression) extends Expression {
 
   override private[flink] def children: Seq[Expression] = Seq(array)
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder
-      .getRexBuilder
-      .makeCall(SqlStdOperatorTable.ELEMENT, array.toRexNode)
-  }
 
   override def toString = s"($array).element()"
 
@@ -156,17 +122,14 @@ case class ArrayElement(array: Expression) extends Expression {
       case other@_ => ValidationFailure(s"Array expected but was '$other'.")
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class Cardinality(container: Expression) extends Expression {
 
   override private[flink] def children: Seq[Expression] = Seq(container)
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder
-      .getRexBuilder
-      .makeCall(SqlStdOperatorTable.CARDINALITY, container.toRexNode)
-  }
 
   override def toString = s"($container).cardinality()"
 
@@ -179,17 +142,14 @@ case class Cardinality(container: Expression) extends Expression {
       case other@_ => ValidationFailure(s"Array or map expected but was '$other'.")
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class ItemAt(container: Expression, key: Expression) extends Expression {
 
   override private[flink] def children: Seq[Expression] = Seq(container, key)
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder
-      .getRexBuilder
-      .makeCall(SqlStdOperatorTable.ITEM, container.toRexNode, key.toRexNode)
-  }
 
   override def toString = s"($container).at($key)"
 
@@ -229,4 +189,7 @@ case class ItemAt(container: Expression, key: Expression) extends Expression {
       case other@_ => ValidationFailure(s"Array or map expected but was '$other'.")
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }

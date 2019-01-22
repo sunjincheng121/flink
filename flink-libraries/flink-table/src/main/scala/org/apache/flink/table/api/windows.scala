@@ -18,6 +18,7 @@
 
 package org.apache.flink.table.api
 
+import org.apache.flink.table.api.base.visitor.ExpressionVisitor
 import org.apache.flink.table.expressions._
 import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeInfo}
@@ -39,6 +40,9 @@ case class CurrentRow() extends Expression {
   override private[flink] def children = Seq()
 
   override def toString = "CURRENT ROW"
+
+  override def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 case class CurrentRange() extends Expression {
@@ -47,6 +51,9 @@ case class CurrentRange() extends Expression {
   override private[flink] def children = Seq()
 
   override def toString = "CURRENT RANGE"
+
+  override def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 case class UnboundedRow() extends Expression {
@@ -55,6 +62,9 @@ case class UnboundedRow() extends Expression {
   override private[flink] def children = Seq()
 
   override def toString = "UNBOUNDED ROW"
+
+  override def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 case class UnboundedRange() extends Expression {
@@ -63,6 +73,9 @@ case class UnboundedRange() extends Expression {
   override private[flink] def children = Seq()
 
   override def toString = "UNBOUNDED RANGE"
+
+  override def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 /**

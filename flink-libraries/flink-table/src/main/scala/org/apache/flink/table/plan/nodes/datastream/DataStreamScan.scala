@@ -24,6 +24,7 @@ import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rel.core.TableScan
 import org.apache.calcite.rex.RexNode
 import org.apache.flink.streaming.api.datastream.DataStream
+import org.apache.flink.table.api.planner.visitor.ExpressionVisitorImpl
 import org.apache.flink.table.api.{StreamQueryConfig, StreamTableEnvironment}
 import org.apache.flink.table.expressions.Cast
 import org.apache.flink.table.plan.schema.RowSchema
@@ -70,10 +71,10 @@ class DataStreamScan(
       if (fieldIdxs.contains(TimeIndicatorTypeInfo.ROWTIME_STREAM_MARKER)) {
         // extract timestamp from StreamRecord
         Some(
-          Cast(
+          ExpressionVisitorImpl.toRexNode(Cast(
             org.apache.flink.table.expressions.StreamRecordTimestamp(),
-            TimeIndicatorTypeInfo.ROWTIME_INDICATOR)
-            .toRexNode(tableEnv.getRelBuilder))
+            TimeIndicatorTypeInfo.ROWTIME_INDICATOR),
+            tableEnv.getRelBuilder))
       } else {
         None
       }

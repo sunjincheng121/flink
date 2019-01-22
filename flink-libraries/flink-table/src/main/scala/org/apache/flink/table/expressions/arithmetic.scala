@@ -17,23 +17,13 @@
  */
 package org.apache.flink.table.expressions
 
-import org.apache.calcite.rex.RexNode
-import org.apache.calcite.sql.SqlOperator
-import org.apache.calcite.sql.fun.SqlStdOperatorTable
-import org.apache.calcite.tools.RelBuilder
-import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
+import org.apache.flink.api.common.typeinfo.TypeInformation
+import org.apache.flink.table.api.base.visitor.ExpressionVisitor
 import org.apache.flink.table.typeutils.TypeCheckUtils._
 import org.apache.flink.table.typeutils.TypeCoercion
 import org.apache.flink.table.validate._
 
-import scala.collection.JavaConversions._
-
 abstract class BinaryArithmetic extends BinaryExpression {
-  private[flink] def sqlOperator: SqlOperator
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.call(sqlOperator, children.map(_.toRexNode))
-  }
 
   override private[flink] def resultType: TypeInformation[_] =
     TypeCoercion.widerTypeOf(left.resultType, right.resultType) match {
@@ -55,30 +45,6 @@ abstract class BinaryArithmetic extends BinaryExpression {
 case class Plus(left: Expression, right: Expression) extends BinaryArithmetic {
   override def toString = s"($left + $right)"
 
-  private[flink] val sqlOperator = SqlStdOperatorTable.PLUS
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    if(isString(left.resultType)) {
-      val castedRight = Cast(right, BasicTypeInfo.STRING_TYPE_INFO)
-      relBuilder.call(SqlStdOperatorTable.CONCAT, left.toRexNode, castedRight.toRexNode)
-    } else if(isString(right.resultType)) {
-      val castedLeft = Cast(left, BasicTypeInfo.STRING_TYPE_INFO)
-      relBuilder.call(SqlStdOperatorTable.CONCAT, castedLeft.toRexNode, right.toRexNode)
-    } else if (isTimeInterval(left.resultType) && left.resultType == right.resultType) {
-      relBuilder.call(SqlStdOperatorTable.PLUS, left.toRexNode, right.toRexNode)
-    } else if (isTimeInterval(left.resultType) && isTemporal(right.resultType)) {
-      // Calcite has a bug that can't apply INTERVAL + DATETIME (INTERVAL at left)
-      // we manually switch them here
-      relBuilder.call(SqlStdOperatorTable.DATETIME_PLUS, right.toRexNode, left.toRexNode)
-    } else if (isTemporal(left.resultType) && isTemporal(right.resultType)) {
-      relBuilder.call(SqlStdOperatorTable.DATETIME_PLUS, left.toRexNode, right.toRexNode)
-    } else {
-      val castedLeft = Cast(left, resultType)
-      val castedRight = Cast(right, resultType)
-      relBuilder.call(SqlStdOperatorTable.PLUS, castedLeft.toRexNode, castedRight.toRexNode)
-    }
-  }
-
   override private[flink] def validateInput(): ValidationResult = {
     if (isString(left.resultType) || isString(right.resultType)) {
       ValidationSuccess
@@ -97,14 +63,12 @@ case class Plus(left: Expression, right: Expression) extends BinaryArithmetic {
         s"but was '$left' : '${left.resultType}' and '$right' : '${right.resultType}'.")
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T = visitor.visit(this)
 }
 
 case class UnaryMinus(child: Expression) extends UnaryExpression {
   override def toString = s"-($child)"
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.call(SqlStdOperatorTable.UNARY_MINUS, child.toRexNode)
-  }
 
   override private[flink] def resultType = child.resultType
 
@@ -118,12 +82,12 @@ case class UnaryMinus(child: Expression) extends UnaryExpression {
         s"interval type, but was '${child.resultType}'.")
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T = visitor.visit(this)
 }
 
 case class Minus(left: Expression, right: Expression) extends BinaryArithmetic {
   override def toString = s"($left - $right)"
-
-  private[flink] val sqlOperator = SqlStdOperatorTable.MINUS
 
   override private[flink] def validateInput(): ValidationResult = {
     if (isTimeInterval(left.resultType) && left.resultType == right.resultType) {
@@ -141,22 +105,24 @@ case class Minus(left: Expression, right: Expression) extends BinaryArithmetic {
         s"but was '$left' : '${left.resultType}' and '$right' : '${right.resultType}'.")
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T = visitor.visit(this)
 }
 
 case class Div(left: Expression, right: Expression) extends BinaryArithmetic {
   override def toString = s"($left / $right)"
 
-  private[flink] val sqlOperator = SqlStdOperatorTable.DIVIDE
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T = visitor.visit(this)
 }
 
 case class Mul(left: Expression, right: Expression) extends BinaryArithmetic {
   override def toString = s"($left * $right)"
 
-  private[flink] val sqlOperator = SqlStdOperatorTable.MULTIPLY
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T = visitor.visit(this)
 }
 
 case class Mod(left: Expression, right: Expression) extends BinaryArithmetic {
   override def toString = s"($left % $right)"
 
-  private[flink] val sqlOperator = SqlStdOperatorTable.MOD
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T = visitor.visit(this)
 }

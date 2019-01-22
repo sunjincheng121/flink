@@ -29,6 +29,7 @@ import org.apache.calcite.rex.{RexLiteral, RexNode}
 import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.api.common.typeutils.CompositeType
+import org.apache.flink.table.api.planner.visitor.ExpressionVisitorImpl
 import org.apache.flink.table.api.{TableException, Types, ValidationException}
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.expressions.{Cast, ResolvedFieldReference}
@@ -381,7 +382,7 @@ object TableSourceUtil {
 
       val expression = tsExtractor.getExpression(fieldAccesses)
       // add cast to requested type and convert expression to RexNode
-      val rexExpression = Cast(expression, resultType).toRexNode(relBuilder)
+      val rexExpression = ExpressionVisitorImpl.toRexNode(Cast(expression, resultType), relBuilder)
       relBuilder.clear()
       rexExpression
     }

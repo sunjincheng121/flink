@@ -17,23 +17,13 @@
  */
 package org.apache.flink.table.expressions
 
-import org.apache.calcite.rex.RexNode
-import org.apache.calcite.sql.SqlOperator
-import org.apache.calcite.sql.fun.SqlStdOperatorTable
-import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
+import org.apache.flink.table.api.base.visitor.ExpressionVisitor
 import org.apache.flink.table.typeutils.TypeCheckUtils.{isArray, isComparable, isNumeric}
 import org.apache.flink.table.validate._
 
-import scala.collection.JavaConversions._
-
 abstract class BinaryComparison extends BinaryExpression {
-  private[flink] def sqlOperator: SqlOperator
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.call(sqlOperator, children.map(_.toRexNode))
-  }
 
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
 
@@ -51,8 +41,6 @@ abstract class BinaryComparison extends BinaryExpression {
 case class EqualTo(left: Expression, right: Expression) extends BinaryComparison {
   override def toString = s"$left === $right"
 
-  private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.EQUALS
-
   override private[flink] def validateInput(): ValidationResult =
     (left.resultType, right.resultType) match {
       case (lType, rType) if isNumeric(lType) && isNumeric(rType) => ValidationSuccess
@@ -62,12 +50,13 @@ case class EqualTo(left: Expression, right: Expression) extends BinaryComparison
       case (lType, rType) =>
         ValidationFailure(s"Equality predicate on incompatible types: $lType and $rType")
     }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class NotEqualTo(left: Expression, right: Expression) extends BinaryComparison {
   override def toString = s"$left !== $right"
-
-  private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.NOT_EQUALS
 
   override private[flink] def validateInput(): ValidationResult =
     (left.resultType, right.resultType) match {
@@ -78,90 +67,91 @@ case class NotEqualTo(left: Expression, right: Expression) extends BinaryCompari
       case (lType, rType) =>
         ValidationFailure(s"Inequality predicate on incompatible types: $lType and $rType")
     }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class GreaterThan(left: Expression, right: Expression) extends BinaryComparison {
   override def toString = s"$left > $right"
 
-  private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.GREATER_THAN
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class GreaterThanOrEqual(left: Expression, right: Expression) extends BinaryComparison {
   override def toString = s"$left >= $right"
 
-  private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.GREATER_THAN_OR_EQUAL
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class LessThan(left: Expression, right: Expression) extends BinaryComparison {
   override def toString = s"$left < $right"
 
-  private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.LESS_THAN
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class LessThanOrEqual(left: Expression, right: Expression) extends BinaryComparison {
   override def toString = s"$left <= $right"
 
-  private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.LESS_THAN_OR_EQUAL
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class IsNull(child: Expression) extends UnaryExpression {
   override def toString = s"($child).isNull"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.isNull(child.toRexNode)
-  }
-
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class IsNotNull(child: Expression) extends UnaryExpression {
   override def toString = s"($child).isNotNull"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.isNotNull(child.toRexNode)
-  }
-
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class IsTrue(child: Expression) extends UnaryExpression {
   override def toString = s"($child).isTrue"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.call(SqlStdOperatorTable.IS_TRUE, child.toRexNode)
-  }
-
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class IsFalse(child: Expression) extends UnaryExpression {
   override def toString = s"($child).isFalse"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.call(SqlStdOperatorTable.IS_FALSE, child.toRexNode)
-  }
-
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class IsNotTrue(child: Expression) extends UnaryExpression {
   override def toString = s"($child).isNotTrue"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.call(SqlStdOperatorTable.IS_NOT_TRUE, child.toRexNode)
-  }
-
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class IsNotFalse(child: Expression) extends UnaryExpression {
   override def toString = s"($child).isNotFalse"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.call(SqlStdOperatorTable.IS_NOT_FALSE, child.toRexNode)
-  }
-
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 abstract class BetweenComparison(
@@ -199,20 +189,8 @@ case class Between(
 
   override def toString: String = s"($expr).between($lowerBound, $upperBound)"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.and(
-      relBuilder.call(
-        SqlStdOperatorTable.GREATER_THAN_OR_EQUAL,
-        expr.toRexNode,
-        lowerBound.toRexNode
-      ),
-      relBuilder.call(
-        SqlStdOperatorTable.LESS_THAN_OR_EQUAL,
-        expr.toRexNode,
-        upperBound.toRexNode
-      )
-    )
-  }
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class NotBetween(
@@ -223,18 +201,6 @@ case class NotBetween(
 
   override def toString: String = s"($expr).notBetween($lowerBound, $upperBound)"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.or(
-      relBuilder.call(
-        SqlStdOperatorTable.LESS_THAN,
-        expr.toRexNode,
-        lowerBound.toRexNode
-      ),
-      relBuilder.call(
-        SqlStdOperatorTable.GREATER_THAN,
-        expr.toRexNode,
-        upperBound.toRexNode
-      )
-    )
-  }
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }

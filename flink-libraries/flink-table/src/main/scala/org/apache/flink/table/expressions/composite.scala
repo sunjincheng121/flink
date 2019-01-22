@@ -18,11 +18,10 @@
 
 package org.apache.flink.table.expressions
 
-import org.apache.calcite.rex.RexNode
-import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.common.typeutils.CompositeType
 import org.apache.flink.table.api.UnresolvedException
+import org.apache.flink.table.api.base.visitor.ExpressionVisitor
 import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, ValidationSuccess}
 
 /**
@@ -38,11 +37,14 @@ case class Flattening(child: Expression) extends UnaryExpression {
 
   override private[flink] def validateInput(): ValidationResult =
     ValidationFailure(s"Unresolved flattening of $child")
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 case class GetCompositeField(child: Expression, key: Any) extends UnaryExpression {
 
-  private var fieldIndex: Option[Int] = None
+  private[flink] var fieldIndex: Option[Int] = None
 
   override def toString = s"$child.get($key)"
 
@@ -78,12 +80,6 @@ case class GetCompositeField(child: Expression, key: Any) extends UnaryExpressio
   override private[flink] def resultType: TypeInformation[_] =
     child.resultType.asInstanceOf[CompositeType[_]].getTypeAt(fieldIndex.get)
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder
-      .getRexBuilder
-      .makeFieldAccess(child.toRexNode, fieldIndex.get)
-  }
-
   override private[flink] def makeCopy(anyRefs: Array[AnyRef]): this.type = {
     val child: Expression = anyRefs.head.asInstanceOf[Expression]
     copy(child, key).asInstanceOf[this.type]
@@ -103,4 +99,7 @@ case class GetCompositeField(child: Expression, key: Any) extends UnaryExpressio
     case c: ResolvedFieldReference => Some(s"${c.name}$$$key")
     case _ => None
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }

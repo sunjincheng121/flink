@@ -19,10 +19,9 @@
 package org.apache.flink.table.expressions
 
 import org.apache.calcite.avatica.util.{TimeUnit, TimeUnitRange}
-import org.apache.calcite.rex.RexNode
 import org.apache.calcite.sql.fun.SqlTrimFunction
-import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.TypeInformation
+import org.apache.flink.table.api.base.visitor.ExpressionVisitor
 
 import scala.language.{existentials, implicitConversions}
 
@@ -36,14 +35,10 @@ case class SymbolExpression(symbol: TableSymbol) extends LeafExpression {
 
   def toExpr: SymbolExpression = this // triggers implicit conversion
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    // dirty hack to pass Java enums to Java from Scala
-    val enum = symbol.enum.asInstanceOf[Enum[T] forSome { type T <: Enum[T] }]
-    relBuilder.getRexBuilder.makeFlag(enum)
-  }
-
   override def toString: String = s"${symbol.symbols}.${symbol.name}"
 
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 /**
@@ -52,7 +47,7 @@ case class SymbolExpression(symbol: TableSymbol) extends LeafExpression {
 trait TableSymbol {
   def symbols: TableSymbols
   def name: String
-  def enum: Enum[_]
+  def javaEnum: Enum[_]
 }
 
 /**
@@ -63,7 +58,7 @@ abstract class TableSymbols extends Enumeration {
   class TableSymbolValue(e: Enum[_]) extends Val(e.name()) with TableSymbol {
     override def symbols: TableSymbols = TableSymbols.this
 
-    override def enum: Enum[_] = e
+    override def javaEnum: Enum[_] = e
 
     override def name: String = toString()
   }

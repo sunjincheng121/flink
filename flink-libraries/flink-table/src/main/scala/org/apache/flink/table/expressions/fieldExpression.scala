@@ -17,13 +17,11 @@
  */
 package org.apache.flink.table.expressions
 
-import org.apache.calcite.rex.RexNode
-import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.api._
+import org.apache.flink.table.api.base.visitor.ExpressionVisitor
 import org.apache.flink.table.calcite.FlinkRelBuilder.NamedWindowProperty
 import org.apache.flink.table.calcite.FlinkTypeFactory._
-import org.apache.flink.table.functions.sql.StreamRecordTimestampSqlFunction
 import org.apache.flink.table.typeutils.TimeIndicatorTypeInfo
 import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, ValidationSuccess}
 
@@ -50,6 +48,9 @@ case class UnresolvedFieldReference(name: String) extends Attribute {
 
   override private[flink] def validateInput(): ValidationResult =
     ValidationFailure(s"Unresolved reference $name.")
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 case class ResolvedFieldReference(
@@ -58,10 +59,6 @@ case class ResolvedFieldReference(
 
   override def toString = s"'$name"
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.field(name)
-  }
-
   override private[flink] def withName(newName: String): Attribute = {
     if (newName == name) {
       this
@@ -69,16 +66,15 @@ case class ResolvedFieldReference(
       ResolvedFieldReference(newName, resultType)
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class Alias(child: Expression, name: String, extraNames: Seq[String] = Seq())
     extends UnaryExpression with NamedExpression {
 
   override def toString = s"$child as '$name"
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.alias(child.toRexNode, name)
-  }
 
   override private[flink] def resultType: TypeInformation[_] = child.resultType
 
@@ -104,6 +100,9 @@ case class Alias(child: Expression, name: String, extraNames: Seq[String] = Seq(
       ValidationSuccess
     }
   }
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }
 
 case class UnresolvedAlias(child: Expression) extends UnaryExpression with NamedExpression {
@@ -118,12 +117,12 @@ case class UnresolvedAlias(child: Expression) extends UnaryExpression with Named
     throw UnresolvedException("Invalid call to resultType on UnresolvedAlias")
 
   override private[flink] lazy val valid = false
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 case class WindowReference(name: String, tpe: Option[TypeInformation[_]] = None) extends Attribute {
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
-    throw new UnsupportedOperationException("A window reference can not be used solely.")
 
   override private[flink] def resultType: TypeInformation[_] =
     tpe.getOrElse(throw UnresolvedException("Could not resolve type of referenced window."))
@@ -137,12 +136,12 @@ case class WindowReference(name: String, tpe: Option[TypeInformation[_]] = None)
   }
 
   override def toString: String = s"'$name"
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    throw new UnsupportedOperationException("A window reference can not be used solely.")
 }
 
 case class TableReference(name: String, table: Table) extends LeafExpression with NamedExpression {
-
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
-    throw new UnsupportedOperationException(s"Table reference '$name' can not be used solely.")
 
   override private[flink] def resultType: TypeInformation[_] =
     throw UnresolvedException(s"Table reference '$name' has no result type.")
@@ -151,6 +150,9 @@ case class TableReference(name: String, table: Table) extends LeafExpression wit
     throw new UnsupportedOperationException(s"A table reference '$name' can not be an attribute.")
 
   override def toString: String = s"$name"
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    throw new UnsupportedOperationException(s"Table reference '$name' can not be used solely.")
 }
 
 abstract class TimeAttribute(val expression: Expression)
@@ -198,6 +200,9 @@ case class RowtimeAttribute(expr: Expression) extends TimeAttribute(expr) {
     NamedWindowProperty(name, this)
 
   override def toString: String = s"rowtime($child)"
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 case class ProctimeAttribute(expr: Expression) extends TimeAttribute(expr) {
@@ -222,6 +227,9 @@ case class ProctimeAttribute(expr: Expression) extends TimeAttribute(expr) {
     NamedWindowProperty(name, this)
 
   override def toString: String = s"proctime($child)"
+
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    throwUnsupportedToRexNodeOperationException
 }
 
 /** Expression to access the timestamp of a StreamRecord. */
@@ -229,7 +237,6 @@ case class StreamRecordTimestamp() extends LeafExpression {
 
   override private[flink] def resultType = Types.LONG
 
-  override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.getRexBuilder.makeCall(StreamRecordTimestampSqlFunction)
-  }
+  override private[flink] def accept[T](visitor: ExpressionVisitor[T]): T =
+    visitor.visit(this)
 }

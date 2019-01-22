@@ -29,6 +29,8 @@ import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
+import org.apache.flink.table.api.base.visitor.ExpressionVisitor
+import org.apache.flink.table.api.planner.visitor.{AggregationCallVisitorImpl, AggregationSqlFunVisitorImpl, ExpressionVisitorImpl}
 import org.apache.flink.table.api.{StreamTableEnvironment, TableEnvironment, Types, UnresolvedException}
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
 import org.apache.flink.table.expressions.ExpressionUtils.isRowCountLiteral
@@ -107,7 +109,7 @@ case class Project(
     }
 
     relBuilder.project(
-      exprs.map(_.toRexNode(relBuilder)).asJava,
+      exprs.map(ExpressionVisitorImpl.toRexNode(_, relBuilder)).asJava,
       projectList.map(_.name).asJava,
       true)
   }
@@ -153,7 +155,7 @@ case class Sort(order: Seq[Ordering], child: LogicalNode) extends UnaryNode {
 
   override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = {
     child.construct(relBuilder)
-    relBuilder.sort(order.map(_.toRexNode(relBuilder)).asJava)
+    relBuilder.sort(order.map(ExpressionVisitorImpl.toRexNode(_, relBuilder)).asJava)
   }
 
   override def validate(tableEnv: TableEnvironment): LogicalNode = {
@@ -191,7 +193,7 @@ case class Filter(condition: Expression, child: LogicalNode) extends UnaryNode {
 
   override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = {
     child.construct(relBuilder)
-    relBuilder.filter(condition.toRexNode(relBuilder))
+    relBuilder.filter(ExpressionVisitorImpl.toRexNode(condition, relBuilder))
   }
 
   override def validate(tableEnv: TableEnvironment): LogicalNode = {
@@ -219,9 +221,11 @@ case class Aggregate(
   override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = {
     child.construct(relBuilder)
     relBuilder.aggregate(
-      relBuilder.groupKey(groupingExpressions.map(_.toRexNode(relBuilder)).asJava),
+      relBuilder.groupKey(groupingExpressions.map(
+        ExpressionVisitorImpl.toRexNode(_, relBuilder)).asJava),
       aggregateExpressions.map {
-        case Alias(agg: Aggregation, name, _) => agg.toAggCall(name)(relBuilder)
+        case Alias(agg: Aggregation, name, _) =>
+          AggregationCallVisitorImpl.toAggCall(agg, name, false, relBuilder)
         case _ => throw new RuntimeException("This should never happen.")
       }.asJava)
   }
@@ -245,7 +249,7 @@ case class Aggregate(
         }
       // check aggregate function
       case aggExpr: Aggregation
-        if aggExpr.getSqlAggFunction.requiresOver =>
+        if AggregationSqlFunVisitorImpl.getSqlAggFunction(aggExpr, relBuilder).requiresOver =>
         failValidation(s"OVER clause is necessary for window functions: [${aggExpr.getClass}].")
       // check no nested aggregation exists.
       case aggExpr: Aggregation =>
@@ -382,7 +386,7 @@ case class Join(
     left.output ++ right.output
   }
 
-  private case class JoinFieldReference(
+  private[flink] case class JoinFieldReference(
     name: String,
     resultType: TypeInformation[_],
     left: LogicalNode,
@@ -400,7 +404,7 @@ case class Join(
 
     override def toString = s"'$name"
 
-    override def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
+    def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
       // look up type of field
       val fieldType = relBuilder.field(2, if (isFromLeftInput) 0 else 1, name).getType
       // create a new RexInputRef with index offset
@@ -413,6 +417,10 @@ case class Join(
       } else {
         JoinFieldReference(newName, resultType, left, right)
       }
+    }
+
+    override private[flink] def accept[T](visitor: ExpressionVisitor[T]) = {
+      visitor.visit(this)
     }
   }
 
@@ -440,7 +448,8 @@ case class Join(
 
     relBuilder.join(
       convertJoinType(joinType),
-      condition.map(_.toRexNode(relBuilder)).getOrElse(relBuilder.literal(true)),
+      condition.map(ExpressionVisitorImpl.toRexNode(_, relBuilder))
+        .getOrElse(relBuilder.literal(true)),
       corSet.asJava)
   }
 
@@ -609,13 +618,15 @@ case class WindowAggregate(
     child.construct(flinkRelBuilder)
     flinkRelBuilder.aggregate(
       window,
-      relBuilder.groupKey(groupingExpressions.map(_.toRexNode(relBuilder)).asJava),
+      relBuilder.groupKey(
+        groupingExpressions.map(ExpressionVisitorImpl.toRexNode(_, relBuilder)).asJava),
       propertyExpressions.map {
         case Alias(prop: WindowProperty, name, _) => prop.toNamedWindowProperty(name)
         case _ => throw new RuntimeException("This should never happen.")
       },
       aggregateExpressions.map {
-        case Alias(agg: Aggregation, name, _) => agg.toAggCall(name)(relBuilder)
+        case Alias(agg: Aggregation, name, _) =>
+          AggregationCallVisitorImpl.toAggCall(agg, name, false, relBuilder)
         case _ => throw new RuntimeException("This should never happen.")
       }.asJava)
   }
@@ -631,7 +642,7 @@ case class WindowAggregate(
     def validateAggregateExpression(expr: Expression): Unit = expr match {
       // check aggregate function
       case aggExpr: Aggregation
-        if aggExpr.getSqlAggFunction.requiresOver =>
+        if AggregationSqlFunVisitorImpl.getSqlAggFunction(aggExpr, relBuilder).requiresOver =>
         failValidation(s"OVER clause is necessary for window functions: [${aggExpr.getClass}].")
       case aggExpr: DistinctAgg =>
         validateAggregateExpression(aggExpr.child)
@@ -774,7 +785,8 @@ case class LogicalTableFunctionCall(
     val scan = LogicalTableFunctionScan.create(
       relBuilder.peek().getCluster,
       new util.ArrayList[RelNode](),
-      relBuilder.call(sqlFunction, parameters.map(_.toRexNode(relBuilder)).asJava),
+      relBuilder.call(sqlFunction,
+        parameters.map(ExpressionVisitorImpl.toRexNode(_, relBuilder)).asJava),
       function.getElementType(null),
       function.getRowType(relBuilder.getTypeFactory, null),
       null)
