@@ -18,13 +18,13 @@
 
 package org.apache.calcite.converters.expression.aggregations;
 
-import org.apache.calcite.converters.expression.AggregationConverter;
+import org.apache.calcite.converters.expression.AggregationConverter3;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.flink.table.expressions.Sum0;
 
-public class Sum0Converter implements AggregationConverter<Sum0> {
+public class Sum0Converter implements AggregationConverter3<Sum0> {
     @Override
     public RelBuilder.AggCall toAggCall(Sum0 agg, String name, boolean isDistinct, RelBuilder relBuilder) {
         return relBuilder.aggregateCall(

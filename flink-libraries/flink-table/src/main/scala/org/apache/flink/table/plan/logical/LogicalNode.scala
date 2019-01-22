@@ -17,8 +17,9 @@
  */
 package org.apache.flink.table.plan.logical
 
-import org.apache.calcite.rel.RelNode
+import org.apache.calcite.rel.{RelNode, RelVisitor}
 import org.apache.calcite.tools.RelBuilder
+import org.apache.calcite.visitor.RelNodeVisitor
 import org.apache.flink.table.plan.TreeNode
 import org.apache.flink.table.api.{TableEnvironment, ValidationException}
 import org.apache.flink.table.expressions._
@@ -47,6 +48,9 @@ import org.apache.flink.table.validate._
   * Once we pass the validation phase, we can safely convert LogicalNode into Calcite's RelNode.
   */
 abstract class LogicalNode extends TreeNode[LogicalNode] {
+
+  def accept(visitor: RelNodeVisitor): Unit
+
   def output: Seq[Attribute]
 
   def resolveExpressions(tableEnv: TableEnvironment): LogicalNode = {
@@ -74,6 +78,8 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
         if (changed) ips.makeCopy(newChildren) else ips
     }
   }
+
+  def accept(visitor: RelNodeVisitor): Unit
 
   final def toRelNode(relBuilder: RelBuilder): RelNode = construct(relBuilder).build()
 

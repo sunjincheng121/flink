@@ -18,13 +18,13 @@
 
 package org.apache.calcite.converters.expression.aggregations;
 
-import org.apache.calcite.converters.expression.AggregationConverter;
+import org.apache.calcite.converters.expression.AggregationConverter3;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.flink.table.expressions.Min;
 
-public class MinConverter implements AggregationConverter<Min> {
+public class MinConverter implements AggregationConverter3<Min> {
     @Override
     public RelBuilder.AggCall toAggCall(Min agg, String name, boolean isDistinct, RelBuilder relBuilder) {
         return relBuilder.aggregateCall(

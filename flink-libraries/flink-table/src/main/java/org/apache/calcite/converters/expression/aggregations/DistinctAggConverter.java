@@ -19,13 +19,13 @@
 package org.apache.calcite.converters.expression.aggregations;
 
 import org.apache.calcite.converters.FlinkAggCallConverterSet;
-import org.apache.calcite.converters.expression.AggregationConverter;
+import org.apache.calcite.converters.expression.AggregationConverter3;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.flink.table.expressions.Aggregation;
 import org.apache.flink.table.expressions.DistinctAgg;
 
-public class DistinctAggConverter implements AggregationConverter<DistinctAgg> {
+public class DistinctAggConverter implements AggregationConverter3<DistinctAgg> {
 
     public static DistinctAggConverter INSTANCE = new DistinctAggConverter();
 

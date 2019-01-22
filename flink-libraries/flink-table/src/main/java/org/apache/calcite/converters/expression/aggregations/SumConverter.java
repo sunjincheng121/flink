@@ -18,7 +18,7 @@
 
 package org.apache.calcite.converters.expression.aggregations;
 
-import org.apache.calcite.converters.expression.AggregationConverter;
+import org.apache.calcite.converters.expression.AggregationConverter3;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -27,7 +27,7 @@ import org.apache.calcite.tools.RelBuilder;
 import org.apache.flink.table.calcite.FlinkTypeFactory;
 import org.apache.flink.table.expressions.Sum;
 
-public class SumConverter implements AggregationConverter<Sum> {
+public class SumConverter implements AggregationConverter3<Sum> {
 
     public static SumConverter INSTANCE = new SumConverter();
 

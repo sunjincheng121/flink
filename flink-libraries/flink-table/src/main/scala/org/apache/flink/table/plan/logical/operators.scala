@@ -20,12 +20,13 @@ package org.apache.flink.table.plan.logical
 import java.lang.reflect.Method
 import java.util
 
-import org.apache.calcite.rel.RelNode
+import org.apache.calcite.rel.{RelNode, RelVisitor}
 import org.apache.calcite.rel.`type`.RelDataType
 import org.apache.calcite.rel.core.{CorrelationId, JoinRelType}
 import org.apache.calcite.rel.logical.LogicalTableFunctionScan
 import org.apache.calcite.rex.{RexInputRef, RexNode}
 import org.apache.calcite.tools.RelBuilder
+import org.apache.calcite.visitor.RelNodeVisitor
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
@@ -43,10 +44,15 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 case class Project(
-    projectList: Seq[NamedExpression],
-    child: LogicalNode,
-    explicitAlias: Boolean = false)
+    private [flink] val projectList: Seq[NamedExpression],
+    private [flink] val child: LogicalNode,
+    private [flink] val explicitAlias: Boolean = false)
   extends UnaryNode {
+
+
+  override def accept(visitor: RelNodeVisitor): Unit = {
+    visitor.visit(this)
+  }
 
   override def output: Seq[Attribute] = projectList.map(_.toAttribute)
 
@@ -92,6 +98,7 @@ case class Project(
     }
     resolvedProject
   }
+
 
   override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = {
     child.construct(relBuilder)

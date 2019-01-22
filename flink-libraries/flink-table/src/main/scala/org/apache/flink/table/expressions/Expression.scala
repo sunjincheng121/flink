@@ -19,7 +19,7 @@ package org.apache.flink.table.expressions
 
 import org.apache.calcite.rex.RexNode
 import org.apache.calcite.tools.RelBuilder
-
+import org.apache.calcite.visitor.RexNodeVisitor
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.plan.TreeNode
 import org.apache.flink.table.validate.{ValidationResult, ValidationSuccess}
@@ -46,13 +46,7 @@ abstract class Expression extends TreeNode[Expression] {
     */
   private[flink] def validateInput(): ValidationResult = ValidationSuccess
 
-  /**
-    * Convert Expression to its counterpart in Calcite, i.e. RexNode
-    */
-  private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
-    throw new UnsupportedOperationException(
-      s"${this.getClass.getName} cannot be transformed to RexNode"
-    )
+  private [flink] def accept[T](visitor: RexNodeVisitor[T]): T
 
   private[flink] def checkEquals(other: Expression): Boolean = {
     if (this.getClass != other.getClass) {
@@ -70,6 +64,8 @@ abstract class Expression extends TreeNode[Expression] {
       checkEquality(elements1, elements2)
     }
   }
+
+
 }
 
 abstract class BinaryExpression extends Expression {
