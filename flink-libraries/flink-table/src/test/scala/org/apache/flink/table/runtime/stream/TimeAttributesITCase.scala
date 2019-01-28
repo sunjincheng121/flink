@@ -31,6 +31,7 @@ import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{TableEnvironment, TableSchema, Types}
+import org.apache.flink.table.apiexpressions.ApiTimeIntervalUnit
 import org.apache.flink.table.expressions.{ExpressionParser, TimeIntervalUnit}
 import org.apache.flink.table.plan.TimeIndicatorConversionTest.TableFunc
 import org.apache.flink.table.runtime.stream.TimeAttributesITCase.{AtomicTimestampWithEqualWatermark, TestPojo, TimestampWithEqualWatermark, TimestampWithEqualWatermarkPojo}
@@ -166,7 +167,8 @@ class TimeAttributesITCase extends AbstractTestBase {
 
     val t = table
       .filter('rowtime.cast(Types.LONG) > 4)
-      .select('rowtime, 'rowtime.floor(TimeIntervalUnit.DAY), 'rowtime.ceil(TimeIntervalUnit.DAY))
+      .select('rowtime, 'rowtime.floor(ApiTimeIntervalUnit.DAY),
+        'rowtime.ceil(ApiTimeIntervalUnit.DAY))
 
     val results = t.toAppendStream[Row]
     results.addSink(new StreamITCase.StringSink[Row])
@@ -200,8 +202,8 @@ class TimeAttributesITCase extends AbstractTestBase {
       .filter('rowtime.cast(Types.LONG) > 4)
       .select(
         'rowtime,
-        'rowtime.floor(TimeIntervalUnit.DAY).as('floorDay),
-        'rowtime.ceil(TimeIntervalUnit.DAY).as('ceilDay))
+        'rowtime.floor(ApiTimeIntervalUnit.DAY).as('floorDay),
+        'rowtime.ceil(ApiTimeIntervalUnit.DAY).as('ceilDay))
       .insertInto("testSink")
 
     env.execute()
@@ -558,13 +560,9 @@ class TimeAttributesITCase extends AbstractTestBase {
     // Java expressions
 
     // use aliases, swap all attributes, and skip b2
-    val table4 = stream.toTable(
-      tEnv,
-      ExpressionParser.parseExpressionList("b.rowtime as b, c as c, a as a"): _*)
+    val table4 = tEnv.fromDataStream(stream, "b.rowtime as b, c as c, a as a")
     // no aliases, no swapping
-    val table5 = stream.toTable(
-      tEnv,
-      ExpressionParser.parseExpressionList("a, b.rowtime, c"): _*)
+    val table5 = tEnv.fromDataStream(stream, "a, b.rowtime, c")
 
     val t = table.select('b, 'c , 'a)
       .unionAll(table2.select('b, 'c, 'a))

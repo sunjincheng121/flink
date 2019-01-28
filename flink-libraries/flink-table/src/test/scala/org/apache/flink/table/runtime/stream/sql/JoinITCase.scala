@@ -27,6 +27,7 @@ import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{TableEnvironment, Types}
+import org.apache.flink.table.apiexpressions.ApiNull
 import org.apache.flink.table.expressions.Null
 import org.apache.flink.table.runtime.utils.{StreamITCase, StreamTestData, StreamingWithStateTestBase}
 import org.apache.flink.types.Row
@@ -69,9 +70,9 @@ class JoinITCase extends StreamingWithStateTestBase {
     data2.+=((2, 2L, "HeHe"))
 
     val t1 = env.fromCollection(data1).toTable(tEnv, 'a, 'b, 'c, 'proctime.proctime)
-      .select(('a === 1)?(Null(Types.INT), 'a) as 'a, 'b, 'c, 'proctime) // test null values
+      .select(('a === 1)?(ApiNull(Types.INT), 'a) as 'a, 'b, 'c, 'proctime) // test null values
     val t2 = env.fromCollection(data2).toTable(tEnv, 'a, 'b, 'c, 'proctime.proctime)
-      .select(('a === 1)?(Null(Types.INT), 'a) as 'a, 'b, 'c, 'proctime) // test null values
+      .select(('a === 1)?(ApiNull(Types.INT), 'a) as 'a, 'b, 'c, 'proctime) // test null values
 
     tEnv.registerTable("T1", t1)
     tEnv.registerTable("T2", t2)
@@ -947,9 +948,9 @@ class JoinITCase extends StreamingWithStateTestBase {
     data2.+=((3, 2L, "HeHe"))
 
     val t1 = env.fromCollection(data1).toTable(tEnv, 'a, 'b, 'c)
-      .select(('a === 3) ? (Null(Types.INT), 'a) as 'a, 'b, 'c)
+      .select(('a === 3) ? (ApiNull(Types.INT), 'a) as 'a, 'b, 'c)
     val t2 = env.fromCollection(data2).toTable(tEnv, 'a, 'b, 'c)
-      .select(('a === 3) ? (Null(Types.INT), 'a) as 'a, 'b, 'c)
+      .select(('a === 3) ? (ApiNull(Types.INT), 'a) as 'a, 'b, 'c)
 
     tEnv.registerTable("T1", t1)
     tEnv.registerTable("T2", t2)

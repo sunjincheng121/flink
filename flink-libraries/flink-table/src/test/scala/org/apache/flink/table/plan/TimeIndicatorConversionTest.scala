@@ -22,7 +22,8 @@ import java.sql.Timestamp
 
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.expressions.{TimeIntervalUnit, WindowReference}
+import org.apache.flink.table.apiexpressions.{ApiExpression, ApiTimeIntervalUnit}
+import org.apache.flink.table.expressions.{ApiExpressionParser, Expression, TimeIntervalUnit, WindowReference}
 import org.apache.flink.table.functions.TableFunction
 import org.apache.flink.table.plan.TimeIndicatorConversionTest.TableFunc
 import org.apache.flink.table.plan.logical.TumblingGroupWindow
@@ -34,6 +35,13 @@ import org.junit.Test
   * Tests for [[org.apache.flink.table.calcite.RelTimeIndicatorConverter]].
   */
 class TimeIndicatorConversionTest extends TableTestBase {
+  implicit def apiExpression2Expression(apiExpression: ApiExpression): Expression = {
+    ApiExpressionParser.parse(apiExpression)
+  }
+
+  implicit def symbol2Expression(apiExpression: Symbol): Expression = {
+    ApiExpressionParser.parse(apiExpression)
+  }
 
   @Test
   def testSimpleMaterialization(): Unit = {
@@ -41,7 +49,7 @@ class TimeIndicatorConversionTest extends TableTestBase {
     val t = util.addTable[(Long, Long, Int)]('rowtime.rowtime, 'long, 'int, 'proctime.proctime)
 
     val result = t
-      .select('rowtime.floor(TimeIntervalUnit.DAY) as 'rowtime, 'long)
+      .select('rowtime.floor(ApiTimeIntervalUnit.DAY) as 'rowtime, 'long)
       .filter('long > 0)
       .select('rowtime)
 

@@ -20,7 +20,7 @@ package org.apache.flink.table.api.scala
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.Table
-import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.apiexpressions.ApiExpression
 
 /**
   * Holds methods to convert a [[DataSet]] into a [[Table]].
@@ -51,7 +51,7 @@ class DataSetConversions[T](dataSet: DataSet[T], inputType: TypeInformation[T]) 
     * @param fields The field names of the new [[Table]] (optional).
     * @return The resulting [[Table]].
     */
-  def toTable(tableEnv: BatchTableEnvironment, fields: Expression*): Table = {
+  def toTable(tableEnv: BatchTableEnvironment, fields: ApiExpression*): Table = {
     if (fields.isEmpty) {
       tableEnv.fromDataSet(dataSet)
     } else {

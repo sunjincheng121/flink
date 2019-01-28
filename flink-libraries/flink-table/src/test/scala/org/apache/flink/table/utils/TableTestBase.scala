@@ -30,7 +30,7 @@ import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{Table, TableEnvironment, TableSchema}
-import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.apiexpressions.ApiExpression
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
 import org.junit.Assert.assertEquals
 import org.junit.{ComparisonFailure, Rule}
@@ -70,12 +70,12 @@ abstract class TableTestUtil {
 
   private var counter = 0
 
-  def addTable[T: TypeInformation](fields: Expression*): Table = {
+  def addTable[T: TypeInformation](fields: ApiExpression*): Table = {
     counter += 1
     addTable[T](s"Table$counter", fields: _*)
   }
 
-  def addTable[T: TypeInformation](name: String, fields: Expression*): Table
+  def addTable[T: TypeInformation](name: String, fields: ApiExpression*): Table
 
   def addFunction[T: TypeInformation](name: String, function: TableFunction[T]): TableFunction[T]
 
@@ -193,7 +193,7 @@ case class BatchTableTestUtil() extends TableTestUtil {
 
   def addTable[T: TypeInformation](
       name: String,
-      fields: Expression*)
+      fields: ApiExpression*)
     : Table = {
     val ds = mock(classOf[DataSet[T]])
     val jDs = mock(classOf[JDataSet[T]])
@@ -279,7 +279,7 @@ case class StreamTableTestUtil() extends TableTestUtil {
 
   def addTable[T: TypeInformation](
       name: String,
-      fields: Expression*)
+      fields: ApiExpression*)
     : Table = {
 
     val table = env.fromElements().toTable(tableEnv, fields: _*)

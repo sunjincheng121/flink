@@ -119,7 +119,7 @@ case class Cosh(child: Expression) extends UnaryExpression {
 }
 
 case class Log(base: Expression, antilogarithm: Expression) extends Expression with InputTypeSpec {
-  def this(antilogarithm: Expression) = this(null, antilogarithm)
+  def this(antilogarithm: Expression) = this(E(), antilogarithm)
 
   override private[flink] def resultType: TypeInformation[_] = DOUBLE_TYPE_INFO
 

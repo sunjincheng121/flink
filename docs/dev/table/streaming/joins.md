@@ -176,7 +176,7 @@ WHERE
 <div data-lang="java" markdown="1">
 {% highlight java %}
 Table result = orders
-    .join(new Table(tEnv, "rates(o_proctime)"), "o_currency = r_currency")
+    .join(tableEnv.scan("rates(o_proctime)"), "o_currency = r_currency")
     .select("(o_amount * r_rate).sum as amount");
 {% endhighlight %}
 </div>

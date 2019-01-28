@@ -21,6 +21,7 @@ package org.apache.flink.table.expressions.validation
 import org.apache.calcite.avatica.util.TimeUnit
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{SqlParserException, ValidationException}
+import org.apache.flink.table.apiexpressions.ApiTimePointUnit
 import org.apache.flink.table.expressions.TimePointUnit
 import org.apache.flink.table.expressions.utils.ScalarTypesTestBase
 import org.junit.Test
@@ -102,13 +103,13 @@ class ScalarFunctionsValidationTest extends ScalarTypesTestBase {
   @Test(expected = classOf[ValidationException])
   def testTimestampDiffWithWrongTime(): Unit = {
     testTableApi(
-      timestampDiff(TimePointUnit.DAY, "2016-02-24", "2016-02-27"), "FAIL", "FAIL")
+      timestampDiff(ApiTimePointUnit.DAY, "2016-02-24", "2016-02-27"), "FAIL", "FAIL")
   }
 
   @Test(expected = classOf[ValidationException])
   def testTimestampDiffWithWrongTimeAndUnit(): Unit = {
     testTableApi(
-      timestampDiff(TimePointUnit.MINUTE, "2016-02-24", "2016-02-27"), "FAIL", "FAIL")
+      timestampDiff(ApiTimePointUnit.MINUTE, "2016-02-24", "2016-02-27"), "FAIL", "FAIL")
   }
 
   @Test(expected = classOf[ValidationException])

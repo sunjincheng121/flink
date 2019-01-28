@@ -263,6 +263,8 @@ object FunctionCatalog {
     "dateTimePlus" -> classOf[Plus],
     "dateFormat" -> classOf[DateFormat],
     "timestampDiff" -> classOf[TimestampDiff],
+    "temporalFloor" -> classOf[TemporalFloor],
+    "temporalCeil" -> classOf[TemporalCeil],
 
     // item
     "at" -> classOf[ItemAt],

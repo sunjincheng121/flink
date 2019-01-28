@@ -23,6 +23,8 @@ import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeInfo}
 import org.apache.flink.table.api.scala.{CURRENT_RANGE, CURRENT_ROW}
 
+trait UnresolvedOverWindow
+
 /**
   * Over window is similar to the traditional OVER SQL.
   */
@@ -31,7 +33,7 @@ case class OverWindow(
     private[flink] val partitionBy: Seq[Expression],
     private[flink] val orderBy: Expression,
     private[flink] val preceding: Expression,
-    private[flink] val following: Expression)
+    private[flink] val following: Expression) extends UnresolvedOverWindow
 
 case class CurrentRow() extends Expression {
   override private[flink] def resultType = RowIntervalTypeInfo.INTERVAL_ROWS
@@ -94,9 +96,9 @@ class OverWindowWithPreceding(
     // set following to CURRENT_ROW / CURRENT_RANGE if not defined
     if (null == following) {
       if (preceding.resultType.isInstanceOf[RowIntervalTypeInfo]) {
-        following = CURRENT_ROW
+        following = CurrentRow()
       } else {
-        following = CURRENT_RANGE
+        following = CurrentRange()
       }
     }
     OverWindow(alias, partitionBy, orderBy, preceding, following)

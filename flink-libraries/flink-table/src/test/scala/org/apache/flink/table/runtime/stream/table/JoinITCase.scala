@@ -27,8 +27,8 @@ import org.junit.Assert._
 import org.junit.Test
 import org.apache.flink.api.common.time.Time
 import org.apache.flink.api.common.typeinfo.TypeInformation
+import org.apache.flink.table.apiexpressions.{ApiLiteral, ApiNull}
 import org.apache.flink.table.expressions.utils.Func20
-import org.apache.flink.table.expressions.{Literal, Null}
 import org.apache.flink.table.functions.aggfunctions.CountAggFunction
 import org.apache.flink.table.runtime.utils.JavaUserDefinedAggFunctions.{CountDistinct, WeightedAvg}
 import org.apache.flink.types.Row
@@ -379,7 +379,7 @@ class JoinITCase extends StreamingWithStateTestBase {
     val ds3 = StreamTestData.getSmall3TupleDataStream(env).toTable(tEnv, 'j, 'k, 'l)
 
     val joinT = ds1.join(ds2)
-      .where(Literal(true))
+      .where(ApiLiteral(true))
       .join(ds3)
       .where('a === 'd && 'e === 'k)
       .select('a, 'f, 'l)
@@ -441,9 +441,9 @@ class JoinITCase extends StreamingWithStateTestBase {
     env.setStateBackend(getStateBackend)
 
     val ds1 = StreamTestData.get3TupleDataStream(env).toTable(tEnv, 'a, 'b, 'c)
-      .select(('a === 21) ? (Null(Types.INT), 'a) as 'a, 'b, 'c)
+      .select(('a === 21) ? (ApiNull(Types.INT), 'a) as 'a, 'b, 'c)
     val ds2 = StreamTestData.get5TupleDataStream(env).toTable(tEnv, 'd, 'e, 'f, 'g, 'h)
-      .select(('e === 15) ? (Null(Types.INT), 'd) as 'd,  'e, 'f, 'g, 'h)
+      .select(('e === 15) ? (ApiNull(Types.INT), 'd) as 'd,  'e, 'f, 'g, 'h)
 
     val joinT = ds1.leftOuterJoin(ds2, 'a === 'd && 'b === 'h).select('c, 'g)
 

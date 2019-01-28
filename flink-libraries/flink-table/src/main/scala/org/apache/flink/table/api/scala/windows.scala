@@ -18,7 +18,8 @@
 
 package org.apache.flink.table.api.scala
 
-import org.apache.flink.table.api.{OverWindow, TumbleWithSize, OverWindowWithPreceding, SlideWithSize, SessionWithGap}
+import org.apache.flink.table.api._
+import org.apache.flink.table.apiexpressions.{ApiExpression, ApiOverWindowWithOrderBy, ApiPartitionedOver, ApiSessionWithGap, ApiSlideWithSize, ApiTumbleWithSize}
 import org.apache.flink.table.expressions.{Expression, ExpressionParser}
 
 /**
@@ -36,8 +37,9 @@ object Tumble {
     * @param size the size of the window as time or row-count interval.
     * @return a partially defined tumbling window
     */
-  def over(size: Expression): TumbleWithSize = new TumbleWithSize(size)
+  def over(size: ApiExpression): ApiTumbleWithSize = new ApiTumbleWithSize(size)
 }
+
 
 /**
   * Helper object for creating a sliding window. Sliding windows have a fixed size and slide by
@@ -62,7 +64,7 @@ object Slide {
     * @param size the size of the window as time or row-count interval
     * @return a partially specified sliding window
     */
-  def over(size: Expression): SlideWithSize = new SlideWithSize(size)
+  def over(size: ApiExpression): ApiSlideWithSize = new ApiSlideWithSize(size)
 }
 
 /**
@@ -81,7 +83,7 @@ object Session {
     *            closing the session window.
     * @return a partially defined session window
     */
-  def withGap(gap: Expression): SessionWithGap = new SessionWithGap(gap)
+  def withGap(gap: ApiExpression): ApiSessionWithGap = new ApiSessionWithGap(gap)
 }
 
 /**
@@ -96,8 +98,8 @@ object Over {
     *
     * For batch tables, refer to a timestamp or long attribute.
     */
-  def orderBy(orderBy: Expression): OverWindowWithOrderBy = {
-    new OverWindowWithOrderBy(Seq[Expression](), orderBy)
+  def orderBy(orderBy: ApiExpression): ApiOverWindowWithOrderBy = {
+    new ApiOverWindowWithOrderBy(Seq[ApiExpression](), orderBy)
   }
 
   /**
@@ -106,8 +108,8 @@ object Over {
     * @param partitionBy some partition keys.
     * @return A partitionedOver instance that only contains the orderBy method.
     */
-  def partitionBy(partitionBy: Expression*): PartitionedOver = {
-    PartitionedOver(partitionBy.toArray)
+  def partitionBy(partitionBy: ApiExpression*): ApiPartitionedOver = {
+    ApiPartitionedOver(partitionBy.toArray)
   }
 }
 
@@ -152,6 +154,6 @@ case class OverWindowWithOrderBy(partitionBy: Seq[Expression], orderBy: Expressi
     * @return over window
     */
   def as(alias: Expression): OverWindow = {
-    OverWindow(alias, partitionBy, orderBy, UNBOUNDED_RANGE, CURRENT_RANGE)
+    OverWindow(alias, partitionBy, orderBy, UnboundedRange(), CurrentRange())
   }
 }

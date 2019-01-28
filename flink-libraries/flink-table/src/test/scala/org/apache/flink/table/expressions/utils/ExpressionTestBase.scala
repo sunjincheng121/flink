@@ -39,7 +39,8 @@ import org.apache.flink.api.java.{DataSet => JDataSet}
 import org.apache.flink.api.scala.{DataSet, ExecutionEnvironment}
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.core.fs.Path
-import org.apache.flink.table.api.{BatchTableEnvironment, TableConfig, TableEnvironment}
+import org.apache.flink.table.api.{BatchTableEnvironment, InnerTable, TableConfig, TableEnvironment}
+import org.apache.flink.table.apiexpressions.ApiExpression
 import org.apache.flink.table.calcite.FlinkPlannerImpl
 import org.apache.flink.table.codegen.{Compiler, FunctionCodeGenerator, GeneratedFunction}
 import org.apache.flink.table.expressions.{Expression, ExpressionParser}
@@ -150,7 +151,7 @@ abstract class ExpressionTestBase {
     if (isRichFunction) {
       val richMapper = mapper.asInstanceOf[RichMapFunction[_, _]]
       val t = new RuntimeUDFContext(
-        new TaskInfo("ExpressionTest", 1, 0, 1, 1),
+        new TaskInfo("ExpressinTest", 1, 0, 1, 1),
         null,
         context._3.getConfig,
         new util.HashMap[String, Future[Path]](),
@@ -197,12 +198,12 @@ abstract class ExpressionTestBase {
     testExprs += ((sqlExpr, extractRexNode(optimized), expected))
   }
 
-  private def addTableApiTestExpr(tableApiExpr: Expression, expected: String): Unit = {
+  private def addTableApiTestExpr(tableApiExpr: ApiExpression, expected: String): Unit = {
     // create RelNode from Table API expression
     val env = context._2.asInstanceOf[BatchTableEnvironment]
     val converted = env
       .scan(tableName)
-      .select(tableApiExpr)
+      .select(tableApiExpr).asInstanceOf[InnerTable]
       .getRelNode
 
     val optimized = env.optimize(converted)
@@ -218,11 +219,20 @@ abstract class ExpressionTestBase {
   }
 
   private def addTableApiTestExpr(tableApiString: String, expected: String): Unit = {
-    addTableApiTestExpr(ExpressionParser.parseExpression(tableApiString), expected)
+    // create RelNode from Table API expression
+    val env = context._2.asInstanceOf[BatchTableEnvironment]
+    val converted = env
+      .scan(tableName)
+      .select(tableApiString).asInstanceOf[InnerTable]
+      .getRelNode
+
+    val optimized = env.optimize(converted)
+
+    testExprs += ((tableApiString, extractRexNode(optimized), expected))
   }
 
   def testAllApis(
-      expr: Expression,
+      expr: ApiExpression,
       exprString: String,
       sqlExpr: String,
       expected: String)
@@ -233,7 +243,7 @@ abstract class ExpressionTestBase {
   }
 
   def testTableApi(
-      expr: Expression,
+      expr: ApiExpression,
       exprString: String,
       expected: String)
     : Unit = {

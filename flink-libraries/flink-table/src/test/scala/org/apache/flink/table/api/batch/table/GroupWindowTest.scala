@@ -23,13 +23,21 @@ import java.sql.Timestamp
 import org.apache.flink.api.scala._
 import org.apache.flink.table.runtime.utils.JavaUserDefinedAggFunctions.WeightedAvgWithMerge
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.expressions.WindowReference
+import org.apache.flink.table.apiexpressions.ApiExpression
+import org.apache.flink.table.expressions.{ApiExpressionParser, Expression, WindowReference}
 import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.utils.TableTestUtil._
 import org.apache.flink.table.utils.TableTestBase
 import org.junit.Test
 
 class GroupWindowTest extends TableTestBase {
+  implicit def apiExpression2Expression(apiExpression: ApiExpression): Expression = {
+    ApiExpressionParser.parse(apiExpression)
+  }
+
+  implicit def symbol2Expression(apiExpression: Symbol): Expression = {
+    ApiExpressionParser.parse(apiExpression)
+  }
 
   //===============================================================================================
   // Common test
