@@ -38,8 +38,8 @@ import org.apache.flink.table.api.{StreamQueryConfig, TableConfig, TableExceptio
 import org.apache.flink.table.calcite.FlinkRelBuilder.NamedWindowProperty
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.codegen.AggregationCodeGenerator
-import org.apache.flink.table.expressions.ExpressionUtils.isTimeIntervalLiteral
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions.ExpressionUtils.isTimeIntervalLiteral
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.aggfunctions._
 import org.apache.flink.table.functions.utils.AggSqlFunction
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
@@ -367,7 +367,7 @@ object AggregateUtil {
       case TumblingGroupWindow(_, time, size) =>
         val timeFieldPos = getTimeFieldPosition(time, inputType, isParserCaseSensitive)
         size match {
-          case Literal(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
+          case PlannerLiteral(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
             (timeFieldPos, Some(value))
           case _ => (timeFieldPos, None)
         }
@@ -378,7 +378,7 @@ object AggregateUtil {
       case SlidingGroupWindow(_, time, size, slide) =>
         val timeFieldPos = getTimeFieldPosition(time, inputType, isParserCaseSensitive)
         size match {
-          case Literal(_: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
+          case PlannerLiteral(_: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
             // pre-tumble incremental aggregates on time-windows
             val timeFieldPos = getTimeFieldPosition(time, inputType, isParserCaseSensitive)
             val preTumblingSize = determineLargestTumblingSize(asLong(size), asLong(slide))
@@ -1171,12 +1171,12 @@ object AggregateUtil {
                 "Duplicate window end property encountered. This is a bug.")
             case WindowEnd(_) =>
               (s, Some(i), rt, i - 1)
-            case RowtimeAttribute(_) if rt.isDefined =>
+            case PlannerRowtimeAttribute(_) if rt.isDefined =>
               throw new TableException(
                 "Duplicate window rowtime property encountered. This is a bug.")
-            case RowtimeAttribute(_) =>
+            case PlannerRowtimeAttribute(_) =>
               (s, e, Some(i), i - 1)
-            case ProctimeAttribute(_) =>
+            case PlannerProctimeAttribute(_) =>
               // ignore this property, it will be null at the position later
               (s, e, rt, i - 1)
           }
@@ -1686,12 +1686,12 @@ object AggregateUtil {
 
 
   private def getTimeFieldPosition(
-    timeField: Expression,
-    inputType: RelDataType,
-    isParserCaseSensitive: Boolean): Int = {
+      timeField: PlannerExpression,
+      inputType: RelDataType,
+      isParserCaseSensitive: Boolean): Int = {
 
     timeField match {
-      case ResolvedFieldReference(name, _) =>
+      case PlannerResolvedFieldReference(name, _) =>
         // get the RelDataType referenced by the time-field
         val relDataType = inputType.getFieldList.filter { r =>
           if (isParserCaseSensitive) {
@@ -1713,9 +1713,9 @@ object AggregateUtil {
     }
   }
 
-  private[flink] def asLong(expr: Expression): Long = expr match {
-    case Literal(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) => value
-    case Literal(value: Long, RowIntervalTypeInfo.INTERVAL_ROWS) => value
+  private[flink] def asLong(expr: PlannerExpression): Long = expr match {
+    case PlannerLiteral(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) => value
+    case PlannerLiteral(value: Long, RowIntervalTypeInfo.INTERVAL_ROWS) => value
     case _ => throw new IllegalArgumentException()
   }
 

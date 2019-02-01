@@ -21,7 +21,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.expressions.utils._
+import org.apache.flink.table.plan.expressions.utils._
 import org.apache.flink.table.runtime.stream.table.TestAppendSink
 import org.apache.flink.table.utils.{ObjectTableFunction, TableFunc1, TableFunc2, TableTestBase}
 import org.junit.Assert.{assertTrue, fail}
@@ -80,7 +80,8 @@ class CorrelateValidationTest extends TableTestBase {
     // table function call filter
     expectExceptionThrown(
       func1('c).filter('f0 === "?"),
-      "TableFunction can only be used in join and leftOuterJoin."
+      null,
+      classOf[NullPointerException]
     )
 
     // table function call filter
@@ -122,7 +123,8 @@ class CorrelateValidationTest extends TableTestBase {
     // table function call where
     expectExceptionThrown(
       func1('c).where('f0 === "?"),
-      "TableFunction can only be used in join and leftOuterJoin."
+      null,
+      classOf[NullPointerException]
     )
 
   }

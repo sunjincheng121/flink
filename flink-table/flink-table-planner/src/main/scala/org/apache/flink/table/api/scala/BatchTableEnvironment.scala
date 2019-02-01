@@ -20,7 +20,7 @@ package org.apache.flink.table.api.scala
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
-import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.expressions.{Expression, ToInternalExpressionVisitor}
 import org.apache.flink.table.functions.{AggregateFunction, TableFunction}
 
 import _root_.scala.reflect.ClassTag
@@ -80,9 +80,9 @@ class BatchTableEnvironment @deprecated(
     * @return The converted [[Table]].
     */
   def fromDataSet[T](dataSet: DataSet[T], fields: Expression*): Table = {
-
     val name = createUniqueTableName()
-    registerDataSetInternal(name, dataSet.javaSet, fields.toArray)
+    registerDataSetInternal(
+      name, dataSet.javaSet, fields.map(_.accept(new ToInternalExpressionVisitor)).toArray)
     scan(name)
   }
 
@@ -123,7 +123,8 @@ class BatchTableEnvironment @deprecated(
   def registerDataSet[T](name: String, dataSet: DataSet[T], fields: Expression*): Unit = {
 
     checkValidTableName(name)
-    registerDataSetInternal(name, dataSet.javaSet, fields.toArray)
+    registerDataSetInternal(name, dataSet.javaSet,
+      fields.map(_.accept(new ToInternalExpressionVisitor)).toArray)
   }
 
   /**

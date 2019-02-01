@@ -24,8 +24,7 @@ import org.apache.flink.api.common.functions.MapPartitionFunction
 import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.util.CollectionDataSets
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.expressions.Literal
-import org.apache.flink.table.expressions.utils.Func20
+import org.apache.flink.table.plan.expressions.utils.Func20
 import org.apache.flink.table.runtime.utils.TableProgramsClusterTestBase
 import org.apache.flink.table.runtime.utils.TableProgramsTestBase.TableConfigMode
 import org.apache.flink.table.utils.TableFunc2

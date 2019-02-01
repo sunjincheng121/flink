@@ -20,7 +20,7 @@ package org.apache.flink.table.plan.util
 import org.apache.calcite.rel.{RelNode, RelVisitor}
 import org.apache.calcite.rex.{RexCall, RexInputRef, RexNode}
 import org.apache.calcite.sql.SqlKind
-import org.apache.flink.table.expressions.ProctimeAttribute
+import org.apache.flink.table.plan.expressions.PlannerProctimeAttribute
 import org.apache.flink.table.plan.nodes.datastream._
 
 import _root_.scala.collection.JavaConversions._
@@ -138,7 +138,7 @@ object UpdatingPlanChecker {
             w.getRowType.getFieldNames.take(w.getGroupings.length).toArray
           // proctime is not a valid key
           val windowProperties = w.getWindowProperties
-            .filter(!_.property.isInstanceOf[ProctimeAttribute])
+            .filter(!_.property.isInstanceOf[PlannerProctimeAttribute])
             .map(_.name)
           // we have only a unique key if at least one window property is selected
           if (windowProperties.nonEmpty) {
