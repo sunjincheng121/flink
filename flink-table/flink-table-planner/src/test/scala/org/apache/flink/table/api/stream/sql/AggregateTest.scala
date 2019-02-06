@@ -24,7 +24,7 @@ import org.apache.flink.api.scala._
 import org.apache.flink.api.scala.typeutils.CaseClassTypeInfo
 import org.apache.flink.table.api.Types
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.expressions.AggFunctionCall
+import org.apache.flink.table.plan.expressions.PlannerAggFunctionCall
 import org.apache.flink.table.functions.AggregateFunction
 import org.apache.flink.table.utils.TableTestUtil.{streamTableNode, term, unaryNode}
 import org.apache.flink.table.utils.{StreamTableTestUtil, TableTestBase}
@@ -67,7 +67,7 @@ class AggregateTest extends TableTestBase {
       .tableEnv
       .functionCatalog
       .lookupFunction("udag", Seq())
-      .asInstanceOf[AggFunctionCall]
+      .asInstanceOf[PlannerAggFunctionCall]
 
     val typeInfo = call.accTypeInfo
     assertTrue(typeInfo.isInstanceOf[CaseClassTypeInfo[_]])
@@ -81,7 +81,7 @@ class AggregateTest extends TableTestBase {
       .tableEnv
       .functionCatalog
       .lookupFunction("udag2", Seq())
-      .asInstanceOf[AggFunctionCall]
+      .asInstanceOf[PlannerAggFunctionCall]
 
     val typeInfo2 = call2.accTypeInfo
     assertTrue(s"actual type: $typeInfo2", typeInfo2.isInstanceOf[RowTypeInfo])

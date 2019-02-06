@@ -20,10 +20,11 @@ package org.apache.flink.table.api.scala
 import org.apache.flink.api.scala._
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.api.{StreamQueryConfig, Table, TableConfig, TableEnvironment}
-import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.plan.expressions.ExpressionParser
 import org.apache.flink.table.functions.{AggregateFunction, TableFunction}
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
 import org.apache.flink.streaming.api.scala.asScalaStream
+import org.apache.flink.table.expressions.{Expression, DefaultExpressionVisitor}
 
 /**
   * The [[TableEnvironment]] for a Scala [[StreamExecutionEnvironment]] that works with
@@ -85,7 +86,8 @@ class StreamTableEnvironment @deprecated(
   def fromDataStream[T](dataStream: DataStream[T], fields: Expression*): Table = {
 
     val name = createUniqueTableName()
-    registerDataStreamInternal(name, dataStream.javaStream, fields.toArray)
+    registerDataStreamInternal(
+      name, dataStream.javaStream, fields.map(_.accept(new DefaultExpressionVisitor)).toArray)
     scan(name)
   }
 
@@ -124,10 +126,14 @@ class StreamTableEnvironment @deprecated(
     * @param fields The field names of the registered table.
     * @tparam T The type of the [[DataStream]] to register.
     */
-  def registerDataStream[T](name: String, dataStream: DataStream[T], fields: Expression*): Unit = {
+  def registerDataStream[T](
+      name: String,
+      dataStream: DataStream[T],
+      fields: Expression*): Unit = {
 
     checkValidTableName(name)
-    registerDataStreamInternal(name, dataStream.javaStream, fields.toArray)
+    registerDataStreamInternal(
+      name, dataStream.javaStream, fields.map(_.accept(new DefaultExpressionVisitor)).toArray)
   }
 
   /**
