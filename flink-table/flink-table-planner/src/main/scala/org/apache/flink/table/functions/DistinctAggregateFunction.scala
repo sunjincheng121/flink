@@ -18,7 +18,7 @@
 package org.apache.flink.table.functions
 
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.table.expressions.{AggFunctionCall, DistinctAgg, Expression}
+import org.apache.flink.table.expressions.{AggregateFunctionDefinition, Call, DistinctAgg, Expression, ExpressionUtils}
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils.{getAccumulatorTypeOfAggregateFunction, getResultTypeOfAggregateFunction}
 
 /**
@@ -37,7 +37,13 @@ private[flink] case class DistinctAggregateFunction[T: TypeInformation, ACC: Typ
       aggFunction,
       implicitly[TypeInformation[ACC]])
 
-    DistinctAgg(
-      AggFunctionCall(aggFunction, resultTypeInfo, accTypeInfo, params))
+    new DistinctAgg(
+      ExpressionUtils.call(
+        new AggregateFunctionDefinition(
+          aggFunction.functionIdentifier(),
+          aggFunction,
+          resultTypeInfo,
+          accTypeInfo),
+        params))
   }
 }

@@ -21,7 +21,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.expressions.utils._
+import org.apache.flink.table.plan.expressions.utils._
 import org.apache.flink.table.runtime.stream.table.TestAppendSink
 import org.apache.flink.table.utils.{ObjectTableFunction, TableFunc1, TableFunc2, TableTestBase}
 import org.junit.Assert.{assertTrue, fail}
@@ -30,7 +30,7 @@ import org.junit.Test
 class CorrelateValidationTest extends TableTestBase {
 
   @Test
-  def testRegisterFunctionException(): Unit ={
+  def testRegisterFunctionException(): Unit = {
     val util = streamTestUtil()
     val t = util.addTable[(Int, Long, String)]('a, 'b, 'c)
 
@@ -79,12 +79,6 @@ class CorrelateValidationTest extends TableTestBase {
 
     // table function call filter
     expectExceptionThrown(
-      func1('c).filter('f0 === "?"),
-      "Table functions can only be used in table.joinLateral() and table.leftOuterJoinLateral()."
-    )
-
-    // table function call filter
-    expectExceptionThrown(
       func1('c).filter("f0 = '?'"),
       "Table functions can only be used in table.joinLateral() and table.leftOuterJoinLateral()."
     )
@@ -122,7 +116,8 @@ class CorrelateValidationTest extends TableTestBase {
     // table function call where
     expectExceptionThrown(
       func1('c).where('f0 === "?"),
-      "Table functions can only be used in table.joinLateral() and table.leftOuterJoinLateral()."
+      null,
+      classOf[NullPointerException]
     )
 
   }

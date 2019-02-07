@@ -25,7 +25,6 @@ import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.runtime.utils.StreamITCase.RetractingSink
 import org.apache.flink.table.api.{StreamQueryConfig, Types}
-import org.apache.flink.table.expressions.Null
 import org.apache.flink.table.runtime.utils.JavaUserDefinedAggFunctions.{CountDistinct, DataViewTestAgg, WeightedAvg}
 import org.apache.flink.table.runtime.utils.{JavaUserDefinedAggFunctions, StreamITCase, StreamTestData, StreamingWithStateTestBase}
 import org.apache.flink.types.Row
@@ -51,13 +50,13 @@ class AggregateITCase extends StreamingWithStateTestBase {
     val testAgg = new DataViewTestAgg
     val t = StreamTestData.get5TupleDataStream(env).toTable(tEnv, 'a, 'b, 'c, 'd, 'e)
       .groupBy('e)
-      .select('e, testAgg.distinct('d, 'e))
+      .select('e, testAgg.distinct('d, 'e), 'e.sum)
 
     val results = t.toRetractStream[Row](queryConfig)
     results.addSink(new StreamITCase.RetractingSink).setParallelism(1)
     env.execute()
 
-    val expected = mutable.MutableList("1,10", "2,21", "3,12")
+    val expected = mutable.MutableList("1,10,5", "2,21,14", "3,12,9")
     assertEquals(expected.sorted, StreamITCase.retractedResults.sorted)
   }
 
