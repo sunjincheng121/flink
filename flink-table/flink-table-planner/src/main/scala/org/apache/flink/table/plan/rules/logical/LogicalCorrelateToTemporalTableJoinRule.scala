@@ -26,7 +26,7 @@ import org.apache.calcite.rel.logical.LogicalCorrelate
 import org.apache.calcite.rex._
 import org.apache.flink.table.api.{Table, Types, ValidationException}
 import org.apache.flink.table.calcite.FlinkTypeFactory.{isProctimeIndicatorType, isTimeIndicatorType}
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.TemporalTableFunction
 import org.apache.flink.table.functions.utils.TableSqlFunction
 import org.apache.flink.table.plan.logical.rel.LogicalTemporalTableJoin
@@ -41,9 +41,9 @@ class LogicalCorrelateToTemporalTableJoinRule
         operand(classOf[TableFunctionScan], none()))),
     "LogicalCorrelateToTemporalTableJoinRule") {
 
-  def extractNameFromTimeAttribute(timeAttribute: Expression): String = {
+  def extractNameFromTimeAttribute(timeAttribute: PlannerExpression): String = {
     timeAttribute match {
-      case ResolvedFieldReference(name, _)
+      case PlannerResolvedFieldReference(name, _)
         if timeAttribute.resultType == Types.LONG ||
           timeAttribute.resultType == Types.SQL_TIMESTAMP ||
           isTimeIndicatorType(timeAttribute.resultType) =>

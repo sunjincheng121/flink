@@ -30,7 +30,7 @@ import org.apache.calcite.rex.RexBuilder
 import org.apache.calcite.tools.RelBuilder.{AggCall, GroupKey}
 import org.apache.calcite.tools.{FrameworkConfig, RelBuilder}
 import org.apache.flink.table.calcite.FlinkRelBuilder.NamedWindowProperty
-import org.apache.flink.table.expressions.WindowProperty
+import org.apache.flink.table.plan.expressions.WindowProperty
 import org.apache.flink.table.plan.logical.LogicalWindow
 import org.apache.flink.table.plan.logical.rel.LogicalWindowAggregate
 

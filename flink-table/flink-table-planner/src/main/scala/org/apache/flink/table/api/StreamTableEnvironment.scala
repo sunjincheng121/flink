@@ -39,7 +39,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
 import org.apache.flink.table.calcite.{FlinkTypeFactory, RelTimeIndicatorConverter}
 import org.apache.flink.table.descriptors.{ConnectorDescriptor, StreamTableDescriptor}
 import org.apache.flink.table.explain.PlanJsonParser
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.plan.nodes.FlinkConventions
 import org.apache.flink.table.plan.nodes.datastream.{DataStreamRel, UpdateAsRetractionTrait}
 import org.apache.flink.table.plan.rules.FlinkRuleSets
@@ -537,7 +537,7 @@ abstract class StreamTableEnvironment(
   protected def registerDataStreamInternal[T](
       name: String,
       dataStream: DataStream[T],
-      fields: Array[Expression])
+      fields: Array[PlannerExpression])
     : Unit = {
 
     val streamType = dataStream.getType
@@ -575,7 +575,7 @@ abstract class StreamTableEnvironment(
     */
   private def validateAndExtractTimeAttributes(
     streamType: TypeInformation[_],
-    exprs: Array[Expression])
+    exprs: Array[PlannerExpression])
   : (Option[(Int, String)], Option[(Int, String)]) = {
 
     val (isRefByPos, fieldTypes) = streamType match {
@@ -666,21 +666,24 @@ abstract class StreamTableEnvironment(
     }
 
     exprs.zipWithIndex.foreach {
-      case (RowtimeAttribute(UnresolvedFieldReference(name)), idx) =>
+      case (PlannerRowtimeAttribute(PlannerUnresolvedFieldReference(name)), idx) =>
         extractRowtime(idx, name, None)
 
-      case (Alias(RowtimeAttribute(UnresolvedFieldReference(origName)), name, _), idx) =>
+      case (PlannerAlias(
+      PlannerRowtimeAttribute(PlannerUnresolvedFieldReference(origName)), name, _), idx) =>
         extractRowtime(idx, name, Some(origName))
 
-      case (ProctimeAttribute(UnresolvedFieldReference(name)), idx) =>
+      case (PlannerProctimeAttribute(PlannerUnresolvedFieldReference(name)), idx) =>
         extractProctime(idx, name)
 
-      case (Alias(ProctimeAttribute(UnresolvedFieldReference(_)), name, _), idx) =>
+      case (PlannerAlias(PlannerProctimeAttribute(
+            PlannerUnresolvedFieldReference(_)), name, _), idx) =>
         extractProctime(idx, name)
 
-      case (UnresolvedFieldReference(name), _) => fieldNames = name :: fieldNames
+      case (PlannerUnresolvedFieldReference(name), _) => fieldNames = name :: fieldNames
 
-      case (Alias(UnresolvedFieldReference(_), name, _), _) => fieldNames = name :: fieldNames
+      case (PlannerAlias(PlannerUnresolvedFieldReference(_), name, _), _) =>
+        fieldNames = name :: fieldNames
 
       case (e, _) =>
         throw new TableException(s"Time attributes can only be defined on field references. " +

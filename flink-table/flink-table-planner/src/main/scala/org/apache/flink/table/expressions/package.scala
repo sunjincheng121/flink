@@ -15,15 +15,45 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.flink.table
 
-/**
- * This package contains the base class of AST nodes and all the expression language AST classes.
- * Expression trees should not be manually constructed by users. They are implicitly constructed
- * from the implicit DSL conversions in
- * [[org.apache.flink.table.api.scala.ImplicitExpressionConversions]] and
- * [[org.apache.flink.table.api.scala.ImplicitExpressionOperations]]. For the Java API,
- * expression trees should be generated from a string parser that parses expressions and creates
- * AST nodes.
- */
-package object expressions
+import org.apache.flink.api.common.typeutils.CompositeType
+import org.apache.flink.types.Row
+import org.apache.flink.api.scala._
+import org.apache.flink.api.scala.DataSet
+import org.apache.flink.streaming.api.scala.DataStream
+import org.apache.flink.table.api.Table
+import org.apache.flink.table.api.scala.{ImplicitExpressionConversions, DataSetConversions, DataStreamConversions, TableConversions, TableFunctionConversions, BatchTableEnvironment => ScalaBatchTableEnv, StreamTableEnvironment => ScalaStreamTableEnv}
+import org.apache.flink.table.functions.TableFunction
+
+import _root_.scala.language.implicitConversions
+
+package object expressions extends ImplicitExpressionConversions {
+
+  implicit def table2TableConversions(table: Table): TableConversions = {
+    new TableConversions(table)
+  }
+
+  implicit def dataSet2DataSetConversions[T](set: DataSet[T]): DataSetConversions[T] = {
+    new DataSetConversions[T](set, set.getType())
+  }
+
+  implicit def table2RowDataSet(table: Table): DataSet[Row] = {
+    val tableEnv = table.tableEnv.asInstanceOf[ScalaBatchTableEnv]
+    tableEnv.toDataSet[Row](table)
+  }
+
+  implicit def dataStream2DataStreamConversions[T](set: DataStream[T]): DataStreamConversions[T] = {
+    new DataStreamConversions[T](set, set.dataType)
+  }
+
+  implicit def table2RowDataStream(table: Table): DataStream[Row] = {
+    val tableEnv = table.tableEnv.asInstanceOf[ScalaStreamTableEnv]
+    tableEnv.toAppendStream[Row](table)
+  }
+
+  implicit def tableFunctionCall2Table[T](tf: TableFunction[T]): TableFunctionConversions[T] = {
+    new TableFunctionConversions[T](tf)
+  }
+}
