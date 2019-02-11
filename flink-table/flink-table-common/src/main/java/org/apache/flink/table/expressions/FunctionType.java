@@ -16,21 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.typeutils
+package org.apache.flink.table.expressions;
 
 /**
-  * TypeInformation for row intervals.
-  */
-@SerialVersionUID(-1306179424364925258L)
-class RowIntervalTypeInfo extends InternalTypeInfo[Long](classOf[Long]) {
-
-  def canEqual(obj: Any): Boolean = obj.isInstanceOf[RowIntervalTypeInfo]
-
-  override def toString: String = s"RowIntervalTypeInfo"
-}
-
-object RowIntervalTypeInfo {
-
-  val INTERVAL_ROWS = new RowIntervalTypeInfo()
-
+ * Function type.
+ */
+public enum FunctionType {
+	LOGICAL,
+	COMPARISON,
+	TABLE_FUNCTION,
+	AGGREGATION,
+	OTHER
 }

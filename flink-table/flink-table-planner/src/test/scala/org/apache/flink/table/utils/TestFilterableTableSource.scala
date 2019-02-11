@@ -27,7 +27,7 @@ import org.apache.flink.streaming.api.datastream.DataStream
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
 import org.apache.flink.table.api.TableSchema
 import org.apache.flink.table.api.Types._
-import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.expressions.{FunctionDefinitions, _}
 import org.apache.flink.table.sources.{BatchTableSource, FilterableTableSource, StreamTableSource, TableSource}
 import org.apache.flink.types.Row
 
@@ -94,7 +94,7 @@ class TestFilterableTableSource(
     rowTypeInfo: RowTypeInfo,
     data: Seq[Row],
     filterableFields: Set[String] = Set(),
-    filterPredicates: Seq[PlannerExpression] = Seq(),
+    filterPredicates: Seq[Expression] = Seq(),
     val filterPushedDown: Boolean = false)
   extends BatchTableSource[Row]
     with StreamTableSource[Row]
@@ -117,7 +117,10 @@ class TestFilterableTableSource(
 
   override def explainSource(): String = {
     if (filterPredicates.nonEmpty) {
-      s"filter=[${filterPredicates.reduce((l, r) => And(l, r)).toString}]"
+      s"filter=[${
+        filterPredicates
+          .reduce((l, r) => ExpressionUtils.call(FunctionDefinitions.AND, Seq(l, r))).toString
+      }]"
     } else {
       ""
     }
@@ -125,8 +128,8 @@ class TestFilterableTableSource(
 
   override def getReturnType: TypeInformation[Row] = rowTypeInfo
 
-  override def applyPredicate(predicates: JList[PlannerExpression]): TableSource[Row] = {
-    val predicatesToUse = new mutable.ListBuffer[PlannerExpression]()
+  override def applyPredicate(predicates: JList[Expression]): TableSource[Row] = {
+    val predicatesToUse = new mutable.ListBuffer[Expression]()
     val iterator = predicates.iterator()
     while (iterator.hasNext) {
       val expr = iterator.next()
@@ -150,76 +153,87 @@ class TestFilterableTableSource(
     rows.filter(shouldKeep)
   }
 
-  private def shouldPushDown(expr: PlannerExpression): Boolean = {
+  private def shouldPushDown(expr: Expression): Boolean = {
     expr match {
-      case binExpr: BinaryComparison => shouldPushDown(binExpr)
+      case call: Call if call.getFunctionDefinition.getFunctionType == FunctionType.COMPARISON =>
+        shouldPushDown(call)
       case _ => false
     }
   }
 
-  private def shouldPushDown(expr: BinaryComparison): Boolean = {
-    (expr.left, expr.right) match {
-      case (f: PlannerResolvedFieldReference, v: PlannerLiteral) =>
-        filterableFields.contains(f.name)
-      case (v: PlannerLiteral, f: PlannerResolvedFieldReference) =>
-        filterableFields.contains(f.name)
-      case (f1: PlannerResolvedFieldReference, f2: PlannerResolvedFieldReference) =>
-        filterableFields.contains(f1.name) && filterableFields.contains(f2.name)
+  private def shouldPushDown(binaryComparison: Call): Boolean = {
+    (binaryComparison.getChildren.get(0), binaryComparison.getChildren.get(1)) match {
+      case (f: FieldReference, v: Literal) =>
+        filterableFields.contains(f.getName)
+      case (v: Literal, f: FieldReference) =>
+        filterableFields.contains(f.getName)
+      case (f1: FieldReference, f2: FieldReference) =>
+        filterableFields.contains(f1.getName) && filterableFields.contains(f2.getName)
       case (_, _) => false
     }
   }
 
   private def shouldKeep(row: Row): Boolean = {
     filterPredicates.isEmpty || filterPredicates.forall {
-      case expr: BinaryComparison => binaryFilterApplies(expr, row)
+      case expr: Call if expr.getFunctionDefinition.getFunctionType == FunctionType.COMPARISON =>
+        binaryFilterApplies(expr, row)
       case expr => throw new RuntimeException(expr + " not supported!")
     }
   }
 
-  private def binaryFilterApplies(expr: BinaryComparison, row: Row): Boolean = {
-    val (lhsValue, rhsValue) = extractValues(expr, row)
+  private def binaryFilterApplies(binaryComparison: Call, row: Row): Boolean = {
+    val (lhsValue, rhsValue) = extractValues(binaryComparison, row)
+    val left = binaryComparison.getChildren.get(0)
+    val right = binaryComparison.getChildren.get(1)
 
-    expr match {
-      case _: GreaterThan =>
+    binaryComparison.getFunctionDefinition match {
+      case FunctionDefinitions.GREATER_THAN =>
         lhsValue.compareTo(rhsValue) > 0
-      case LessThan(l: PlannerResolvedFieldReference, r: PlannerLiteral) =>
+      case FunctionDefinitions.LESS_THAN
+        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
         lhsValue.compareTo(rhsValue) < 0
-      case GreaterThanOrEqual(l: PlannerResolvedFieldReference, r: PlannerLiteral) =>
+      case FunctionDefinitions.GREATER_THAN_OR_EQUAL
+        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
         lhsValue.compareTo(rhsValue) >= 0
-      case LessThanOrEqual(l: PlannerResolvedFieldReference, r: PlannerLiteral) =>
+      case FunctionDefinitions.LESS_THAN_OR_EQUAL
+        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
         lhsValue.compareTo(rhsValue) <= 0
-      case EqualTo(l: PlannerResolvedFieldReference, r: PlannerLiteral) =>
+      case FunctionDefinitions.EQUALS
+        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
         lhsValue.compareTo(rhsValue) == 0
-      case NotEqualTo(l: PlannerResolvedFieldReference, r: PlannerLiteral) =>
+      case FunctionDefinitions.NOT_EQUALS
+        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
         lhsValue.compareTo(rhsValue) != 0
     }
   }
 
-  private def extractValues(expr: BinaryComparison, row: Row)
+  private def extractValues(binaryComparison: Call, row: Row)
     : (Comparable[Any], Comparable[Any]) = {
+    val left = binaryComparison.getChildren.get(0)
+    val right = binaryComparison.getChildren.get(1)
 
-    (expr.left, expr.right) match {
-      case (l: PlannerResolvedFieldReference, r: PlannerLiteral) =>
-        val idx = rowTypeInfo.getFieldIndex(l.name)
+    (left, right) match {
+      case (l: FieldReference, r: Literal) =>
+        val idx = rowTypeInfo.getFieldIndex(l.getName)
         val lv = row.getField(idx).asInstanceOf[Comparable[Any]]
-        val rv = r.value.asInstanceOf[Comparable[Any]]
+        val rv = r.getValue.asInstanceOf[Comparable[Any]]
         (lv, rv)
-      case (l: PlannerLiteral, r: PlannerResolvedFieldReference) =>
-        val idx = rowTypeInfo.getFieldIndex(r.name)
-        val lv = l.value.asInstanceOf[Comparable[Any]]
+      case (l: Literal, r: FieldReference) =>
+        val idx = rowTypeInfo.getFieldIndex(r.getName)
+        val lv = l.getValue.asInstanceOf[Comparable[Any]]
         val rv = row.getField(idx).asInstanceOf[Comparable[Any]]
         (lv, rv)
-      case (l: PlannerLiteral, r: PlannerLiteral) =>
-        val lv = l.value.asInstanceOf[Comparable[Any]]
-        val rv = r.value.asInstanceOf[Comparable[Any]]
+      case (l: Literal, r: Literal) =>
+        val lv = l.getValue.asInstanceOf[Comparable[Any]]
+        val rv = r.getValue.asInstanceOf[Comparable[Any]]
         (lv, rv)
-      case (l: PlannerResolvedFieldReference, r: PlannerResolvedFieldReference) =>
-        val lidx = rowTypeInfo.getFieldIndex(l.name)
-        val ridx = rowTypeInfo.getFieldIndex(r.name)
+      case (l: FieldReference, r: FieldReference) =>
+        val lidx = rowTypeInfo.getFieldIndex(l.getName)
+        val ridx = rowTypeInfo.getFieldIndex(r.getName)
         val lv = row.getField(lidx).asInstanceOf[Comparable[Any]]
         val rv = row.getField(ridx).asInstanceOf[Comparable[Any]]
         (lv, rv)
-      case _ => throw new RuntimeException(expr + " not supported!")
+      case _ => throw new RuntimeException(binaryComparison + " not supported!")
     }
   }
 

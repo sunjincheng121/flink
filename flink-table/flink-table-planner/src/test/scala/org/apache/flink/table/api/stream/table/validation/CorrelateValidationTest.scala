@@ -116,8 +116,7 @@ class CorrelateValidationTest extends TableTestBase {
     // table function call where
     expectExceptionThrown(
       func1('c).where('f0 === "?"),
-      null,
-      classOf[NullPointerException]
+      "Table functions can only be used in table.joinLateral() and table.leftOuterJoinLateral()."
     )
 
   }

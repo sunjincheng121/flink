@@ -42,6 +42,10 @@ case class PlannerCurrentRow() extends PlannerExpression {
   override private[flink] def children = Seq()
 
   override def toString = "CURRENT ROW"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("currentRow", children))
+  }
 }
 
 case class PlannerCurrentRange() extends PlannerExpression {
@@ -50,6 +54,10 @@ case class PlannerCurrentRange() extends PlannerExpression {
   override private[flink] def children = Seq()
 
   override def toString = "CURRENT RANGE"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("currentRange", children))
+  }
 }
 
 case class PlannerUnboundedRow() extends PlannerExpression {
@@ -58,6 +66,10 @@ case class PlannerUnboundedRow() extends PlannerExpression {
   override private[flink] def children = Seq()
 
   override def toString = "UNBOUNDED ROW"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("unboundedRow", children))
+  }
 }
 
 case class PlannerUnboundedRange() extends PlannerExpression {
@@ -66,6 +78,10 @@ case class PlannerUnboundedRange() extends PlannerExpression {
   override private[flink] def children = Seq()
 
   override def toString = "UNBOUNDED RANGE"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("unboundedRange", children))
+  }
 }
 
 case class PartitionedOver(partitionBy: Array[PlannerExpression]) {

@@ -21,8 +21,10 @@ package org.apache.flink.table.expressions;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.table.functions.ScalarFunction;
 
+import static org.apache.flink.table.expressions.FunctionType.OTHER;
+
 /**
- * The definition for user-defined scalar function.
+ * The function definition for user-defined scalar function.
  */
 @PublicEvolving
 public final class ScalarFunctionDefinition extends FunctionDefinition {
@@ -30,7 +32,7 @@ public final class ScalarFunctionDefinition extends FunctionDefinition {
 	private ScalarFunction scalarFunction;
 
 	public ScalarFunctionDefinition(ScalarFunction scalarFunction) {
-		super("Scalar Function");
+		super("Scalar Function", OTHER);
 		this.scalarFunction = scalarFunction;
 	}
 

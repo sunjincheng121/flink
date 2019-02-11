@@ -57,6 +57,10 @@ case class WindowStart(child: PlannerExpression) extends AbstractWindowProperty(
   override def resultType = SqlTimeTypeInfo.TIMESTAMP
 
   override def toString: String = s"start($child)"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("start", children))
+  }
 }
 
 case class WindowEnd(child: PlannerExpression) extends AbstractWindowProperty(child) {
@@ -64,4 +68,8 @@ case class WindowEnd(child: PlannerExpression) extends AbstractWindowProperty(ch
   override def resultType = SqlTimeTypeInfo.TIMESTAMP
 
   override def toString: String = s"end($child)"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("end", children))
+  }
 }

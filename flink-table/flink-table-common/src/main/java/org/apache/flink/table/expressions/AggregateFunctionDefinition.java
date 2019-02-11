@@ -22,8 +22,10 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.table.functions.AggregateFunction;
 
+import static org.apache.flink.table.expressions.FunctionType.AGGREGATION;
+
 /**
- * The definition for user-defined aggregate function.
+ * The function definition for user-defined aggregate function.
  */
 @PublicEvolving
 public final class AggregateFunctionDefinition extends FunctionDefinition {
@@ -35,7 +37,7 @@ public final class AggregateFunctionDefinition extends FunctionDefinition {
 		AggregateFunction<?, ?> aggregateFunction,
 		TypeInformation<?> resultTypeInfo,
 		TypeInformation<?> accTypeInfo) {
-		super("Aggregate Function");
+		super("Aggregate Function", AGGREGATION);
 		this.aggregateFunction = aggregateFunction;
 		this.resultTypeInfo = resultTypeInfo;
 		this.accumulatorTypeInfo = accTypeInfo;

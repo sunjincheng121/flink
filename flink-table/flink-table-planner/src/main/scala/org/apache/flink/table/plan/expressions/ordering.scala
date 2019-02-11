@@ -41,6 +41,10 @@ case class Asc(child: PlannerExpression) extends Ordering {
   }
 
   override private[flink] def resultType: TypeInformation[_] = child.resultType
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("asc", children))
+  }
 }
 
 case class Desc(child: PlannerExpression) extends Ordering {
@@ -51,4 +55,8 @@ case class Desc(child: PlannerExpression) extends Ordering {
   }
 
   override private[flink] def resultType: TypeInformation[_] = child.resultType
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("desc", children))
+  }
 }

@@ -19,21 +19,25 @@
 package org.apache.flink.table.expressions;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
+import org.apache.flink.api.common.typeinfo.SqlTimeTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.table.typeutils.RowIntervalTypeInfo;
+import org.apache.flink.table.typeutils.TimeIntervalTypeInfo;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Literal expression.
+ * The literal expression.
  */
 @PublicEvolving
 public final class Literal implements Expression {
 
 	private final Object value;
 
-	private Optional<TypeInformation<?>> type;
+	private final Optional<TypeInformation<?>> type;
 
 	public Literal(Object value) {
 		this.value = value;
@@ -63,4 +67,32 @@ public final class Literal implements Expression {
 		return visitor.visitLiteral(this);
 	}
 
+	@Override
+	public String toString() {
+		if (value == null) {
+			return "null";
+		}
+
+		if (type.isPresent()) {
+			if (type.get() instanceof BasicTypeInfo) {
+				return value.toString();
+			} else if (type.get() == SqlTimeTypeInfo.DATE) {
+				return value.toString() + ".toDate";
+			} else if (type.get() == SqlTimeTypeInfo.TIME) {
+				return value.toString() + ".toTime";
+			} else if (type.get() == SqlTimeTypeInfo.TIMESTAMP) {
+				return value.toString() + ".toTimestamp";
+			} else if (type.get() == TimeIntervalTypeInfo.INTERVAL_MILLIS) {
+				return value.toString() + ".millis";
+			} else if (type.get() == TimeIntervalTypeInfo.INTERVAL_MONTHS) {
+				return value.toString() + ".months";
+			} else if (type.get() == RowIntervalTypeInfo.INTERVAL_ROWS) {
+				return value.toString() + ".rows";
+			} else {
+				return "Literal(" + value.toString() + ", " + type.get().toString() + ")";
+			}
+		} else {
+			return "Literal(" + value.toString() + ")";
+		}
+	}
 }

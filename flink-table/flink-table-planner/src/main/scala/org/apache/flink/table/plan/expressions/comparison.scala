@@ -62,6 +62,10 @@ case class EqualTo(left: PlannerExpression, right: PlannerExpression) extends Bi
       case (lType, rType) =>
         ValidationFailure(s"Equality predicate on incompatible types: $lType and $rType")
     }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("equals", children))
+  }
 }
 
 case class NotEqualTo(left: PlannerExpression, right: PlannerExpression) extends BinaryComparison {
@@ -78,12 +82,20 @@ case class NotEqualTo(left: PlannerExpression, right: PlannerExpression) extends
       case (lType, rType) =>
         ValidationFailure(s"Inequality predicate on incompatible types: $lType and $rType")
     }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("notEquals", children))
+  }
 }
 
 case class GreaterThan(left: PlannerExpression, right: PlannerExpression) extends BinaryComparison {
   override def toString = s"$left > $right"
 
   private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.GREATER_THAN
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("greaterThan", children))
+  }
 }
 
 case class GreaterThanOrEqual(left: PlannerExpression, right: PlannerExpression)
@@ -91,12 +103,20 @@ case class GreaterThanOrEqual(left: PlannerExpression, right: PlannerExpression)
   override def toString = s"$left >= $right"
 
   private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.GREATER_THAN_OR_EQUAL
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("greaterThanOrEqual", children))
+  }
 }
 
 case class LessThan(left: PlannerExpression, right: PlannerExpression) extends BinaryComparison {
   override def toString = s"$left < $right"
 
   private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.LESS_THAN
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("lessThan", children))
+  }
 }
 
 case class LessThanOrEqual(left: PlannerExpression, right: PlannerExpression)
@@ -104,6 +124,10 @@ case class LessThanOrEqual(left: PlannerExpression, right: PlannerExpression)
   override def toString = s"$left <= $right"
 
   private[flink] val sqlOperator: SqlOperator = SqlStdOperatorTable.LESS_THAN_OR_EQUAL
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("lessThanOrEqual", children))
+  }
 }
 
 case class IsNull(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -114,6 +138,10 @@ case class IsNull(child: PlannerExpression) extends UnaryPlannerExpression {
   }
 
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("isNull", children))
+  }
 }
 
 case class IsNotNull(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -124,6 +152,10 @@ case class IsNotNull(child: PlannerExpression) extends UnaryPlannerExpression {
   }
 
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("isNotNull", children))
+  }
 }
 
 case class IsTrue(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -134,6 +166,10 @@ case class IsTrue(child: PlannerExpression) extends UnaryPlannerExpression {
   }
 
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("isTrue", children))
+  }
 }
 
 case class IsFalse(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -144,6 +180,10 @@ case class IsFalse(child: PlannerExpression) extends UnaryPlannerExpression {
   }
 
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("isFalse", children))
+  }
 }
 
 case class IsNotTrue(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -154,6 +194,10 @@ case class IsNotTrue(child: PlannerExpression) extends UnaryPlannerExpression {
   }
 
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("isNotTrue", children))
+  }
 }
 
 case class IsNotFalse(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -164,6 +208,10 @@ case class IsNotFalse(child: PlannerExpression) extends UnaryPlannerExpression {
   }
 
   override private[flink] def resultType = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("isNotFalse", children))
+  }
 }
 
 abstract class BetweenComparison(
@@ -215,6 +263,10 @@ case class Between(
       )
     )
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("between", children))
+  }
 }
 
 case class NotBetween(
@@ -238,5 +290,9 @@ case class NotBetween(
         upperBound.toRexNode
       )
     )
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("notBetween", children))
   }
 }

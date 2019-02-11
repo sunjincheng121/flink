@@ -70,6 +70,10 @@ abstract class PlannerExpression extends TreeNode[PlannerExpression] {
       checkEquality(elements1, elements2)
     }
   }
+
+  private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visit(this)
+  }
 }
 
 abstract class BinaryPlannerExpression extends PlannerExpression {

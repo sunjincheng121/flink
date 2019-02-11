@@ -48,6 +48,10 @@ case class CharLength(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.CHAR_LENGTH, child.toRexNode)
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("charLength", children))
+  }
 }
 
 /**
@@ -70,6 +74,10 @@ case class InitCap(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.INITCAP, child.toRexNode)
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("initCap", children))
   }
 }
 
@@ -97,6 +105,10 @@ case class Like(str: PlannerExpression, pattern: PlannerExpression)
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.LIKE, children.map(_.toRexNode))
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("like", children))
+  }
 }
 
 /**
@@ -118,6 +130,10 @@ case class Lower(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.LOWER, child.toRexNode)
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("lower", children))
   }
 }
 
@@ -145,6 +161,10 @@ case class Similar(str: PlannerExpression, pattern: PlannerExpression)
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.SIMILAR_TO, children.map(_.toRexNode))
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("similar", children))
+  }
 }
 
 /**
@@ -168,6 +188,10 @@ case class Substring(
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.SUBSTRING, children.map(_.toRexNode))
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("substring", children))
   }
 }
 
@@ -203,6 +227,10 @@ case class Trim(
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.TRIM, children.map(_.toRexNode))
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("trim", children))
+  }
 }
 
 /**
@@ -227,6 +255,10 @@ case class Upper(child: PlannerExpression) extends UnaryPlannerExpression with I
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.UPPER, child.toRexNode)
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("upper", children))
+  }
 }
 
 /**
@@ -246,6 +278,10 @@ case class Position(needle: PlannerExpression, haystack: PlannerExpression)
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.POSITION, needle.toRexNode, haystack.toRexNode)
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("position", children))
   }
 }
 
@@ -281,6 +317,10 @@ case class Overlay(
       starting.toRexNode,
       position.toRexNode)
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("overlay", children))
+  }
 }
 
 /**
@@ -300,6 +340,10 @@ case class Concat(strings: Seq[PlannerExpression]) extends PlannerExpression wit
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.CONCAT, children.map(_.toRexNode))
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("concat", children))
   }
 }
 
@@ -325,6 +369,10 @@ case class ConcatWs(separator: PlannerExpression, strings: Seq[PlannerExpression
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.CONCAT_WS, children.map(_.toRexNode))
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("concat_ws", children))
+  }
 }
 
 case class Lpad(text: PlannerExpression, len: PlannerExpression, pad: PlannerExpression)
@@ -342,6 +390,10 @@ case class Lpad(text: PlannerExpression, len: PlannerExpression, pad: PlannerExp
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.LPAD, children.map(_.toRexNode))
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("lpad", children))
+  }
 }
 
 case class Rpad(text: PlannerExpression, len: PlannerExpression, pad: PlannerExpression)
@@ -358,6 +410,10 @@ case class Rpad(text: PlannerExpression, len: PlannerExpression, pad: PlannerExp
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.RPAD, children.map(_.toRexNode))
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("rpad", children))
   }
 }
 
@@ -386,6 +442,10 @@ case class RegexpReplace(
   }
 
   override def toString: String = s"($str).regexp_replace($regex, $replacement)"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("regexpReplace", children))
+  }
 }
 
 /**
@@ -424,6 +484,10 @@ case class RegexpExtract(
   }
 
   override def toString: String = s"($str).regexp_extract($regex, $extractIndex)"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("regexpExtract", children))
+  }
 }
 
 object RegexpExtract {
@@ -456,6 +520,9 @@ case class FromBase64(child: PlannerExpression) extends UnaryPlannerExpression w
 
   override def toString: String = s"($child).fromBase64"
 
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("fromBase64", children))
+  }
 }
 
 /**
@@ -482,6 +549,9 @@ case class ToBase64(child: PlannerExpression) extends UnaryPlannerExpression wit
 
   override def toString: String = s"($child).toBase64"
 
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("toBase64", children))
+  }
 }
 
 /**
@@ -506,6 +576,10 @@ case class LTrim(child: PlannerExpression) extends UnaryPlannerExpression with I
   }
 
   override def toString = s"($child).ltrim"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("ltrim", children))
+  }
 }
 
 /**
@@ -531,6 +605,10 @@ case class RTrim(child: PlannerExpression) extends UnaryPlannerExpression with I
   }
 
   override def toString = s"($child).rtrim"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("rtrim", children))
+  }
 }
 
 /**
@@ -560,6 +638,10 @@ case class Repeat(str: PlannerExpression, n: PlannerExpression)
   }
 
   override def toString: String = s"($str).repeat($n)"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("repeat", children))
+  }
 }
 
 /**
@@ -584,5 +666,9 @@ case class Replace(
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.REPLACE, children.map(_.toRexNode))
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("replace", children))
   }
 }

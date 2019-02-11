@@ -19,23 +19,37 @@
 package org.apache.flink.table.expressions;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
- * Field reference expression.
+ * The field reference expression.
  */
 @PublicEvolving
 public final class FieldReference implements Expression {
 	private final String name;
 
+	private final Optional<TypeInformation<?>> resultType;
+
 	public FieldReference(String name) {
 		this.name = name;
+		this.resultType = Optional.empty();
+	}
+
+	public FieldReference(String name, TypeInformation<?> resultType) {
+		this.name = name;
+		this.resultType = Optional.of(resultType);
 	}
 
 	public String getName() {
 		return name;
+	}
+
+	public Optional<TypeInformation<?>> getResultType() {
+		return resultType;
 	}
 
 	@Override
@@ -46,5 +60,10 @@ public final class FieldReference implements Expression {
 	@Override
 	public <R> R accept(ExpressionVisitor<R> visitor) {
 		return visitor.visitFieldReference(this);
+	}
+
+	@Override
+	public String toString() {
+		return name;
 	}
 }

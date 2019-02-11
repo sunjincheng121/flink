@@ -19,8 +19,9 @@
 package org.apache.flink.table.sources.tsextractors
 
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
+import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{Types, ValidationException}
-import org.apache.flink.table.plan.expressions.{PlannerCast, PlannerExpression, PlannerResolvedFieldReference}
+import org.apache.flink.table.expressions._
 
 /**
   * Converts an existing [[Long]], [[java.sql.Timestamp]], or
@@ -48,23 +49,31 @@ final class ExistingField(val field: String) extends TimestampExtractor {
   }
 
   /**
-    * Returns an [[PlannerExpression]] that casts a [[Long]], [[java.sql.Timestamp]], or
+    * Returns an [[Expression]] that casts a [[Long]], [[java.sql.Timestamp]], or
     * timestamp formatted [[java.lang.String]] field (e.g., "2018-05-28 12:34:56.000")
     * into a rowtime attribute.
     */
   override def getExpression(
-      fieldAccesses: Array[PlannerResolvedFieldReference]): PlannerExpression = {
-    val fieldAccess: PlannerExpression = fieldAccesses(0)
+      fieldAccesses: Array[FieldReference],
+      fieldTypes: Array[TypeInformation[_]]): Expression = {
+    val fieldAccess: FieldReference = fieldAccesses(0)
+    val fieldType = fieldTypes(0)
 
-    fieldAccess.resultType match {
+    val fieldAccessWithType = new FieldReference(fieldAccess.getName, Types.LONG)
+    fieldType match {
       case Types.LONG =>
         // access LONG field
-        fieldAccess
+        fieldAccessWithType
       case Types.SQL_TIMESTAMP =>
         // cast timestamp to long
-        PlannerCast(fieldAccess, Types.LONG)
+        ExpressionUtils.call(FunctionDefinitions.CAST, Seq(fieldAccessWithType, Types.LONG))
       case Types.STRING =>
-        PlannerCast(PlannerCast(fieldAccess, SqlTimeTypeInfo.TIMESTAMP), Types.LONG)
+        ExpressionUtils.call(
+          FunctionDefinitions.CAST,
+          Seq(
+            ExpressionUtils
+              .call(FunctionDefinitions.CAST, Seq(fieldAccessWithType, SqlTimeTypeInfo.TIMESTAMP)),
+            Types.LONG))
     }
   }
 

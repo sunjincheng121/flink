@@ -88,5 +88,9 @@ case class PlannerIn(expression: PlannerExpression, elements: Seq[PlannerExpress
   }
 
   override private[flink] def resultType: TypeInformation[_] = BOOLEAN_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("in", children))
+  }
 }
 

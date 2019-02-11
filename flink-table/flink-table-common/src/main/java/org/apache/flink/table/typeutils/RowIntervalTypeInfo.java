@@ -16,16 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.flink.table.expressions;
+package org.apache.flink.table.typeutils;
 
-import java.util.List;
+import org.apache.flink.annotation.Internal;
 
 /**
- * The interface for all expressions.
+ * TypeInformation for row intervals.
  */
-public interface Expression {
+@Internal
+public final class RowIntervalTypeInfo extends InternalTypeInfo<Long> {
 
-	List<Expression> getChildren();
+	private static final long serialVersionUID = -1306179424364925258L;
 
-	<R> R accept(ExpressionVisitor<R> visitor);
+	public static final RowIntervalTypeInfo INTERVAL_ROWS = new RowIntervalTypeInfo();
+
+	private RowIntervalTypeInfo() {
+		super(Long.class);
+	}
+
+	@Override
+	public boolean canEqual(Object obj) {
+		return obj instanceof RowIntervalTypeInfo;
+	}
+
+	@Override
+	public String toString() {
+		return "RowIntervalTypeInfo";
+	}
 }

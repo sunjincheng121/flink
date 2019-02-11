@@ -53,4 +53,9 @@ public class TableReference implements Expression {
 	public <R> R accept(ExpressionVisitor<R> visitor) {
 		return visitor.visitOther(this);
 	}
+
+	@Override
+	public String toString() {
+		return name;
+	}
 }

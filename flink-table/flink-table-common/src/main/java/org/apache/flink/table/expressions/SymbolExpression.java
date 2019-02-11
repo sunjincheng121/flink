@@ -24,7 +24,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Symbol expression.
+ * The symbol expression.
  */
 @PublicEvolving
 public final class SymbolExpression implements Expression {

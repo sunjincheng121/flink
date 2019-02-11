@@ -104,6 +104,10 @@ case class PlannerAlias(child: PlannerExpression, name: String, extraNames: Seq[
       ValidationSuccess
     }
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("as", children))
+  }
 }
 
 case class PlannerUnresolvedAlias(child: PlannerExpression)
@@ -207,6 +211,10 @@ case class PlannerRowtimeAttribute(expr: PlannerExpression)
     NamedWindowProperty(name, this)
 
   override def toString: String = s"rowtime($child)"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("rowtime", children))
+  }
 }
 
 case class PlannerProctimeAttribute(expr: PlannerExpression) extends PlannerTimeAttribute(expr) {
@@ -231,6 +239,10 @@ case class PlannerProctimeAttribute(expr: PlannerExpression) extends PlannerTime
     NamedWindowProperty(name, this)
 
   override def toString: String = s"proctime($child)"
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("proctime", children))
+  }
 }
 
 /** Expression to access the timestamp of a StreamRecord. */
@@ -240,5 +252,9 @@ case class PlannerStreamRecordTimestamp() extends LeafPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.getRexBuilder.makeCall(StreamRecordTimestampSqlFunction)
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("streamRecordTimestamp", children))
   }
 }

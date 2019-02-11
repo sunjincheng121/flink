@@ -52,4 +52,8 @@ case class PlannerCast(child: PlannerExpression, resultType: TypeInformation[_])
       ValidationFailure(s"Unsupported cast from ${child.resultType} to $resultType")
     }
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("cast", children))
+  }
 }

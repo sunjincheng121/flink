@@ -30,7 +30,7 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
 
   override def visitCall(call: Call): PlannerExpression = {
 
-    val func = call.getFunc
+    val func = call.getFunctionDefinition
     val args = call.getChildren.asScala
 
     func match {
@@ -76,8 +76,524 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
             PlannerGetCompositeField(args.head.accept(this),
               args.last.asInstanceOf[Literal].getValue)
 
+          case FunctionDefinitions.AND =>
+            assert(args.size == 2)
+            And(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.OR =>
+            assert(args.size == 2)
+            Or(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.NOT =>
+            assert(args.size == 1)
+            Not(args.head.accept(this))
+
+          case FunctionDefinitions.EQUALS =>
+            assert(args.size == 2)
+            EqualTo(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.GREATER_THAN =>
+            assert(args.size == 2)
+            GreaterThan(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.GREATER_THAN_OR_EQUAL =>
+            assert(args.size == 2)
+            GreaterThanOrEqual(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.LESS_THAN =>
+            assert(args.size == 2)
+            LessThan(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.LESS_THAN_OR_EQUAL =>
+            assert(args.size == 2)
+            LessThanOrEqual(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.NOT_EQUALS =>
+            assert(args.size == 2)
+            NotEqualTo(args.head.accept(this), args.last.accept(this))
+
           case FunctionDefinitions.IN =>
             PlannerIn(args.head.accept(this), args.slice(1, args.size).map(_.accept(this)))
+
+          case FunctionDefinitions.IS_NULL =>
+            assert(args.size == 1)
+            IsNull(args.head.accept(this))
+
+          case FunctionDefinitions.IS_NOT_NULL =>
+            assert(args.size == 1)
+            IsNotNull(args.head.accept(this))
+
+          case FunctionDefinitions.IS_TRUE =>
+            assert(args.size == 1)
+            IsTrue(args.head.accept(this))
+
+          case FunctionDefinitions.IS_FALSE =>
+            assert(args.size == 1)
+            IsFalse(args.head.accept(this))
+
+          case FunctionDefinitions.IS_NOT_TRUE =>
+            assert(args.size == 1)
+            IsNotTrue(args.head.accept(this))
+
+          case FunctionDefinitions.IS_NOT_FALSE =>
+            assert(args.size == 1)
+            IsNotFalse(args.head.accept(this))
+
+          case FunctionDefinitions.IF =>
+            assert(args.size == 3)
+            If(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.BETWEEN =>
+            assert(args.size == 3)
+            Between(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.NOT_BETWEEN =>
+            assert(args.size == 3)
+            NotBetween(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.AVG =>
+            assert(args.size == 1)
+            Avg(args.head.accept(this))
+
+          case FunctionDefinitions.COUNT =>
+            assert(args.size == 1)
+            Count(args.head.accept(this))
+
+          case FunctionDefinitions.MAX =>
+            assert(args.size == 1)
+            Max(args.head.accept(this))
+
+          case FunctionDefinitions.MIN =>
+            assert(args.size == 1)
+            Min(args.head.accept(this))
+
+          case FunctionDefinitions.SUM =>
+            assert(args.size == 1)
+            Sum(args.head.accept(this))
+
+          case FunctionDefinitions.SUM0 =>
+            assert(args.size == 1)
+            Sum0(args.head.accept(this))
+
+          case FunctionDefinitions.STDDEV_POP =>
+            assert(args.size == 1)
+            StddevPop(args.head.accept(this))
+
+          case FunctionDefinitions.STDDEV_SAMP =>
+            assert(args.size == 1)
+            StddevSamp(args.head.accept(this))
+
+          case FunctionDefinitions.VAR_POP =>
+            assert(args.size == 1)
+            VarPop(args.head.accept(this))
+
+          case FunctionDefinitions.VAR_SAMP =>
+            assert(args.size == 1)
+            VarSamp(args.head.accept(this))
+
+          case FunctionDefinitions.COLLECT =>
+            assert(args.size == 1)
+            Collect(args.head.accept(this))
+
+          case FunctionDefinitions.CHAR_LENGTH =>
+            assert(args.size == 1)
+            CharLength(args.head.accept(this))
+
+          case FunctionDefinitions.INIT_CAP =>
+            assert(args.size == 1)
+            InitCap(args.head.accept(this))
+
+          case FunctionDefinitions.LIKE =>
+            assert(args.size == 2)
+            Like(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.LOWER =>
+            assert(args.size == 1)
+            Lower(args.head.accept(this))
+
+          case FunctionDefinitions.SIMILAR =>
+            assert(args.size == 2)
+            Similar(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.SUBSTRING =>
+            assert(args.size == 2 || args.size == 3)
+            if (args.size == 2) {
+              new Substring(args.head.accept(this), args.last.accept(this))
+            } else {
+              Substring(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+            }
+
+          case FunctionDefinitions.REPLACE =>
+            assert(args.size == 2 || args.size == 3)
+            if (args.size == 2) {
+              new Replace(args.head.accept(this), args.last.accept(this))
+            } else {
+              Replace(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+            }
+
+          case FunctionDefinitions.TRIM =>
+            assert(args.size == 3)
+            Trim(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.UPPER =>
+            assert(args.size == 1)
+            Upper(args.head.accept(this))
+
+          case FunctionDefinitions.POSITION =>
+            assert(args.size == 2)
+            Position(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.OVERLAY =>
+            assert(args.size == 3 || args.size == 4)
+            if (args.size == 3) {
+              new Overlay(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+            } else {
+              Overlay(
+                args.head.accept(this),
+                args(1).accept(this),
+                args(2).accept(this),
+                args.last.accept(this))
+            }
+
+          case FunctionDefinitions.CONCAT =>
+            Concat(args.map(_.accept(this)))
+
+          case FunctionDefinitions.CONCAT_WS =>
+            assert(args.nonEmpty)
+            ConcatWs(args.head.accept(this), args.tail.map(_.accept(this)))
+
+          case FunctionDefinitions.LPAD =>
+            assert(args.size == 3)
+            Lpad(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.RPAD =>
+            assert(args.size == 3)
+            Rpad(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.REGEXP_EXTRACT =>
+            assert(args.size == 2 || args.size == 3)
+            if (args.size == 2) {
+              RegexpExtract(args.head.accept(this), args.last.accept(this))
+            } else {
+              RegexpExtract(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+            }
+
+          case FunctionDefinitions.FROM_BASE64 =>
+            assert(args.size == 1)
+            FromBase64(args.head.accept(this))
+
+          case FunctionDefinitions.TO_BASE64 =>
+            assert(args.size == 1)
+            ToBase64(args.head.accept(this))
+
+          case FunctionDefinitions.UUID =>
+            assert(args.isEmpty)
+            UUID()
+
+          case FunctionDefinitions.LTRIM =>
+            assert(args.size == 1)
+            LTrim(args.head.accept(this))
+
+          case FunctionDefinitions.RTRIM =>
+            assert(args.size == 1)
+            RTrim(args.head.accept(this))
+
+          case FunctionDefinitions.REPEAT =>
+            assert(args.size == 2)
+            Repeat(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.REGEXP_REPLACE =>
+            assert(args.size == 3)
+            RegexpReplace(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.PLUS =>
+            assert(args.size == 2)
+            Plus(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.MINUS =>
+            assert(args.size == 2)
+            Minus(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.DIVIDE =>
+            assert(args.size == 2)
+            Div(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.TIMES =>
+            assert(args.size == 2)
+            Mul(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.ABS =>
+            assert(args.size == 1)
+            Abs(args.head.accept(this))
+
+          case FunctionDefinitions.CEIL =>
+            assert(args.size == 1)
+            Ceil(args.head.accept(this))
+
+          case FunctionDefinitions.EXP =>
+            assert(args.size == 1)
+            Exp(args.head.accept(this))
+
+          case FunctionDefinitions.FLOOR =>
+            assert(args.size == 1)
+            Floor(args.head.accept(this))
+
+          case FunctionDefinitions.LOG10 =>
+            assert(args.size == 1)
+            Log10(args.head.accept(this))
+
+          case FunctionDefinitions.LOG2 =>
+            assert(args.size == 1)
+            Log2(args.head.accept(this))
+
+          case FunctionDefinitions.LN =>
+            assert(args.size == 1)
+            Ln(args.head.accept(this))
+
+          case FunctionDefinitions.LOG =>
+            assert(args.size == 1 || args.size == 2)
+            if (args.size == 1) {
+              Log(args.head.accept(this))
+            } else {
+              Log(args.head.accept(this), args.last.accept(this))
+            }
+
+          case FunctionDefinitions.POWER =>
+            assert(args.size == 2)
+            Power(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.MOD =>
+            assert(args.size == 2)
+            Mod(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.SQRT =>
+            assert(args.size == 1)
+            Sqrt(args.head.accept(this))
+
+          case FunctionDefinitions.MINUS_PREFIX =>
+            assert(args.size == 1)
+            UnaryMinus(args.head.accept(this))
+
+          case FunctionDefinitions.SIN =>
+            assert(args.size == 1)
+            Sin(args.head.accept(this))
+
+          case FunctionDefinitions.COS =>
+            assert(args.size == 1)
+            Cos(args.head.accept(this))
+
+          case FunctionDefinitions.SINH =>
+            assert(args.size == 1)
+            Sinh(args.head.accept(this))
+
+          case FunctionDefinitions.TAN =>
+            assert(args.size == 1)
+            Tan(args.head.accept(this))
+
+          case FunctionDefinitions.TANH =>
+            assert(args.size == 1)
+            Tanh(args.head.accept(this))
+
+          case FunctionDefinitions.COT =>
+            assert(args.size == 1)
+            Cot(args.head.accept(this))
+
+          case FunctionDefinitions.ASIN =>
+            assert(args.size == 1)
+            Asin(args.head.accept(this))
+
+          case FunctionDefinitions.ACOS =>
+            assert(args.size == 1)
+            Acos(args.head.accept(this))
+
+          case FunctionDefinitions.ATAN =>
+            assert(args.size == 1)
+            Atan(args.head.accept(this))
+
+          case FunctionDefinitions.ATAN2 =>
+            assert(args.size == 2)
+            Atan2(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.COSH =>
+            assert(args.size == 1)
+            Cosh(args.head.accept(this))
+
+          case FunctionDefinitions.DEGREES =>
+            assert(args.size == 1)
+            Degrees(args.head.accept(this))
+
+          case FunctionDefinitions.RADIANS =>
+            assert(args.size == 1)
+            Radians(args.head.accept(this))
+
+          case FunctionDefinitions.SIGN =>
+            assert(args.size == 1)
+            Sign(args.head.accept(this))
+
+          case FunctionDefinitions.ROUND =>
+            assert(args.size == 2)
+            Round(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.PI =>
+            assert(args.isEmpty)
+            Pi()
+
+          case FunctionDefinitions.E =>
+            assert(args.isEmpty)
+            E()
+
+          case FunctionDefinitions.RAND =>
+            assert(args.isEmpty || args.size == 1)
+            if (args.isEmpty) {
+              new Rand()
+            } else {
+              Rand(args.head.accept(this))
+            }
+
+          case FunctionDefinitions.RAND_INTEGER =>
+            assert(args.size == 1 || args.size == 2)
+            if (args.size == 1) {
+              new RandInteger(args.head.accept(this))
+            } else {
+              RandInteger(args.head.accept(this), args.last.accept(this))
+            }
+
+          case FunctionDefinitions.BIN =>
+            assert(args.size == 1)
+            Bin(args.head.accept(this))
+
+          case FunctionDefinitions.HEX =>
+            assert(args.size == 1)
+            Hex(args.head.accept(this))
+
+          case FunctionDefinitions.TRUNCATE =>
+            assert(args.size == 1 || args.size == 2)
+            if (args.size == 1) {
+              new Truncate(args.head.accept(this))
+            } else {
+              Truncate(args.head.accept(this), args.last.accept(this))
+            }
+
+          case FunctionDefinitions.EXTRACT =>
+            assert(args.size == 2)
+            Extract(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.CURRENT_DATE =>
+            assert(args.isEmpty)
+            CurrentDate()
+
+          case FunctionDefinitions.CURRENT_TIME =>
+            assert(args.isEmpty)
+            CurrentTime()
+
+          case FunctionDefinitions.CURRENT_TIMESTAMP =>
+            assert(args.isEmpty)
+            CurrentTimestamp()
+
+          case FunctionDefinitions.LOCAL_TIME =>
+            assert(args.isEmpty)
+            LocalTime()
+
+          case FunctionDefinitions.LOCAL_TIMESTAMP =>
+            assert(args.isEmpty)
+            LocalTimestamp()
+
+          case FunctionDefinitions.QUARTER =>
+            assert(args.size == 1)
+            Quarter(args.head.accept(this))
+
+          case FunctionDefinitions.TEMPORAL_OVERLAPS =>
+            assert(args.size == 4)
+            TemporalOverlaps(
+              args.head.accept(this),
+              args(1).accept(this),
+              args(2).accept(this),
+              args.last.accept(this))
+
+          case FunctionDefinitions.DATE_TIME_PLUS =>
+            assert(args.size == 2)
+            Plus(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.DATE_FORMAT =>
+            assert(args.size == 2)
+            DateFormat(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.TIMESTAMP_DIFF =>
+            assert(args.size == 3)
+            TimestampDiff(args.head.accept(this), args(1).accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.TEMPORAL_FLOOR =>
+            assert(args.size == 2)
+            TemporalFloor(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.TEMPORAL_CEIL =>
+            assert(args.size == 2)
+            TemporalCeil(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.AT =>
+            assert(args.size == 2)
+            ItemAt(args.head.accept(this), args.last.accept(this))
+
+          case FunctionDefinitions.CARDINALITY =>
+            assert(args.size == 1)
+            Cardinality(args.head.accept(this))
+
+          case FunctionDefinitions.ARRAY =>
+            ArrayConstructor(args.map(_.accept(this)))
+
+          case FunctionDefinitions.ARRAY_ELEMENT =>
+            assert(args.size == 1)
+            ArrayElement(args.head.accept(this))
+
+          case FunctionDefinitions.MAP =>
+            MapConstructor(args.map(_.accept(this)))
+
+          case FunctionDefinitions.ROW =>
+            RowConstructor(args.map(_.accept(this)))
+
+          case FunctionDefinitions.WIN_START =>
+            assert(args.size == 1)
+            WindowStart(args.head.accept(this))
+
+          case FunctionDefinitions.WIN_END =>
+            assert(args.size == 1)
+            WindowEnd(args.head.accept(this))
+
+          case FunctionDefinitions.ASC =>
+            assert(args.size == 1)
+            Asc(args.head.accept(this))
+
+          case FunctionDefinitions.DESC =>
+            assert(args.size == 1)
+            Desc(args.head.accept(this))
+
+          case FunctionDefinitions.MD5 =>
+            assert(args.size == 1)
+            Md5(args.head.accept(this))
+
+          case FunctionDefinitions.SHA1 =>
+            assert(args.size == 1)
+            Sha1(args.head.accept(this))
+
+          case FunctionDefinitions.SHA224 =>
+            assert(args.size == 1)
+            Sha224(args.head.accept(this))
+
+          case FunctionDefinitions.SHA256 =>
+            assert(args.size == 1)
+            Sha256(args.head.accept(this))
+
+          case FunctionDefinitions.SHA384 =>
+            assert(args.size == 1)
+            Sha384(args.head.accept(this))
+
+          case FunctionDefinitions.SHA512 =>
+            assert(args.size == 1)
+            Sha512(args.head.accept(this))
+
+          case FunctionDefinitions.SHA2 =>
+            assert(args.size == 2)
+            Sha2(args.head.accept(this), args.last.accept(this))
 
           case FunctionDefinitions.PROC_TIME =>
             PlannerProctimeAttribute(args.head.accept(this))
@@ -85,14 +601,23 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
           case FunctionDefinitions.ROW_TIME =>
             PlannerRowtimeAttribute(args.head.accept(this))
 
+          case FunctionDefinitions.OVER_CALL =>
+            PlannerUnresolvedOverCall(
+              args.head.accept(this),
+              args.last.accept(this)
+            )
+
           case FunctionDefinitions.UNBOUNDED_RANGE =>
             PlannerUnboundedRange()
 
-          case FunctionDefinitions.OVER_CALL =>
-            PlannerUnresolvedOverCall(
-              args(0).accept(this),
-              args(1).accept(this)
-            )
+          case FunctionDefinitions.UNBOUNDED_ROW =>
+            PlannerUnboundedRow()
+
+          case FunctionDefinitions.CURRENT_RANGE =>
+            PlannerCurrentRange()
+
+          case FunctionDefinitions.CURRENT_ROW =>
+            PlannerCurrentRow()
 
           case _ => PlannerCall(e.getName, args.map(_.accept(this)))
         }
@@ -166,8 +691,13 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
 
   }
 
-  override def visitFieldReference(unresolvedFieldReference: FieldReference)
-  : PlannerExpression = {
-    PlannerUnresolvedFieldReference(unresolvedFieldReference.getName)
+  override def visitFieldReference(fieldReference: FieldReference): PlannerExpression = {
+    if (fieldReference.getResultType.isPresent) {
+      PlannerResolvedFieldReference(
+        fieldReference.getName,
+        fieldReference.getResultType.get())
+    } else {
+      PlannerUnresolvedFieldReference(fieldReference.getName)
+    }
   }
 }

@@ -25,7 +25,7 @@ import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.api._
 import org.apache.flink.table.expressions.ExpressionUtils._
 import org.apache.flink.table.expressions.FunctionDefinitions._
-import org.apache.flink.table.expressions.{Call, DefaultExpressionVisitor, DistinctAggExpression, Expression, ExpressionUtils, FieldReference, FunctionDefinition, FunctionDefinitions, ScalarFunctionDefinition, SymbolExpression, TableFunctionCall, TableFunctionDefinition, TableReference, TableSymbol, TimeIntervalUnit, TimePointUnit, TrimMode, TypeLiteral, UDAGGExpression, Literal => ELiteral}
+import org.apache.flink.table.expressions.{Call, DefaultExpressionVisitor, DistinctAggExpression, Expression, ExpressionUtils, FieldReference, FunctionDefinition, FunctionDefinitions, FunctionType, ScalarFunctionDefinition, SymbolExpression, TableFunctionCall, TableFunctionDefinition, TableReference, TableSymbol, TimeIntervalUnit, TimePointUnit, TrimMode, TypeLiteral, UDAGGExpression, Literal => ELiteral}
 import org.apache.flink.table.functions.{AggregateFunction, DistinctAggregateFunction, ScalarFunction, TableFunction}
 import org.apache.flink.table.plan.logical.LogicalTableFunctionCall
 
@@ -579,12 +579,12 @@ trait ImplicitExpressionOperations {
     */
   def over(alias: Expression): Expression = {
     expr match {
-      case call: Call if call.getFunc.isInstanceOf[FunctionDefinition] =>
+      case call: Call if call.getFunctionDefinition.isInstanceOf[FunctionDefinition] &&
+        call.getFunctionDefinition.getFunctionType == FunctionType.AGGREGATION =>
         ExpressionUtils.call(FunctionDefinitions.OVER_CALL, Seq(expr, alias))
       case _ => throw new TableException(
         "The over method can only using with aggregation call expression.")
     }
-
   }
 
   /**
@@ -1066,7 +1066,7 @@ trait ImplicitExpressionConversions {
 
   @deprecated("Please use Table.joinLateral() or Table.leftOuterJoinLateral() instead.", "1.8")
   implicit def tableFunctionCall2Table(tfc: TableFunctionCall): Table = {
-    val tfd = tfc.getFunc.asInstanceOf[TableFunctionDefinition]
+    val tfd = tfc.getFunctionDefinition.asInstanceOf[TableFunctionDefinition]
     new Table(
       tableEnv = null, // table environment will be set later.
       LogicalTableFunctionCall(

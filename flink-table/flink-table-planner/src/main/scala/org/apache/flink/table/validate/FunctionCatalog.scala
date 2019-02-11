@@ -25,11 +25,12 @@ import org.apache.calcite.sql.util.{ChainedSqlOperatorTable, ListSqlOperatorTabl
 import org.apache.calcite.sql._
 import org.apache.flink.table.api._
 import org.apache.flink.table.calcite.FlinkTypeFactory
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.sql.ScalarSqlFunctions
 import org.apache.flink.table.functions.utils.{AggSqlFunction, ScalarSqlFunction, TableSqlFunction}
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
-import org.apache.flink.table.typeutils.TimeIndicatorTypeInfo
+import org.apache.flink.table.plan.expressions.{PlannerAggFunctionCall, PlannerExpression, PlannerScalarFunctionCall, PlannerTableFunctionCall}
 
 import _root_.scala.collection.JavaConversions._
 import _root_.scala.collection.mutable

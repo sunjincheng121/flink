@@ -19,6 +19,7 @@
 package org.apache.flink.table.expressions;
 
 import org.apache.flink.annotation.PublicEvolving;
+import org.apache.flink.util.Preconditions;
 
 /**
  * The base class of function definition which can directly define built-in functions
@@ -27,13 +28,38 @@ import org.apache.flink.annotation.PublicEvolving;
 @PublicEvolving
 public class FunctionDefinition {
 	private final String name;
+	private final FunctionType functionType;
 
-	public FunctionDefinition(String name) {
-		this.name = name;
+	public FunctionDefinition(String name, FunctionType functionType) {
+		this.name = Preconditions.checkNotNull(name);
+		this.functionType = Preconditions.checkNotNull(functionType);
 	}
 
 	public String getName() {
 		return name;
 	}
 
+	public FunctionType getFunctionType() {
+		return functionType;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (!(obj instanceof FunctionDefinition)) {
+			return false;
+		}
+
+		FunctionDefinition other = (FunctionDefinition) obj;
+		return this == other || (other.getName().equalsIgnoreCase(name) && other.getFunctionType() == functionType);
+	}
+
+	@Override
+	public int hashCode() {
+		return name.hashCode() + 31 * functionType.hashCode();
+	}
+
+	@Override
+	public String toString() {
+		return name;
+	}
 }

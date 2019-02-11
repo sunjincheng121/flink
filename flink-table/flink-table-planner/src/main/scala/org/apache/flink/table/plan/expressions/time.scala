@@ -81,6 +81,10 @@ case class Extract(timeIntervalUnit: PlannerExpression, temporal: PlannerExpress
         SqlStdOperatorTable.EXTRACT,
         Seq(timeIntervalUnit.toRexNode, temporal.toRexNode))
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("extract", children))
+  }
 }
 
 abstract class TemporalCeilFloor(
@@ -134,6 +138,10 @@ case class TemporalFloor(
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.FLOOR, temporal.toRexNode, timeIntervalUnit.toRexNode)
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("temporalFloor", children))
+  }
 }
 
 case class TemporalCeil(
@@ -147,6 +155,10 @@ case class TemporalCeil(
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.CEIL, temporal.toRexNode, timeIntervalUnit.toRexNode)
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("temporalCeil", children))
   }
 }
 
@@ -187,18 +199,38 @@ abstract class CurrentTimePoint(
   }
 }
 
-case class CurrentDate() extends CurrentTimePoint(SqlTimeTypeInfo.DATE, local = false)
+case class CurrentDate() extends CurrentTimePoint(SqlTimeTypeInfo.DATE, local = false) {
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("currentDate", children))
+  }
+}
 
-case class CurrentTime() extends CurrentTimePoint(SqlTimeTypeInfo.TIME, local = false)
+case class CurrentTime() extends CurrentTimePoint(SqlTimeTypeInfo.TIME, local = false) {
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("currentTime", children))
+  }
+}
 
-case class CurrentTimestamp() extends CurrentTimePoint(SqlTimeTypeInfo.TIMESTAMP, local = false)
+case class CurrentTimestamp() extends CurrentTimePoint(SqlTimeTypeInfo.TIMESTAMP, local = false) {
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("currentTimestamp", children))
+  }
+}
 
-case class LocalTime() extends CurrentTimePoint(SqlTimeTypeInfo.TIME, local = true)
+case class LocalTime() extends CurrentTimePoint(SqlTimeTypeInfo.TIME, local = true) {
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("localTime", children))
+  }
+}
 
-case class LocalTimestamp() extends CurrentTimePoint(SqlTimeTypeInfo.TIMESTAMP, local = true)
+case class LocalTimestamp() extends CurrentTimePoint(SqlTimeTypeInfo.TIMESTAMP, local = true) {
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("localTimestamp", children))
+  }
+}
 
 /**
-  * Extracts the quarter of a year from a SQL date.
+  * E* xtracts the quarter of a year from a SQL date.
   */
 case class Quarter(child: PlannerExpression) extends UnaryPlannerExpression with InputTypeSpec {
 
@@ -221,6 +253,10 @@ case class Quarter(child: PlannerExpression) extends UnaryPlannerExpression with
         PlannerLiteral(TimeUnit.QUARTER.multiplier.longValue())),
       PlannerLiteral(1L)
     ).toRexNode
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("quarter", children))
   }
 }
 
@@ -329,6 +365,10 @@ case class TemporalOverlaps(
     val r = relBuilder.call(SqlStdOperatorTable.CASE, le, end, start)
     (l, r)
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("temporalOverlaps", children))
+  }
 }
 
 case class DateFormat(timestamp: PlannerExpression, format: PlannerExpression)
@@ -341,6 +381,10 @@ case class DateFormat(timestamp: PlannerExpression, format: PlannerExpression)
   override def toString: String = s"$timestamp.dateFormat($format)"
 
   override private[flink] def resultType = STRING_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("dateFormat", children))
+  }
 }
 
 case class TimestampDiff(
@@ -395,4 +439,8 @@ case class TimestampDiff(
   override def toString: String = s"timestampDiff(${children.mkString(", ")})"
 
   override private[flink] def resultType = INT_TYPE_INFO
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("timestampDiff", children))
+  }
 }

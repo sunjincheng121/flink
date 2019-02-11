@@ -22,6 +22,8 @@ import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.table.functions.TableFunction;
 
+import static org.apache.flink.table.expressions.FunctionType.TABLE_FUNCTION;
+
 /**
  * The function definition of user-defined table function.
  */
@@ -32,7 +34,7 @@ public final class TableFunctionDefinition extends FunctionDefinition {
 	private final TypeInformation resultType;
 
 	public TableFunctionDefinition(TableFunction tableFunction, TypeInformation resultType) {
-		super("Table Function");
+		super("Table Function", TABLE_FUNCTION);
 		this.tableFunction = tableFunction;
 		this.resultType = resultType;
 	}

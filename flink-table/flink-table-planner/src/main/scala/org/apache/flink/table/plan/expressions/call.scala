@@ -254,6 +254,10 @@ case class PlannerOverCall(
 
     ValidationSuccess
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
+    visitor.visitCall(PlannerCall("overCall", children))
+  }
 }
 
 /**
@@ -350,6 +354,8 @@ case class PlannerTableFunctionCall(
     this.aliases = Some(name.name +: extraNames.map(_.name))
     this
   }
+
+  def alias(): Option[Seq[String]] = aliases
 
   /**
     * Converts an API class to a logical node for planning.

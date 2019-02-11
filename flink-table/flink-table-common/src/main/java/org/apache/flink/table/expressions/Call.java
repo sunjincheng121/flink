@@ -20,6 +20,8 @@ package org.apache.flink.table.expressions;
 
 import org.apache.flink.annotation.PublicEvolving;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,12 +31,12 @@ import java.util.List;
 @PublicEvolving
 public class Call implements Expression {
 
-	private final FunctionDefinition func;
+	private final FunctionDefinition functionDefinition;
 
 	private List<Expression> args = new ArrayList<>();
 
-	protected Call(FunctionDefinition func, List<Expression> args) {
-		this.func = func;
+	public Call(FunctionDefinition functionDefinition, List<Expression> args) {
+		this.functionDefinition = functionDefinition;
 		this.args.addAll(args);
 	}
 
@@ -43,8 +45,8 @@ public class Call implements Expression {
 		return new ArrayList<>(this.args);
 	}
 
-	public FunctionDefinition getFunc() {
-		return func;
+	public FunctionDefinition getFunctionDefinition() {
+		return functionDefinition;
 	}
 
 	@Override
@@ -52,4 +54,8 @@ public class Call implements Expression {
 		return visitor.visitCall(this);
 	}
 
+	@Override
+	public String toString() {
+		return functionDefinition.getName() + "(" + StringUtils.join(args, ", ") + ")";
+	}
 }

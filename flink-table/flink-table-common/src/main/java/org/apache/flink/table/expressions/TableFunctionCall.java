@@ -54,5 +54,4 @@ public final class TableFunctionCall extends Call {
 	public <R> R accept(ExpressionVisitor<R> visitor) {
 		return visitor.visitCall(this);
 	}
-
 }

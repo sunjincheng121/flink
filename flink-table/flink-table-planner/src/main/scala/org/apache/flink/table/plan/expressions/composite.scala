@@ -38,6 +38,10 @@ case class PlannerFlattening(child: PlannerExpression) extends UnaryPlannerExpre
 
   override private[flink] def validateInput(): ValidationResult =
     ValidationFailure(s"Unresolved flattening of $child")
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("flatten", children))
+  }
 }
 
 case class PlannerGetCompositeField(child: PlannerExpression, key: Any)
@@ -103,5 +107,9 @@ case class PlannerGetCompositeField(child: PlannerExpression, key: Any)
       }
     case c: PlannerResolvedFieldReference => Some(s"${c.name}$$$key")
     case _ => None
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("getCompositeField", children))
   }
 }

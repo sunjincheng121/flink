@@ -19,7 +19,7 @@
 package org.apache.flink.table.expressions;
 
 /**
- * The base interface for all symbol, such as time interval unit, time point unit
+ * The base interface for all table symbol, such as time interval unit, time point unit
  * are all defined based on TableSymbol.
  */
 public interface TableSymbol {

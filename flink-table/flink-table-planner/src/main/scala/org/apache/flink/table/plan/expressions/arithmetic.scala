@@ -97,6 +97,10 @@ case class Plus(left: PlannerExpression, right: PlannerExpression) extends Binar
         s"but was '$left' : '${left.resultType}' and '$right' : '${right.resultType}'.")
     }
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("plus", children))
+  }
 }
 
 case class UnaryMinus(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -117,6 +121,10 @@ case class UnaryMinus(child: PlannerExpression) extends UnaryPlannerExpression {
       ValidationFailure(s"The arithmetic '$this' requires input that is numeric or a time " +
         s"interval type, but was '${child.resultType}'.")
     }
+  }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("minusPrefix", children))
   }
 }
 
@@ -141,22 +149,38 @@ case class Minus(left: PlannerExpression, right: PlannerExpression) extends Bina
         s"but was '$left' : '${left.resultType}' and '$right' : '${right.resultType}'.")
     }
   }
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("minus", children))
+  }
 }
 
 case class Div(left: PlannerExpression, right: PlannerExpression) extends BinaryArithmetic {
   override def toString = s"($left / $right)"
 
   private[flink] val sqlOperator = SqlStdOperatorTable.DIVIDE
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("divide", children))
+  }
 }
 
 case class Mul(left: PlannerExpression, right: PlannerExpression) extends BinaryArithmetic {
   override def toString = s"($left * $right)"
 
   private[flink] val sqlOperator = SqlStdOperatorTable.MULTIPLY
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("times", children))
+  }
 }
 
 case class Mod(left: PlannerExpression, right: PlannerExpression) extends BinaryArithmetic {
   override def toString = s"($left % $right)"
 
   private[flink] val sqlOperator = SqlStdOperatorTable.MOD
+
+  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
+    visitor.visitCall(PlannerCall("mod", children))
+  }
 }

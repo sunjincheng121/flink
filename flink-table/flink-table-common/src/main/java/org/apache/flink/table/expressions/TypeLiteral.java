@@ -25,7 +25,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * TypeLiteral which can wrap the TypeInformation.
+ * The type literal which can wrap the TypeInformation.
  */
 @PublicEvolving
 public final class TypeLiteral implements Expression {
@@ -49,5 +49,4 @@ public final class TypeLiteral implements Expression {
 	public <R> R accept(ExpressionVisitor<R> visitor) {
 		return visitor.visitTypeLiteral(this);
 	}
-
 }
