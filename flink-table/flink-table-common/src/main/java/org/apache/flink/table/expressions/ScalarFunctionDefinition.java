@@ -29,7 +29,7 @@ import static org.apache.flink.table.expressions.FunctionType.OTHER;
 @PublicEvolving
 public final class ScalarFunctionDefinition extends FunctionDefinition {
 
-	private ScalarFunction scalarFunction;
+	private final ScalarFunction scalarFunction;
 
 	public ScalarFunctionDefinition(ScalarFunction scalarFunction) {
 		super("Scalar Function", OTHER);

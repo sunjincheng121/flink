@@ -28,7 +28,7 @@ import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.`type`.SqlTypeName.{BIGINT, INTEGER, VARCHAR}
 import org.apache.calcite.sql.fun.SqlStdOperatorTable
 import org.apache.calcite.util.{DateString, TimeString, TimestampString}
-import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.expressions.DefaultExpressionVisitor
 import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.plan.util.{RexNodeToExpressionConverter, RexProgramExtractor}
 import org.apache.flink.table.utils.InputTypeBuilder.inputOf
@@ -57,8 +57,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
 
     val firstExp = ExpressionParser.parseExpression("id > 6")
     val secondExp = ExpressionParser.parseExpression("amount * price < 100")
-    val expected: Array[Expression] = Array(firstExp, secondExp)
-      .map(_.accept(new DefaultPlannerExpressionVisitor))
+    val expected: Array[PlannerExpression] = Array(firstExp, secondExp)
 
     val (convertedExpressions, unconvertedRexNodes) =
       RexProgramExtractor.extractConjunctiveConditions(
@@ -68,7 +67,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
 
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions)
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -94,11 +93,10 @@ class RexProgramExtractorTest extends RexProgramTestBase {
         relBuilder,
         functionCatalog)
 
-    val expected: Array[Expression] = Array(ExpressionParser.parseExpression("amount >= id"))
-      .map(_.accept(new DefaultPlannerExpressionVisitor))
+    val expected: Array[PlannerExpression] = Array(ExpressionParser.parseExpression("amount >= id"))
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions)
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -149,14 +147,13 @@ class RexProgramExtractorTest extends RexProgramTestBase {
         relBuilder,
         functionCatalog)
 
-    val expected: Array[Expression] = Array(
+    val expected: Array[PlannerExpression] = Array(
       ExpressionParser.parseExpression("amount < 100 || price == 100 || price === 200"),
       ExpressionParser.parseExpression("id > 100 || price == 100 || price === 200"),
       ExpressionParser.parseExpression("!(amount <= id)"))
-      .map(_.accept(new DefaultPlannerExpressionVisitor))
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions)
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -193,20 +190,19 @@ class RexProgramExtractorTest extends RexProgramTestBase {
 
     val expanded = program.expandLocalRef(program.getCondition)
 
-    var convertedExpressions = new mutable.ArrayBuffer[Expression]
+    var convertedExpressions = new mutable.ArrayBuffer[PlannerExpression]
     val unconvertedRexNodes = new mutable.ArrayBuffer[RexNode]
     val inputNames = program.getInputRowType.getFieldNames.asScala.toArray
     val converter = new RexNodeToExpressionConverter(inputNames, functionCatalog)
 
     expanded.accept(converter) match {
       case Some(expression) =>
-        convertedExpressions += expression
+        convertedExpressions += expression.accept(new DefaultExpressionVisitor)
       case None => unconvertedRexNodes += expanded
     }
 
-    val expected: Array[Expression] = Array(
+    val expected: Array[PlannerExpression] = Array(
       ExpressionParser.parseExpression("amount < 100 && id > 100 && price === 100 && amount <= id"))
-      .map(_.accept(new DefaultPlannerExpressionVisitor))
 
     assertExpressionArrayEquals(
       expected,
@@ -244,24 +240,24 @@ class RexProgramExtractorTest extends RexProgramTestBase {
       functionCatalog)
 
 
-    val expected = Array(
+    val expected = Array[PlannerExpression](
       EqualTo(
-        PlannerUnresolvedFieldReference("timestamp_col"),
-        PlannerLiteral(Timestamp.valueOf("2017-09-10 14:23:01.245"))
+        UnresolvedFieldReference("timestamp_col"),
+        Literal(Timestamp.valueOf("2017-09-10 14:23:01.245"))
       ),
       EqualTo(
-        PlannerUnresolvedFieldReference("date_col"),
-        PlannerLiteral(Date.valueOf("2017-09-12"))
+        UnresolvedFieldReference("date_col"),
+        Literal(Date.valueOf("2017-09-12"))
       ),
       EqualTo(
-        PlannerUnresolvedFieldReference("time_col"),
-        PlannerLiteral(Time.valueOf("14:23:01"))
+        UnresolvedFieldReference("time_col"),
+        Literal(Time.valueOf("14:23:01"))
       )
-    ).map(_.accept(new DefaultPlannerExpressionVisitor))
+    )
 
     assertExpressionArrayEquals(
       expected,
-      converted)
+      converted.map(_.accept(new DefaultExpressionVisitor)))
   }
 
     @Test
@@ -315,7 +311,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
         relBuilder,
         functionCatalog)
 
-    val expected: Array[Expression] = Array(
+    val expected: Array[PlannerExpression] = Array(
       ExpressionParser.parseExpression("amount < id"),
       ExpressionParser.parseExpression("amount <= id"),
       ExpressionParser.parseExpression("amount <> id"),
@@ -327,10 +323,10 @@ class RexProgramExtractorTest extends RexProgramTestBase {
       ExpressionParser.parseExpression("amount * id == 100"),
       ExpressionParser.parseExpression("amount / id == 100"),
       ExpressionParser.parseExpression("-amount == 100")
-    ).map(_.accept(new DefaultPlannerExpressionVisitor))
+    )
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions)
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -378,13 +374,13 @@ class RexProgramExtractorTest extends RexProgramTestBase {
         relBuilder,
         functionCatalog)
 
-    val expected: Array[Expression] = Array(
-      GreaterThan(Sum(PlannerUnresolvedFieldReference("amount")), PlannerLiteral(100)),
-      EqualTo(Min(PlannerUnresolvedFieldReference("id")), PlannerLiteral(100))
-    ).map(_.accept(new DefaultPlannerExpressionVisitor))
+    val expected: Array[PlannerExpression] = Array(
+      GreaterThan(Sum(UnresolvedFieldReference("amount")), Literal(100)),
+      EqualTo(Min(UnresolvedFieldReference("id")), Literal(100))
+    )
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions)
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -427,12 +423,12 @@ class RexProgramExtractorTest extends RexProgramTestBase {
         relBuilder,
         functionCatalog)
 
-    val expected: Array[Expression] = Array(
+    val expected: Array[PlannerExpression] = Array(
       ExpressionParser.parseExpression("amount <= id")
-    ).map(_.accept(new DefaultPlannerExpressionVisitor))
+    )
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions)
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(2, unconvertedRexNodes.length)
     assertEquals(">(CAST($2):BIGINT NOT NULL, 100)", unconvertedRexNodes(0).toString)
     assertEquals("OR(>(CAST($2):BIGINT NOT NULL, 100), <=($2, $1))",
@@ -640,8 +636,8 @@ class RexProgramExtractorTest extends RexProgramTestBase {
   }
 
   private def assertExpressionArrayEquals(
-      expected: Array[Expression],
-      actual: Array[Expression]) = {
+      expected: Array[PlannerExpression],
+      actual: Array[PlannerExpression]) = {
     val sortedExpected = expected.sortBy(e => e.toString)
     val sortedActual = actual.sortBy(e => e.toString)
 

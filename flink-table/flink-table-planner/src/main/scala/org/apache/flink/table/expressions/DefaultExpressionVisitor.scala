@@ -20,6 +20,7 @@ package org.apache.flink.table.expressions
 
 import org.apache.flink.table.api._
 import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.plan.expressions.{Call => PlannerCall, Literal => PlannerLiteral, DistinctAgg => PlannerDistinctAgg, TableFunctionCall => PlannerTableFunctionCall, TableReference => PlannerTableReference}
 
 import _root_.scala.collection.JavaConverters._
 
@@ -35,7 +36,7 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
 
     func match {
       case e: ScalarFunctionDefinition =>
-        PlannerScalarFunctionCall(e.getScalarFunction, args.map(_.accept(this)))
+        ScalarFunctionCall(e.getScalarFunction, args.map(_.accept(this)))
 
       case e: TableFunctionDefinition =>
         val tfc = PlannerTableFunctionCall(
@@ -47,7 +48,7 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
         tfc
 
       case aggFuncDef: AggregateFunctionDefinition =>
-        PlannerAggFunctionCall(
+        AggFunctionCall(
           aggFuncDef.getAggregateFunction,
           aggFuncDef.getResultTypeInfo,
           aggFuncDef.getAccumulatorTypeInfo,
@@ -57,7 +58,7 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
         e match {
           case FunctionDefinitions.CAST =>
             assert(args.size == 2)
-            PlannerCast(args.head.accept(this), args.last.asInstanceOf[TypeLiteral].getType)
+            Cast(args.head.accept(this), args.last.asInstanceOf[TypeLiteral].getType)
 
           case FunctionDefinitions.AS =>
             assert(args.size >= 2)
@@ -65,15 +66,15 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
             val name = args(1).asInstanceOf[Literal].getValue.asInstanceOf[String]
             val extraNames =
               args.drop(1).drop(1).map(e => e.asInstanceOf[Literal].getValue.asInstanceOf[String])
-            PlannerAlias(child.accept(this), name, extraNames)
+            Alias(child.accept(this), name, extraNames)
 
           case FunctionDefinitions.FLATTEN =>
             assert(args.size == 1)
-            PlannerFlattening(args.head.accept(this))
+            Flattening(args.head.accept(this))
 
           case FunctionDefinitions.GET_COMPOSITE_FIELD =>
             assert(args.size == 2)
-            PlannerGetCompositeField(args.head.accept(this),
+            GetCompositeField(args.head.accept(this),
               args.last.asInstanceOf[Literal].getValue)
 
           case FunctionDefinitions.AND =>
@@ -113,7 +114,7 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
             NotEqualTo(args.head.accept(this), args.last.accept(this))
 
           case FunctionDefinitions.IN =>
-            PlannerIn(args.head.accept(this), args.slice(1, args.size).map(_.accept(this)))
+            In(args.head.accept(this), args.slice(1, args.size).map(_.accept(this)))
 
           case FunctionDefinitions.IS_NULL =>
             assert(args.size == 1)
@@ -596,28 +597,28 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
             Sha2(args.head.accept(this), args.last.accept(this))
 
           case FunctionDefinitions.PROC_TIME =>
-            PlannerProctimeAttribute(args.head.accept(this))
+            ProctimeAttribute(args.head.accept(this))
 
           case FunctionDefinitions.ROW_TIME =>
-            PlannerRowtimeAttribute(args.head.accept(this))
+            RowtimeAttribute(args.head.accept(this))
 
           case FunctionDefinitions.OVER_CALL =>
-            PlannerUnresolvedOverCall(
+            UnresolvedOverCall(
               args.head.accept(this),
               args.last.accept(this)
             )
 
           case FunctionDefinitions.UNBOUNDED_RANGE =>
-            PlannerUnboundedRange()
+            UnboundedRange()
 
           case FunctionDefinitions.UNBOUNDED_ROW =>
-            PlannerUnboundedRow()
+            UnboundedRow()
 
           case FunctionDefinitions.CURRENT_RANGE =>
-            PlannerCurrentRange()
+            CurrentRange()
 
           case FunctionDefinitions.CURRENT_ROW =>
-            PlannerCurrentRow()
+            CurrentRow()
 
           case _ => PlannerCall(e.getName, args.map(_.accept(this)))
         }
@@ -674,7 +675,7 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
     if (!literal.getType.isPresent) {
       PlannerLiteral(literal.getValue)
     } else if (literal.getValue == null) {
-      PlannerNull(literal.getType.get())
+      Null(literal.getType.get())
     } else {
       PlannerLiteral(literal.getValue, literal.getType.get())
     }
@@ -693,11 +694,11 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
 
   override def visitFieldReference(fieldReference: FieldReference): PlannerExpression = {
     if (fieldReference.getResultType.isPresent) {
-      PlannerResolvedFieldReference(
+      ResolvedFieldReference(
         fieldReference.getName,
         fieldReference.getResultType.get())
     } else {
-      PlannerUnresolvedFieldReference(fieldReference.getName)
+      UnresolvedFieldReference(fieldReference.getName)
     }
   }
 }

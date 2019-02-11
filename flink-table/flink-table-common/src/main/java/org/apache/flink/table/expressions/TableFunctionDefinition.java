@@ -25,7 +25,7 @@ import org.apache.flink.table.functions.TableFunction;
 import static org.apache.flink.table.expressions.FunctionType.TABLE_FUNCTION;
 
 /**
- * The function definition of user-defined table function.
+ * The function definition for user-defined table function.
  */
 @PublicEvolving
 public final class TableFunctionDefinition extends FunctionDefinition {

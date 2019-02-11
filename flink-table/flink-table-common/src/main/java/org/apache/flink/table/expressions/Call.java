@@ -26,14 +26,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The function call expression.
+ * General expression for unresolved function calls. The function can be a built-in
+ * function or a user-defined function.
  */
 @PublicEvolving
 public class Call implements Expression {
 
 	private final FunctionDefinition functionDefinition;
 
-	private List<Expression> args = new ArrayList<>();
+	private final List<Expression> args = new ArrayList<>();
 
 	public Call(FunctionDefinition functionDefinition, List<Expression> args) {
 		this.functionDefinition = functionDefinition;

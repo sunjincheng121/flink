@@ -43,7 +43,7 @@ class LogicalCorrelateToTemporalTableJoinRule
 
   def extractNameFromTimeAttribute(timeAttribute: PlannerExpression): String = {
     timeAttribute match {
-      case PlannerResolvedFieldReference(name, _)
+      case ResolvedFieldReference(name, _)
         if timeAttribute.resultType == Types.LONG ||
           timeAttribute.resultType == Types.SQL_TIMESTAMP ||
           isTimeIndicatorType(timeAttribute.resultType) =>

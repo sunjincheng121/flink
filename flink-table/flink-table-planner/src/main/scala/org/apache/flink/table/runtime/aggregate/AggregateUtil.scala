@@ -367,7 +367,7 @@ object AggregateUtil {
       case TumblingGroupWindow(_, time, size) =>
         val timeFieldPos = getTimeFieldPosition(time, inputType, isParserCaseSensitive)
         size match {
-          case PlannerLiteral(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
+          case Literal(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
             (timeFieldPos, Some(value))
           case _ => (timeFieldPos, None)
         }
@@ -378,7 +378,7 @@ object AggregateUtil {
       case SlidingGroupWindow(_, time, size, slide) =>
         val timeFieldPos = getTimeFieldPosition(time, inputType, isParserCaseSensitive)
         size match {
-          case PlannerLiteral(_: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
+          case Literal(_: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
             // pre-tumble incremental aggregates on time-windows
             val timeFieldPos = getTimeFieldPosition(time, inputType, isParserCaseSensitive)
             val preTumblingSize = determineLargestTumblingSize(asLong(size), asLong(slide))
@@ -1171,12 +1171,12 @@ object AggregateUtil {
                 "Duplicate window end property encountered. This is a bug.")
             case WindowEnd(_) =>
               (s, Some(i), rt, i - 1)
-            case PlannerRowtimeAttribute(_) if rt.isDefined =>
+            case RowtimeAttribute(_) if rt.isDefined =>
               throw new TableException(
                 "Duplicate window rowtime property encountered. This is a bug.")
-            case PlannerRowtimeAttribute(_) =>
+            case RowtimeAttribute(_) =>
               (s, e, Some(i), i - 1)
-            case PlannerProctimeAttribute(_) =>
+            case ProctimeAttribute(_) =>
               // ignore this property, it will be null at the position later
               (s, e, rt, i - 1)
           }
@@ -1691,7 +1691,7 @@ object AggregateUtil {
       isParserCaseSensitive: Boolean): Int = {
 
     timeField match {
-      case PlannerResolvedFieldReference(name, _) =>
+      case ResolvedFieldReference(name, _) =>
         // get the RelDataType referenced by the time-field
         val relDataType = inputType.getFieldList.filter { r =>
           if (isParserCaseSensitive) {
@@ -1714,8 +1714,8 @@ object AggregateUtil {
   }
 
   private[flink] def asLong(expr: PlannerExpression): Long = expr match {
-    case PlannerLiteral(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) => value
-    case PlannerLiteral(value: Long, RowIntervalTypeInfo.INTERVAL_ROWS) => value
+    case Literal(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) => value
+    case Literal(value: Long, RowIntervalTypeInfo.INTERVAL_ROWS) => value
     case _ => throw new IllegalArgumentException()
   }
 

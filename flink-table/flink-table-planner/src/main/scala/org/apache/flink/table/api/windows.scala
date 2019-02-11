@@ -36,52 +36,36 @@ case class OverWindow(
     private[flink] val preceding: PlannerExpression,
     private[flink] val following: PlannerExpression) extends UnresolvedOverWindow
 
-case class PlannerCurrentRow() extends PlannerExpression {
+case class CurrentRow() extends PlannerExpression {
   override private[flink] def resultType = RowIntervalTypeInfo.INTERVAL_ROWS
 
   override private[flink] def children = Seq()
 
   override def toString = "CURRENT ROW"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("currentRow", children))
-  }
 }
 
-case class PlannerCurrentRange() extends PlannerExpression {
+case class CurrentRange() extends PlannerExpression {
   override private[flink] def resultType = TimeIntervalTypeInfo.INTERVAL_MILLIS
 
   override private[flink] def children = Seq()
 
   override def toString = "CURRENT RANGE"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("currentRange", children))
-  }
 }
 
-case class PlannerUnboundedRow() extends PlannerExpression {
+case class UnboundedRow() extends PlannerExpression {
   override private[flink] def resultType = RowIntervalTypeInfo.INTERVAL_ROWS
 
   override private[flink] def children = Seq()
 
   override def toString = "UNBOUNDED ROW"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("unboundedRow", children))
-  }
 }
 
-case class PlannerUnboundedRange() extends PlannerExpression {
+case class UnboundedRange() extends PlannerExpression {
   override private[flink] def resultType = TimeIntervalTypeInfo.INTERVAL_MILLIS
 
   override private[flink] def children = Seq()
 
   override def toString = "UNBOUNDED RANGE"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("unboundedRange", children))
-  }
 }
 
 case class PartitionedOver(partitionBy: Array[PlannerExpression]) {
@@ -125,7 +109,7 @@ case class OverWindowWithOrderBy(partitionBy: Seq[PlannerExpression], orderBy: P
     * @return over window
     */
   def as(alias: PlannerExpression): OverWindow = {
-    OverWindow(alias, partitionBy, orderBy, PlannerUnboundedRange(), PlannerCurrentRange())
+    OverWindow(alias, partitionBy, orderBy, UnboundedRange(), CurrentRange())
   }
 }
 
@@ -158,9 +142,9 @@ class OverWindowWithPreceding(
     // set following to CURRENT_ROW / CURRENT_RANGE if not defined
     if (null == following) {
       if (preceding.resultType.isInstanceOf[RowIntervalTypeInfo]) {
-        following = PlannerCurrentRow()
+        following = CurrentRow()
       } else {
-        following = PlannerCurrentRange()
+        following = CurrentRange()
       }
     }
     OverWindow(alias, partitionBy, orderBy, preceding, following)

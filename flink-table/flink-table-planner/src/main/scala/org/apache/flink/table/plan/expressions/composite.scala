@@ -29,7 +29,7 @@ import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, Val
   * Flattening of composite types. All flattenings are resolved into
   * `GetCompositeField` expressions.
   */
-case class PlannerFlattening(child: PlannerExpression) extends UnaryPlannerExpression {
+case class Flattening(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override def toString = s"$child.flatten()"
 
@@ -38,13 +38,9 @@ case class PlannerFlattening(child: PlannerExpression) extends UnaryPlannerExpre
 
   override private[flink] def validateInput(): ValidationResult =
     ValidationFailure(s"Unresolved flattening of $child")
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("flatten", children))
-  }
 }
 
-case class PlannerGetCompositeField(child: PlannerExpression, key: Any)
+case class GetCompositeField(child: PlannerExpression, key: Any)
   extends UnaryPlannerExpression {
 
   private var fieldIndex: Option[Int] = None
@@ -98,18 +94,14 @@ case class PlannerGetCompositeField(child: PlannerExpression, key: Any)
     * Gives a meaningful alias if possible (e.g. a$mypojo$field).
     */
   private[flink] def aliasName(): Option[String] = child match {
-    case gcf: PlannerGetCompositeField =>
+    case gcf: GetCompositeField =>
       val alias = gcf.aliasName()
       if (alias.isDefined) {
         Some(s"${alias.get}$$$key")
       } else {
         None
       }
-    case c: PlannerResolvedFieldReference => Some(s"${c.name}$$$key")
+    case c: ResolvedFieldReference => Some(s"${c.name}$$$key")
     case _ => None
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("getCompositeField", children))
   }
 }

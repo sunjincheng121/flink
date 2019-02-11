@@ -35,10 +35,6 @@ case class Md5(child: PlannerExpression) extends UnaryPlannerExpression with Inp
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.MD5, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("md5", children))
-  }
 }
 
 case class Sha1(child: PlannerExpression) extends UnaryPlannerExpression with InputTypeSpec {
@@ -51,10 +47,6 @@ case class Sha1(child: PlannerExpression) extends UnaryPlannerExpression with In
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.SHA1, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("sha1", children))
   }
 }
 
@@ -69,10 +61,6 @@ case class Sha224(child: PlannerExpression) extends UnaryPlannerExpression with 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.SHA224, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("sha224", children))
-  }
 }
 
 case class Sha256(child: PlannerExpression) extends UnaryPlannerExpression with InputTypeSpec {
@@ -85,10 +73,6 @@ case class Sha256(child: PlannerExpression) extends UnaryPlannerExpression with 
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.SHA256, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("sha256", children))
   }
 }
 
@@ -103,10 +87,6 @@ case class Sha384(child: PlannerExpression) extends UnaryPlannerExpression with 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.SHA384, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("sha384", children))
-  }
 }
 
 case class Sha512(child: PlannerExpression) extends UnaryPlannerExpression with InputTypeSpec {
@@ -119,10 +99,6 @@ case class Sha512(child: PlannerExpression) extends UnaryPlannerExpression with 
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.SHA512, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("sha512", children))
   }
 }
 
@@ -141,10 +117,6 @@ case class Sha2(child: PlannerExpression, hashLength: PlannerExpression)
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.SHA2, left.toRexNode, right.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("sha2", children))
   }
 }
 

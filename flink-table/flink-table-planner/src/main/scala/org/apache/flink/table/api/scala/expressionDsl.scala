@@ -579,8 +579,7 @@ trait ImplicitExpressionOperations {
     */
   def over(alias: Expression): Expression = {
     expr match {
-      case call: Call if call.getFunctionDefinition.isInstanceOf[FunctionDefinition] &&
-        call.getFunctionDefinition.getFunctionType == FunctionType.AGGREGATION =>
+      case call: Call if call.getFunctionDefinition.getFunctionType == FunctionType.AGGREGATION =>
         ExpressionUtils.call(FunctionDefinitions.OVER_CALL, Seq(expr, alias))
       case _ => throw new TableException(
         "The over method can only using with aggregation call expression.")

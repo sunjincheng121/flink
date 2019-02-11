@@ -20,7 +20,7 @@ package org.apache.flink.table.api.stream.table
 
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.plan.expressions.PlannerWindowReference
+import org.apache.flink.table.plan.expressions.WindowReference
 import org.apache.flink.table.plan.logical.TumblingGroupWindow
 import org.apache.flink.table.utils.TableTestUtil._
 import org.apache.flink.table.utils.TableTestBase
@@ -52,7 +52,7 @@ class CalcTest extends TableTestBase {
           term("select", "c", "a", "rowtime", "UPPER(c) AS $f3")
         ),
         term("window",
-          TumblingGroupWindow(PlannerWindowReference("w"), 'rowtime, 5.millis)),
+          TumblingGroupWindow(WindowReference("w"), 'rowtime, 5.millis)),
         term("select", "COUNT($f3) AS TMP_0", "SUM(a) AS TMP_1")
       )
 
@@ -80,7 +80,7 @@ class CalcTest extends TableTestBase {
           ),
           term("groupBy", "b"),
           term("window",
-            TumblingGroupWindow(PlannerWindowReference("w"), 'rowtime, 5.millis)),
+            TumblingGroupWindow(WindowReference("w"), 'rowtime, 5.millis)),
           term("select", "b", "COUNT($f4) AS TMP_0", "SUM(a) AS TMP_1")
         ),
         term("select", "TMP_0", "TMP_1", "b")

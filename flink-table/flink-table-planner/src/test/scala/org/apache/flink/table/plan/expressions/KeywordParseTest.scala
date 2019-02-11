@@ -33,30 +33,30 @@ class KeywordParseTest extends ExpressionTestBase {
   def testKeyword(): Unit = {
     Assert.assertEquals(
       ExpressionParser.parseExpression("f0.asc"),
-      Asc(PlannerUnresolvedFieldReference("f0")))
+      Asc(UnresolvedFieldReference("f0")))
     Assert.assertEquals(
       ExpressionParser.parseExpression("f0.asc()"),
-      Asc(PlannerUnresolvedFieldReference("f0")))
+      Asc(UnresolvedFieldReference("f0")))
   }
 
   @Test
   def testKeywordAsPrefixInFunctionName(): Unit = {
     Assert.assertEquals(
-      ExpressionParser.parseExpression("f0.ascii()").asInstanceOf[PlannerCall].functionName,
+      ExpressionParser.parseExpression("f0.ascii()").asInstanceOf[Call].functionName,
       "ASCII")
   }
 
   @Test
   def testKeywordAsInfixInFunctionName(): Unit = {
     Assert.assertEquals(
-      ExpressionParser.parseExpression("f0.iiascii()").asInstanceOf[PlannerCall].functionName,
+      ExpressionParser.parseExpression("f0.iiascii()").asInstanceOf[Call].functionName,
       "IIASCII")
   }
 
   @Test
   def testKeywordAsSuffixInFunctionName(): Unit = {
     Assert.assertEquals(
-      ExpressionParser.parseExpression("f0.iiasc()").asInstanceOf[PlannerCall].functionName,
+      ExpressionParser.parseExpression("f0.iiasc()").asInstanceOf[Call].functionName,
       "IIASC")
   }
 

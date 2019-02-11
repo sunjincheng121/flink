@@ -31,28 +31,28 @@ import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, SqlTimeTypeInfo, Typ
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeInfo}
 
-object PlannerLiteral {
+object Literal {
   private[flink] val UTC = TimeZone.getTimeZone("UTC")
 
-  private[flink] def apply(l: Any): PlannerLiteral = l match {
-    case i: Int => PlannerLiteral(i, BasicTypeInfo.INT_TYPE_INFO)
-    case s: Short => PlannerLiteral(s, BasicTypeInfo.SHORT_TYPE_INFO)
-    case b: Byte => PlannerLiteral(b, BasicTypeInfo.BYTE_TYPE_INFO)
-    case l: Long => PlannerLiteral(l, BasicTypeInfo.LONG_TYPE_INFO)
-    case d: Double => PlannerLiteral(d, BasicTypeInfo.DOUBLE_TYPE_INFO)
-    case f: Float => PlannerLiteral(f, BasicTypeInfo.FLOAT_TYPE_INFO)
-    case str: String => PlannerLiteral(str, BasicTypeInfo.STRING_TYPE_INFO)
-    case bool: Boolean => PlannerLiteral(bool, BasicTypeInfo.BOOLEAN_TYPE_INFO)
-    case javaDec: java.math.BigDecimal => PlannerLiteral(javaDec, BasicTypeInfo.BIG_DEC_TYPE_INFO)
+  private[flink] def apply(l: Any): Literal = l match {
+    case i: Int => Literal(i, BasicTypeInfo.INT_TYPE_INFO)
+    case s: Short => Literal(s, BasicTypeInfo.SHORT_TYPE_INFO)
+    case b: Byte => Literal(b, BasicTypeInfo.BYTE_TYPE_INFO)
+    case l: Long => Literal(l, BasicTypeInfo.LONG_TYPE_INFO)
+    case d: Double => Literal(d, BasicTypeInfo.DOUBLE_TYPE_INFO)
+    case f: Float => Literal(f, BasicTypeInfo.FLOAT_TYPE_INFO)
+    case str: String => Literal(str, BasicTypeInfo.STRING_TYPE_INFO)
+    case bool: Boolean => Literal(bool, BasicTypeInfo.BOOLEAN_TYPE_INFO)
+    case javaDec: java.math.BigDecimal => Literal(javaDec, BasicTypeInfo.BIG_DEC_TYPE_INFO)
     case scalaDec: scala.math.BigDecimal =>
-      PlannerLiteral(scalaDec.bigDecimal, BasicTypeInfo.BIG_DEC_TYPE_INFO)
-    case sqlDate: Date => PlannerLiteral(sqlDate, SqlTimeTypeInfo.DATE)
-    case sqlTime: Time => PlannerLiteral(sqlTime, SqlTimeTypeInfo.TIME)
-    case sqlTimestamp: Timestamp => PlannerLiteral(sqlTimestamp, SqlTimeTypeInfo.TIMESTAMP)
+      Literal(scalaDec.bigDecimal, BasicTypeInfo.BIG_DEC_TYPE_INFO)
+    case sqlDate: Date => Literal(sqlDate, SqlTimeTypeInfo.DATE)
+    case sqlTime: Time => Literal(sqlTime, SqlTimeTypeInfo.TIME)
+    case sqlTimestamp: Timestamp => Literal(sqlTimestamp, SqlTimeTypeInfo.TIMESTAMP)
   }
 }
 
-case class PlannerLiteral(value: Any, resultType: TypeInformation[_])
+case class Literal(value: Any, resultType: TypeInformation[_])
   extends LeafPlannerExpression {
   override def toString: String = resultType match {
     case _: BasicTypeInfo[_] => value.toString
@@ -123,7 +123,7 @@ case class PlannerLiteral(value: Any, resultType: TypeInformation[_])
   }
 }
 
-case class PlannerNull(resultType: TypeInformation[_]) extends LeafPlannerExpression {
+case class Null(resultType: TypeInformation[_]) extends LeafPlannerExpression {
   override def toString = s"null"
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {

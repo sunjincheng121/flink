@@ -32,15 +32,15 @@ import org.apache.flink.table.validate._
   *
   * Expressions' resolution and transformation ([[resolveExpressions]]):
   *
-  * - translate [[PlannerUnresolvedFieldReference]] into [[PlannerResolvedFieldReference]]
+  * - translate [[UnresolvedFieldReference]] into [[ResolvedFieldReference]]
   *     using child operator's output
-  * - translate [[PlannerCall]](UnresolvedFunction) into solid Expression
+  * - translate [[Call]](UnresolvedFunction) into solid Expression
   * - generate alias names for query output
   * - ....
   *
   * LogicalNode validation ([[validate]]):
   *
-  * - check no [[PlannerUnresolvedFieldReference]] exists any more
+  * - check no [[UnresolvedFieldReference]] exists any more
   * - check if all expressions have children of needed type
   * - check each logical operator have desired input
   *
@@ -52,10 +52,10 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
   def resolveExpressions(tableEnv: TableEnvironment): LogicalNode = {
     // resolve references and function calls
     val exprResolved = expressionPostOrderTransform {
-      case u @ PlannerUnresolvedFieldReference(name) =>
+      case u @ UnresolvedFieldReference(name) =>
         // try resolve a field
         resolveReference(tableEnv, name).getOrElse(u)
-      case c @ PlannerCall(name, children) if c.childrenValid =>
+      case c @ Call(name, children) if c.childrenValid =>
         tableEnv.getFunctionCatalog.lookupFunction(name, children)
     }
 
@@ -66,7 +66,7 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
           val childType = child.resultType
           if (childType != tpe && TypeCoercion.canSafelyCast(childType, tpe)) {
             changed = true
-            PlannerCast(child, tpe)
+            Cast(child, tpe)
           } else {
             child
           }
@@ -115,7 +115,7 @@ abstract class LogicalNode extends TreeNode[LogicalNode] {
 
     // try to resolve a table
     tableEnv.scanInternal(Array(name)) match {
-      case Some(table) => Some(PlannerTableReference(name, table))
+      case Some(table) => Some(TableReference(name, table))
       case None => None
     }
   }

@@ -24,7 +24,7 @@ import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.typeutils.TypeCoercion
 import org.apache.flink.table.validate._
 
-case class PlannerCast(child: PlannerExpression, resultType: TypeInformation[_])
+case class Cast(child: PlannerExpression, resultType: TypeInformation[_])
   extends UnaryPlannerExpression {
 
   override def toString = s"$child.cast($resultType)"
@@ -51,9 +51,5 @@ case class PlannerCast(child: PlannerExpression, resultType: TypeInformation[_])
     } else {
       ValidationFailure(s"Unsupported cast from ${child.resultType} to $resultType")
     }
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("cast", children))
   }
 }

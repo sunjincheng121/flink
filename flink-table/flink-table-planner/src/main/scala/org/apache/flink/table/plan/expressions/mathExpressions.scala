@@ -39,10 +39,6 @@ case class Abs(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.ABS, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("abs", children))
-  }
 }
 
 case class Ceil(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -56,10 +52,6 @@ case class Ceil(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.CEIL, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("ceil", children))
-  }
 }
 
 case class Exp(child: PlannerExpression) extends UnaryPlannerExpression with InputTypeSpec {
@@ -71,10 +63,6 @@ case class Exp(child: PlannerExpression) extends UnaryPlannerExpression with Inp
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.EXP, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("exp", children))
   }
 }
 
@@ -90,10 +78,6 @@ case class Floor(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.FLOOR, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("floor", children))
-  }
 }
 
 case class Log10(child: PlannerExpression) extends UnaryPlannerExpression with InputTypeSpec {
@@ -105,10 +89,6 @@ case class Log10(child: PlannerExpression) extends UnaryPlannerExpression with I
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.LOG10, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("log10", children))
   }
 }
 
@@ -122,10 +102,6 @@ case class Log2(child: PlannerExpression) extends UnaryPlannerExpression with In
   }
 
   override def toString: String = s"log2($child)"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("log2", children))
-  }
 }
 
 case class Cosh(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -140,10 +116,6 @@ case class Cosh(child: PlannerExpression) extends UnaryPlannerExpression {
     TypeCheckUtils.assertNumericExpr(child.resultType, "Cosh")
 
   override def toString = s"cosh($child)"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("cosh", children))
-  }
 }
 
 case class Log(base: PlannerExpression, antilogarithm: PlannerExpression)
@@ -163,10 +135,6 @@ case class Log(base: PlannerExpression, antilogarithm: PlannerExpression)
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.LOG, children.map(_.toRexNode))
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("log", children))
-  }
 }
 
 object Log {
@@ -183,10 +151,6 @@ case class Ln(child: PlannerExpression) extends UnaryPlannerExpression with Inpu
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.LN, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("ln", children))
-  }
 }
 
 case class Power(left: PlannerExpression, right: PlannerExpression)
@@ -200,10 +164,6 @@ case class Power(left: PlannerExpression, right: PlannerExpression)
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.POWER, left.toRexNode, right.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("power", children))
   }
 }
 
@@ -219,10 +179,6 @@ case class Sinh(child: PlannerExpression) extends UnaryPlannerExpression {
   }
 
   override def toString = s"sinh($child)"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("sinh", children))
-  }
 }
 
 case class Sqrt(child: PlannerExpression) extends UnaryPlannerExpression with InputTypeSpec {
@@ -234,11 +190,7 @@ case class Sqrt(child: PlannerExpression) extends UnaryPlannerExpression with In
   override def toString: String = s"sqrt($child)"
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
-    relBuilder.call(SqlStdOperatorTable.POWER, child.toRexNode, PlannerLiteral(0.5).toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("sqrt", children))
+    relBuilder.call(SqlStdOperatorTable.POWER, child.toRexNode, Literal(0.5).toRexNode)
   }
 }
 
@@ -253,10 +205,6 @@ case class Sin(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.SIN, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("sin", children))
-  }
 }
 
 case class Cos(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -270,10 +218,6 @@ case class Cos(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.COS, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("cos", children))
-  }
 }
 
 case class Tan(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -286,10 +230,6 @@ case class Tan(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.TAN, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("tan", children))
   }
 }
 
@@ -305,10 +245,6 @@ case class Tanh(child: PlannerExpression) extends UnaryPlannerExpression {
     TypeCheckUtils.assertNumericExpr(child.resultType, "Tanh")
 
   override def toString = s"tanh($child)"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("tanh", children))
-  }
 }
 
 case class Cot(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -321,10 +257,6 @@ case class Cot(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.COT, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("cot", children))
   }
 }
 
@@ -339,10 +271,6 @@ case class Asin(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.ASIN, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("asin", children))
-  }
 }
 
 case class Acos(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -356,10 +284,6 @@ case class Acos(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.ACOS, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("acos", children))
-  }
 }
 
 case class Atan(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -372,10 +296,6 @@ case class Atan(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.ATAN, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("atan", children))
   }
 }
 
@@ -397,10 +317,6 @@ case class Atan2(y: PlannerExpression, x: PlannerExpression) extends BinaryPlann
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.ATAN2, left.toRexNode, right.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("atan2", children))
-  }
 }
 
 case class Degrees(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -413,10 +329,6 @@ case class Degrees(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.DEGREES, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("degrees", children))
   }
 }
 
@@ -431,10 +343,6 @@ case class Radians(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.RADIANS, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("radians", children))
-  }
 }
 
 case class Sign(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -447,10 +355,6 @@ case class Sign(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.SIGN, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("sign", children))
   }
 }
 
@@ -471,10 +375,6 @@ case class Round(left: PlannerExpression, right: PlannerExpression)
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.ROUND, left.toRexNode, right.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("round", children))
-  }
 }
 
 case class Pi() extends LeafPlannerExpression {
@@ -485,10 +385,6 @@ case class Pi() extends LeafPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.PI)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("pi", children))
-  }
 }
 
 case class E() extends LeafPlannerExpression {
@@ -498,10 +394,6 @@ case class E() extends LeafPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.E)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("e", children))
   }
 }
 
@@ -531,10 +423,6 @@ case class Rand(seed: PlannerExpression) extends PlannerExpression with InputTyp
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.RAND, children.map(_.toRexNode))
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("rand", children))
   }
 }
 
@@ -566,10 +454,6 @@ case class RandInteger(seed: PlannerExpression, bound: PlannerExpression)
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(SqlStdOperatorTable.RAND_INTEGER, children.map(_.toRexNode))
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("randInteger", children))
-  }
 }
 
 case class Bin(child: PlannerExpression) extends UnaryPlannerExpression {
@@ -582,10 +466,6 @@ case class Bin(child: PlannerExpression) extends UnaryPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.BIN, child.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("bin", children))
   }
 }
 
@@ -606,10 +486,6 @@ case class Hex(child: PlannerExpression) extends UnaryPlannerExpression {
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.HEX, child.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("hex", children))
-  }
 }
 
 case class UUID() extends LeafPlannerExpression {
@@ -619,10 +495,6 @@ case class UUID() extends LeafPlannerExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.UUID)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("uuid", children))
   }
 }
 
@@ -652,10 +524,6 @@ case class Truncate(base: PlannerExpression, num: PlannerExpression)
       }
     }
     TypeCheckUtils.assertNumericExpr(base.resultType, s"truncate base :$base")
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("truncate", children))
   }
 }
 

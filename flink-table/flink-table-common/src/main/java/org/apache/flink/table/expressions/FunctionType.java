@@ -18,9 +18,12 @@
 
 package org.apache.flink.table.expressions;
 
+import org.apache.flink.annotation.Internal;
+
 /**
- * Function type.
+ * The types used to identify the function.
  */
+@Internal
 public enum FunctionType {
 	LOGICAL,
 	COMPARISON,

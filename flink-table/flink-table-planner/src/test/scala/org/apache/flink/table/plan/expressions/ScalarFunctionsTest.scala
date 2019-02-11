@@ -19,7 +19,7 @@
 package org.apache.flink.table.plan.expressions
 
 import org.apache.flink.table.api.Types
-import org.apache.flink.table.api.scala._
+import org.apache.flink.table.api.scala.{Null => ApiNull, _}
 import org.apache.flink.table.expressions.{Expression, TimeIntervalUnit, TimePointUnit}
 import org.apache.flink.table.plan.expressions.utils.ScalarTypesTestBase
 import org.junit.Test
@@ -116,13 +116,13 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
       "null")
 
     testAllApis(
-      'f0.replace(Null(Types.STRING), ""),
+      'f0.replace(ApiNull(Types.STRING), ""),
       "f0.replace(Null(STRING), '')",
       "REPLACE(f0, NULLIF('', ''), '')",
       "null")
 
     testAllApis(
-      'f0.replace(" ", Null(Types.STRING)),
+      'f0.replace(" ", ApiNull(Types.STRING)),
       "f0.replace(' ', Null(STRING))",
       "REPLACE(f0, ' ', NULLIF('', ''))",
       "null")
@@ -441,7 +441,7 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
       "2A")
 
     testAllApis(
-      Null(Types.BYTE).hex(),
+      ApiNull(Types.BYTE).hex(),
       "hex(Null(BYTE))",
       "HEX(CAST(NULL AS TINYINT))",
       "null")
@@ -530,7 +530,7 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
   def testBin(): Unit = {
 
     testAllApis(
-      Null(Types.BYTE).bin(),
+      ApiNull(Types.BYTE).bin(),
       "bin(Null(BYTE))",
       "BIN((CAST(NULL AS TINYINT)))",
       "null")
@@ -649,7 +649,7 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
 
     // This test was added for the null literal problem in string expression parsing (FLINK-10463).
     testAllApis(
-      Null(Types.STRING).regexpReplace("oo|ar", 'f33),
+      ApiNull(Types.STRING).regexpReplace("oo|ar", 'f33),
       "Null(STRING).regexpReplace('oo|ar', f33)",
       "REGEXP_REPLACE(CAST(NULL AS VARCHAR), 'oo|ar', f33)",
       "null")
@@ -2640,7 +2640,7 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
     }
 
     testAllApis(
-      timestampDiff(TimePointUnit.DAY, Null(Types.SQL_TIMESTAMP),
+      timestampDiff(TimePointUnit.DAY, ApiNull(Types.SQL_TIMESTAMP),
         "2016-02-24 12:42:25".toTimestamp),
       "timestampDiff(DAY, Null(SQL_TIMESTAMP), '2016-02-24 12:42:25'.toTimestamp)",
       "TIMESTAMPDIFF(DAY, CAST(NULL AS TIMESTAMP), TIMESTAMP '2016-02-24 12:42:25')",
@@ -2649,7 +2649,7 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
 
     testAllApis(
       timestampDiff(TimePointUnit.DAY, "2016-02-24 12:42:25".toTimestamp,
-        Null(Types.SQL_TIMESTAMP)),
+        ApiNull(Types.SQL_TIMESTAMP)),
       "timestampDiff(DAY, '2016-02-24 12:42:25'.toTimestamp,  Null(SQL_TIMESTAMP))",
       "TIMESTAMPDIFF(DAY, TIMESTAMP '2016-02-24 12:42:25',  CAST(NULL AS TIMESTAMP))",
       "null"
@@ -2774,19 +2774,19 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
     }
 
     testAllApis(
-      "2016-02-24 12:42:25".toTimestamp + Null(Types.INTERVAL_MILLIS),
+      "2016-02-24 12:42:25".toTimestamp + ApiNull(Types.INTERVAL_MILLIS),
       "'2016-02-24 12:42:25'.toTimestamp + Null(INTERVAL_MILLIS)",
       "TIMESTAMPADD(HOUR, CAST(NULL AS INTEGER), TIMESTAMP '2016-02-24 12:42:25')",
       "null")
 
     testAllApis(
-      Null(Types.SQL_TIMESTAMP) + -200.hours,
+      ApiNull(Types.SQL_TIMESTAMP) + -200.hours,
       "Null(SQL_TIMESTAMP) + -200.hours",
       "TIMESTAMPADD(HOUR, -200, CAST(NULL AS TIMESTAMP))",
       "null")
 
     testAllApis(
-      Null(Types.SQL_TIMESTAMP) + 3.months,
+      ApiNull(Types.SQL_TIMESTAMP) + 3.months,
       "Null(SQL_TIMESTAMP) + 3.months",
       "TIMESTAMPADD(MONTH, 3, CAST(NULL AS TIMESTAMP))",
       "null")
@@ -2822,12 +2822,12 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
       "timestampadd(SECOND, 1, date '2016-06-15')",
       "2016-06-15 00:00:01.0")
 
-    testAllApis(Null(Types.SQL_TIMESTAMP) + 1.second,
+    testAllApis(ApiNull(Types.SQL_TIMESTAMP) + 1.second,
       "Null(SQL_TIMESTAMP) + 1.second",
       "timestampadd(SECOND, 1, cast(null as date))",
       "null")
 
-    testAllApis(Null(Types.SQL_TIMESTAMP) + 1.day,
+    testAllApis(ApiNull(Types.SQL_TIMESTAMP) + 1.day,
       "Null(SQL_TIMESTAMP) + 1.day",
       "timestampadd(DAY, 1, cast(null as date))",
       "null")
@@ -2981,7 +2981,7 @@ class ScalarFunctionsTest extends ScalarTypesTestBase {
       "null")
 
     testAllApis(
-      "test".sha2(Null(Types.INT)),
+      "test".sha2(ApiNull(Types.INT)),
       "sha2('test', Null(INT))",
       "SHA2('test', CAST(NULL AS INT))",
       "null")

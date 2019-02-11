@@ -1013,7 +1013,7 @@ abstract class TableEnvironment(val config: TableConfig) {
     // This prevents confusing cases like ('f2, 'f0, 'myName) for a Tuple3 where fields are renamed
     // by position but the user might assume reordering instead of renaming.
     fields.forall {
-      case PlannerUnresolvedFieldReference(name) => !inputNames.contains(name)
+      case UnresolvedFieldReference(name) => !inputNames.contains(name)
       case _ => true
     }
   }
@@ -1078,20 +1078,20 @@ abstract class TableEnvironment(val config: TableConfig) {
         val isRefByPos = isReferenceByPosition(t, exprs)
 
         exprs.zipWithIndex flatMap {
-          case (PlannerUnresolvedFieldReference(name: String), idx) =>
+          case (UnresolvedFieldReference(name: String), idx) =>
             if (isRefByPos) {
               Some((idx, name))
             } else {
               referenceByName(name, t).map((_, name))
             }
-          case (PlannerAlias(PlannerUnresolvedFieldReference(origName), name: String, _), _) =>
+          case (Alias(UnresolvedFieldReference(origName), name: String, _), _) =>
             if (isRefByPos) {
               throw new TableException(
                 s"Alias '$name' is not allowed if other fields are referenced by position.")
             } else {
               referenceByName(origName, t).map((_, name))
             }
-          case (_: PlannerTimeAttribute, _) | (PlannerAlias(_: PlannerTimeAttribute, _, _), _) =>
+          case (_: TimeAttribute, _) | (Alias(_: TimeAttribute, _, _), _) =>
             None
           case _ => throw new TableException(
             "Field reference expression or alias on field expression expected.")
@@ -1099,11 +1099,11 @@ abstract class TableEnvironment(val config: TableConfig) {
 
       case p: PojoTypeInfo[A] =>
         exprs flatMap {
-          case (PlannerUnresolvedFieldReference(name: String)) =>
+          case (UnresolvedFieldReference(name: String)) =>
             referenceByName(name, p).map((_, name))
-          case PlannerAlias(PlannerUnresolvedFieldReference(origName), name: String, _) =>
+          case Alias(UnresolvedFieldReference(origName), name: String, _) =>
             referenceByName(origName, p).map((_, name))
-          case _: PlannerTimeAttribute | PlannerAlias(_: PlannerTimeAttribute, _, _) =>
+          case _: TimeAttribute | Alias(_: TimeAttribute, _, _) =>
             None
           case _ => throw new TableException(
             "Field reference expression or alias on field expression expected.")
@@ -1112,12 +1112,12 @@ abstract class TableEnvironment(val config: TableConfig) {
       case _: TypeInformation[_] => // atomic or other custom type information
         var referenced = false
         exprs flatMap {
-          case _: PlannerTimeAttribute =>
+          case _: TimeAttribute =>
             None
-          case PlannerUnresolvedFieldReference(_) if referenced =>
+          case UnresolvedFieldReference(_) if referenced =>
             // only accept the first field for an atomic type
             throw new TableException("Only the first field can reference an atomic type.")
-          case PlannerUnresolvedFieldReference(name: String) =>
+          case UnresolvedFieldReference(name: String) =>
             referenced = true
             // first field reference is mapped to atomic type
             Some((0, name))

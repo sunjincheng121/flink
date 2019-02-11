@@ -18,14 +18,23 @@
 
 package org.apache.flink.table.expressions;
 
+import org.apache.flink.annotation.PublicEvolving;
+
 import java.util.List;
 
 /**
  * The interface for all expressions.
  */
+@PublicEvolving
 public interface Expression {
 
+	/**
+	 * List of child nodes that should be considered when doing transformations.
+	 */
 	List<Expression> getChildren();
 
+	/**
+	 * Convert the current Expression to the corresponding R type.
+	 */
 	<R> R accept(ExpressionVisitor<R> visitor);
 }

@@ -666,23 +666,23 @@ abstract class StreamTableEnvironment(
     }
 
     exprs.zipWithIndex.foreach {
-      case (PlannerRowtimeAttribute(PlannerUnresolvedFieldReference(name)), idx) =>
+      case (RowtimeAttribute(UnresolvedFieldReference(name)), idx) =>
         extractRowtime(idx, name, None)
 
-      case (PlannerAlias(
-      PlannerRowtimeAttribute(PlannerUnresolvedFieldReference(origName)), name, _), idx) =>
+      case (Alias(
+      RowtimeAttribute(UnresolvedFieldReference(origName)), name, _), idx) =>
         extractRowtime(idx, name, Some(origName))
 
-      case (PlannerProctimeAttribute(PlannerUnresolvedFieldReference(name)), idx) =>
+      case (ProctimeAttribute(UnresolvedFieldReference(name)), idx) =>
         extractProctime(idx, name)
 
-      case (PlannerAlias(PlannerProctimeAttribute(
-            PlannerUnresolvedFieldReference(_)), name, _), idx) =>
+      case (Alias(ProctimeAttribute(
+            UnresolvedFieldReference(_)), name, _), idx) =>
         extractProctime(idx, name)
 
-      case (PlannerUnresolvedFieldReference(name), _) => fieldNames = name :: fieldNames
+      case (UnresolvedFieldReference(name), _) => fieldNames = name :: fieldNames
 
-      case (PlannerAlias(PlannerUnresolvedFieldReference(_), name, _), _) =>
+      case (Alias(UnresolvedFieldReference(_), name, _), _) =>
         fieldNames = name :: fieldNames
 
       case (e, _) =>

@@ -18,9 +18,12 @@
 
 package org.apache.flink.table.expressions;
 
+import org.apache.flink.annotation.PublicEvolving;
+
 /**
  * The base interface for all table symbol, such as time interval unit, time point unit
  * are all defined based on TableSymbol.
  */
+@PublicEvolving
 public interface TableSymbol {
 }

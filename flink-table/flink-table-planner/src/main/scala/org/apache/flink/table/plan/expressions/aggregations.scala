@@ -54,9 +54,9 @@ abstract sealed class Aggregation extends PlannerExpression {
 
 }
 
-case class PlannerDistinctAgg(child: PlannerExpression) extends Aggregation {
+case class DistinctAgg(child: PlannerExpression) extends Aggregation {
 
-  def distinct: PlannerExpression = PlannerDistinctAgg(child)
+  def distinct: PlannerExpression = DistinctAgg(child)
 
   override private[flink] def resultType: TypeInformation[_] = child.resultType
 
@@ -110,10 +110,6 @@ case class Sum(child: PlannerExpression) extends Aggregation {
       .createTypeFromTypeInfo(resultType, isNullable = true)
     new SqlSumAggFunction(returnType)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("sum", children))
-  }
 }
 
 case class Sum0(child: PlannerExpression) extends Aggregation {
@@ -138,10 +134,6 @@ case class Sum0(child: PlannerExpression) extends Aggregation {
 
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) =
     SqlStdOperatorTable.SUM0
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("sum0", children))
-  }
 }
 
 case class Min(child: PlannerExpression) extends Aggregation {
@@ -166,10 +158,6 @@ case class Min(child: PlannerExpression) extends Aggregation {
 
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) = {
     SqlStdOperatorTable.MIN
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("min", children))
   }
 }
 
@@ -196,10 +184,6 @@ case class Max(child: PlannerExpression) extends Aggregation {
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) = {
     SqlStdOperatorTable.MAX
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("max", children))
-  }
 }
 
 case class Count(child: PlannerExpression) extends Aggregation {
@@ -221,10 +205,6 @@ case class Count(child: PlannerExpression) extends Aggregation {
 
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) = {
     SqlStdOperatorTable.COUNT
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("count", children))
   }
 }
 
@@ -250,10 +230,6 @@ case class Avg(child: PlannerExpression) extends Aggregation {
 
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) = {
     SqlStdOperatorTable.AVG
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("avg", children))
   }
 }
 
@@ -283,10 +259,6 @@ case class Collect(child: PlannerExpression) extends Aggregation  {
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) = {
     SqlStdOperatorTable.COLLECT
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("collect", children))
-  }
 }
 
 case class StddevPop(child: PlannerExpression) extends Aggregation {
@@ -311,10 +283,6 @@ case class StddevPop(child: PlannerExpression) extends Aggregation {
 
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) =
     SqlStdOperatorTable.STDDEV_POP
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("stddevPop", children))
-  }
 }
 
 case class StddevSamp(child: PlannerExpression) extends Aggregation {
@@ -339,10 +307,6 @@ case class StddevSamp(child: PlannerExpression) extends Aggregation {
 
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) =
     SqlStdOperatorTable.STDDEV_SAMP
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("stddevSamp", children))
-  }
 }
 
 case class VarPop(child: PlannerExpression) extends Aggregation {
@@ -367,10 +331,6 @@ case class VarPop(child: PlannerExpression) extends Aggregation {
 
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) =
     SqlStdOperatorTable.VAR_POP
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("varPop", children))
-  }
 }
 
 case class VarSamp(child: PlannerExpression) extends Aggregation {
@@ -395,13 +355,9 @@ case class VarSamp(child: PlannerExpression) extends Aggregation {
 
   override private[flink] def getSqlAggFunction()(implicit relBuilder: RelBuilder) =
     SqlStdOperatorTable.VAR_SAMP
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("varSamp", children))
-  }
 }
 
-case class PlannerAggFunctionCall(
+case class AggFunctionCall(
     aggregateFunction: AggregateFunction[_, _],
     resultTypeInfo: TypeInformation[_],
     accTypeInfo: TypeInformation[_],

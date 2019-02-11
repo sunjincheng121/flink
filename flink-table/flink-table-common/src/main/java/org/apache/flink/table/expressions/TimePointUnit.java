@@ -18,9 +18,12 @@
 
 package org.apache.flink.table.expressions;
 
+import org.apache.flink.annotation.PublicEvolving;
+
 /**
  * The definition of time point unit symbol.
  */
+@PublicEvolving
 public enum TimePointUnit implements TableSymbol {
 	YEAR,
 	MONTH,

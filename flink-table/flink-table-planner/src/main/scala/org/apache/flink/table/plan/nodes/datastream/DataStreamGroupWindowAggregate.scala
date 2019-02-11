@@ -30,7 +30,7 @@ import org.apache.flink.table.api.{StreamQueryConfig, StreamTableEnvironment, Ta
 import org.apache.flink.table.calcite.FlinkRelBuilder.NamedWindowProperty
 import org.apache.flink.table.codegen.AggregationCodeGenerator
 import org.apache.flink.table.plan.expressions.ExpressionUtils._
-import org.apache.flink.table.plan.expressions.PlannerResolvedFieldReference
+import org.apache.flink.table.plan.expressions.ResolvedFieldReference
 import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.plan.nodes.CommonAggregate
 import org.apache.flink.table.plan.nodes.datastream.DataStreamGroupWindowAggregate._
@@ -144,7 +144,7 @@ class DataStreamGroupWindowAggregate(
 
     val timestampedInput = if (isRowtimeAttribute(window.timeAttribute)) {
       // copy the window rowtime attribute into the StreamRecord timestamp field
-      val timeAttribute = window.timeAttribute.asInstanceOf[PlannerResolvedFieldReference].name
+      val timeAttribute = window.timeAttribute.asInstanceOf[ResolvedFieldReference].name
       val timeIdx = inputSchema.fieldNames.indexOf(timeAttribute)
       if (timeIdx < 0) {
         throw new TableException("Time attribute could not be found. This is a bug.")

@@ -28,7 +28,7 @@ import org.apache.flink.table.api.StreamTableEnvironment
 import org.apache.flink.table.typeutils.TypeCheckUtils._
 import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, ValidationSuccess}
 
-case class PlannerIn(expression: PlannerExpression, elements: Seq[PlannerExpression])
+case class In(expression: PlannerExpression, elements: Seq[PlannerExpression])
   extends PlannerExpression  {
 
   override def toString = s"$expression.in(${elements.mkString(", ")})"
@@ -39,7 +39,7 @@ case class PlannerIn(expression: PlannerExpression, elements: Seq[PlannerExpress
     // check if this is a sub-query expression or an element list
     elements.head match {
 
-      case PlannerTableReference(name, table) =>
+      case TableReference(name, table) =>
         RexSubQuery.in(table.getRelNode, ImmutableList.of(expression.toRexNode))
 
       case _ =>
@@ -51,7 +51,7 @@ case class PlannerIn(expression: PlannerExpression, elements: Seq[PlannerExpress
     // check if this is a sub-query expression or an element list
     elements.head match {
 
-      case PlannerTableReference(name, table) =>
+      case TableReference(name, table) =>
         if (elements.length != 1) {
           return ValidationFailure("IN operator supports only one table reference.")
         }
@@ -88,9 +88,5 @@ case class PlannerIn(expression: PlannerExpression, elements: Seq[PlannerExpress
   }
 
   override private[flink] def resultType: TypeInformation[_] = BOOLEAN_TYPE_INFO
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("in", children))
-  }
 }
 

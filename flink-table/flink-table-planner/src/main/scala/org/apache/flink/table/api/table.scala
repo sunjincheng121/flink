@@ -24,7 +24,7 @@ import org.apache.flink.table.api.java.{OverWindow => JOverWindow, SessionWithGa
 import org.apache.flink.table.api.scala.{OverWindow =>SOverWindow, SessionWithGapOnTimeWithAlias => SSessionWithGapOnTimeWithAlias, SlideWithSizeAndSlideOnTimeWithAlias => SSlideWithSizeAndSlideOnTimeWithAlias, TumbleWithSizeOnTimeWithAlias => STumbleWithSizeOnTimeWithAlias}
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
 import org.apache.flink.table.expressions.{Expression, DefaultExpressionVisitor}
-import org.apache.flink.table.plan.expressions.{Asc, Desc, ExpressionParser, Ordering, PlannerAlias, PlannerCall, PlannerExpression, PlannerResolvedFieldReference, PlannerUnresolvedAlias, PlannerUnresolvedFieldReference, WindowProperty}
+import org.apache.flink.table.plan.expressions.{Asc, Desc, ExpressionParser, Ordering, Alias, Call, PlannerExpression, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
 import org.apache.flink.table.functions.{TableFunction, TemporalTableFunction}
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.table.plan.ProjectionTranslator._
@@ -168,14 +168,14 @@ class Table(
         Project(
           projectsOnAgg,
           Aggregate(
-            Nil, aggNames.map(a => PlannerAlias(a._1, a._2)).toSeq,
+            Nil, aggNames.map(a => Alias(a._1, a._2)).toSeq,
             Project(projectFields, logicalPlan).validate(tableEnv)
           ).validate(tableEnv)
         ).validate(tableEnv)
       )
     } else {
       new Table(tableEnv,
-        Project(expandedFields.map(PlannerUnresolvedAlias), logicalPlan).validate(tableEnv))
+        Project(expandedFields.map(UnresolvedAlias), logicalPlan).validate(tableEnv))
     }
   }
 
@@ -248,7 +248,7 @@ class Table(
 
   private def validatePrimaryKeyExpression(expression: PlannerExpression): String = {
     expression match {
-      case fieldReference: PlannerResolvedFieldReference =>
+      case fieldReference: ResolvedFieldReference =>
         fieldReference.name
       case _ => throw new ValidationException(
         s"Unsupported expression [$expression] as primary key. " +
@@ -296,7 +296,7 @@ class Table(
           throw new ValidationException(
             "List of column aliases must have same degree as TableFunction's output")
         }
-        if (!fields.forall(_.isInstanceOf[PlannerUnresolvedFieldReference])) {
+        if (!fields.forall(_.isInstanceOf[UnresolvedFieldReference])) {
           throw new ValidationException(
             "Alias field must be an instance of FieldReference"
           )
@@ -308,7 +308,7 @@ class Table(
             functionCall.tableFunction,
             functionCall.parameters,
             functionCall.resultType,
-            fields.map(_.asInstanceOf[PlannerUnresolvedFieldReference].name).toArray,
+            fields.map(_.asInstanceOf[UnresolvedFieldReference].name).toArray,
             functionCall.child)
         )
       case _ =>
@@ -1038,9 +1038,9 @@ class Table(
   private def orderByInternal(fields: PlannerExpression*): Table = {
     val order: Seq[Ordering] = fields.map {
       case o: Ordering => o
-      case asc: PlannerCall if "asc".equals(asc.functionName) =>
+      case asc: Call if "asc".equals(asc.functionName) =>
         Asc(asc.args.head)
-      case desc: PlannerCall if "desc".equals(desc.functionName) =>
+      case desc: Call if "desc".equals(desc.functionName) =>
         Desc(desc.args.head)
       case e => Asc(e)
     }
@@ -1430,7 +1430,7 @@ class GroupedTable(
       table.tableEnv,
       Project(
         projectsOnAgg,
-        Aggregate(groupKey, aggNames.map(a => PlannerAlias(a._1, a._2)).toSeq,
+        Aggregate(groupKey, aggNames.map(a => Alias(a._1, a._2)).toSeq,
                   Project(projectFields, table.logicalPlan).validate(table.tableEnv)
         ).validate(table.tableEnv)
       ).validate(table.tableEnv))
@@ -1528,7 +1528,7 @@ class OverWindowedTable(
     new Table(
       table.tableEnv,
       Project(
-        expandedOverFields.map(PlannerUnresolvedAlias),
+        expandedOverFields.map(UnresolvedAlias),
         table.logicalPlan,
         // required for proper projection push down
         explicitAlias = true)
@@ -1592,8 +1592,8 @@ class WindowGroupedTable(
         WindowAggregate(
           groupKeys,
           window.toLogicalWindow,
-          propNames.map(a => PlannerAlias(a._1, a._2)).toSeq,
-          aggNames.map(a => PlannerAlias(a._1, a._2)).toSeq,
+          propNames.map(a => Alias(a._1, a._2)).toSeq,
+          aggNames.map(a => Alias(a._1, a._2)).toSeq,
           Project(projectFields, table.logicalPlan).validate(table.tableEnv)
         ).validate(table.tableEnv),
         // required for proper resolution of the time attribute in multi-windows

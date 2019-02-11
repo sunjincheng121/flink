@@ -18,6 +18,7 @@
 
 package org.apache.flink.table.expressions;
 
+import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.table.api.TableException;
 
 import java.lang.reflect.Field;
@@ -32,7 +33,8 @@ import static org.apache.flink.table.expressions.FunctionType.OTHER;
 /**
  * FunctionDefinitions is like a dictionary, defining all FunctionDefinitions as constants.
  */
-public class FunctionDefinitions {
+@PublicEvolving
+public final class FunctionDefinitions {
 
 	public static final FunctionDefinition CAST = new FunctionDefinition("cast", OTHER);
 	public static final FunctionDefinition AS = new FunctionDefinition("as", OTHER);
@@ -43,6 +45,8 @@ public class FunctionDefinitions {
 	public static final FunctionDefinition AND = new FunctionDefinition("and", LOGICAL);
 	public static final FunctionDefinition OR = new FunctionDefinition("or", LOGICAL);
 	public static final FunctionDefinition NOT = new FunctionDefinition("not", LOGICAL);
+
+	// comparison functions
 	public static final FunctionDefinition EQUALS = new FunctionDefinition("equals", COMPARISON);
 	public static final FunctionDefinition GREATER_THAN = new FunctionDefinition("greaterThan", COMPARISON);
 	public static final FunctionDefinition GREATER_THAN_OR_EQUAL =
@@ -226,7 +230,6 @@ public class FunctionDefinitions {
 			}
 		}
 
-		throw new TableException(
-			"The function definition " + name + " cannot be found.");
+		return null;
 	}
 }

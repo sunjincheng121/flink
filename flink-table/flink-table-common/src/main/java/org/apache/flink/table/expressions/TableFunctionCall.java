@@ -28,8 +28,7 @@ import java.util.Optional;
  *
  * <p>
  * NOTE: this function call is only a temporary solution until we
- * remove the deprecated table constructor. Otherwise Scala would be confused
- * about Table.as() and Expression.as(). In the future, we can rely on Expression.as() only.
+ * remove the deprecated table constructor.
  * </p>
  */
 @PublicEvolving

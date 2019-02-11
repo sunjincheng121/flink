@@ -41,7 +41,7 @@ import _root_.scala.collection.JavaConverters._
   * General expression for unresolved function calls. The function can be a built-in
   * scalar function or a user-defined scalar function.
   */
-case class PlannerCall(functionName: String, args: Seq[PlannerExpression])
+case class Call(functionName: String, args: Seq[PlannerExpression])
   extends PlannerExpression {
 
   override private[flink] def children: Seq[PlannerExpression] = args
@@ -65,7 +65,7 @@ case class PlannerCall(functionName: String, args: Seq[PlannerExpression])
   * @param agg The aggregation of the over call.
   * @param alias The alias of the referenced over window.
   */
-case class PlannerUnresolvedOverCall(agg: PlannerExpression, alias: PlannerExpression)
+case class UnresolvedOverCall(agg: PlannerExpression, alias: PlannerExpression)
   extends PlannerExpression {
 
   override private[flink] def validateInput() =
@@ -85,7 +85,7 @@ case class PlannerUnresolvedOverCall(agg: PlannerExpression, alias: PlannerExpre
   * @param preceding      The lower bound of the window
   * @param following      The upper bound of the window
   */
-case class PlannerOverCall(
+case class OverCall(
     agg: PlannerExpression,
     partitionBy: Seq[PlannerExpression],
     orderBy: PlannerExpression,
@@ -145,13 +145,13 @@ case class PlannerOverCall(
     sqlKind: SqlKind): RexWindowBound = {
 
     bound match {
-      case _: PlannerUnboundedRow | _: PlannerUnboundedRange =>
+      case _: UnboundedRow | _: UnboundedRange =>
         val unbounded = SqlWindow.createUnboundedPreceding(SqlParserPos.ZERO)
         create(unbounded, null)
-      case _: PlannerCurrentRow | _: PlannerCurrentRange =>
+      case _: CurrentRow | _: CurrentRange =>
         val currentRow = SqlWindow.createCurrentRow(SqlParserPos.ZERO)
         create(currentRow, null)
-      case b: PlannerLiteral =>
+      case b: Literal =>
         val returnType = relBuilder
           .getTypeFactory.asInstanceOf[FlinkTypeFactory]
           .createTypeFromTypeInfo(Types.DECIMAL, isNullable = true)
@@ -195,9 +195,9 @@ case class PlannerOverCall(
 
     // check partitionBy expression keys are resolved field reference
     partitionBy.foreach {
-      case r: PlannerResolvedFieldReference if r.resultType.isKeyType  =>
+      case r: ResolvedFieldReference if r.resultType.isKeyType  =>
         ValidationSuccess
-      case r: PlannerResolvedFieldReference =>
+      case r: ResolvedFieldReference =>
         return ValidationFailure(s"Invalid PartitionBy expression: $r. " +
           s"Expression must return key type.")
       case r =>
@@ -207,35 +207,35 @@ case class PlannerOverCall(
 
     // check preceding is valid
     preceding match {
-      case _: PlannerCurrentRow | _: PlannerCurrentRange
-           | _: PlannerUnboundedRow | _: PlannerUnboundedRange =>
+      case _: CurrentRow | _: CurrentRange
+           | _: UnboundedRow | _: UnboundedRange =>
         ValidationSuccess
-      case PlannerLiteral(v: Long, _: RowIntervalTypeInfo) if v > 0 =>
+      case Literal(v: Long, _: RowIntervalTypeInfo) if v > 0 =>
         ValidationSuccess
-      case PlannerLiteral(_, _: RowIntervalTypeInfo) =>
+      case Literal(_, _: RowIntervalTypeInfo) =>
         return ValidationFailure("Preceding row interval must be larger than 0.")
-      case PlannerLiteral(v: Long, _: TimeIntervalTypeInfo[_]) if v >= 0 =>
+      case Literal(v: Long, _: TimeIntervalTypeInfo[_]) if v >= 0 =>
         ValidationSuccess
-      case PlannerLiteral(_, _: TimeIntervalTypeInfo[_]) =>
+      case Literal(_, _: TimeIntervalTypeInfo[_]) =>
         return ValidationFailure("Preceding time interval must be equal or larger than 0.")
-      case PlannerLiteral(_, _) =>
+      case Literal(_, _) =>
         return ValidationFailure("Preceding must be a row interval or time interval literal.")
     }
 
     // check following is valid
     following match {
-      case _: PlannerCurrentRow | _: PlannerCurrentRange
-           | _: PlannerUnboundedRow | _: PlannerUnboundedRange =>
+      case _: CurrentRow | _: CurrentRange
+           | _: UnboundedRow | _: UnboundedRange =>
         ValidationSuccess
-      case PlannerLiteral(v: Long, _: RowIntervalTypeInfo) if v > 0 =>
+      case Literal(v: Long, _: RowIntervalTypeInfo) if v > 0 =>
         ValidationSuccess
-      case PlannerLiteral(_, _: RowIntervalTypeInfo) =>
+      case Literal(_, _: RowIntervalTypeInfo) =>
         return ValidationFailure("Following row interval must be larger than 0.")
-      case PlannerLiteral(v: Long, _: TimeIntervalTypeInfo[_]) if v >= 0 =>
+      case Literal(v: Long, _: TimeIntervalTypeInfo[_]) if v >= 0 =>
         ValidationSuccess
-      case PlannerLiteral(_, _: TimeIntervalTypeInfo[_]) =>
+      case Literal(_, _: TimeIntervalTypeInfo[_]) =>
         return ValidationFailure("Following time interval must be equal or larger than 0.")
-      case PlannerLiteral(_, _) =>
+      case Literal(_, _) =>
         return ValidationFailure("Following must be a row interval or time interval literal.")
     }
 
@@ -254,10 +254,6 @@ case class PlannerOverCall(
 
     ValidationSuccess
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("overCall", children))
-  }
 }
 
 /**
@@ -266,7 +262,7 @@ case class PlannerOverCall(
   * @param scalarFunction scalar function to be called (might be overloaded)
   * @param parameters actual parameters that determine target evaluation method
   */
-case class PlannerScalarFunctionCall(
+case class ScalarFunctionCall(
     scalarFunction: ScalarFunction,
     parameters: Seq[PlannerExpression])
   extends PlannerExpression {
@@ -317,7 +313,7 @@ case class PlannerScalarFunctionCall(
   * @param parameters actual parameters of function
   * @param resultType type information of returned table
   */
-case class PlannerTableFunctionCall(
+case class TableFunctionCall(
     functionName: String,
     tableFunction: TableFunction[_],
     parameters: Seq[PlannerExpression],
@@ -335,7 +331,7 @@ case class PlannerTableFunctionCall(
     * @param aliasList alias for this table function's returned fields
     * @return this table function call
     */
-  private[flink] def setAliases(aliasList: Seq[String]): PlannerTableFunctionCall = {
+  private[flink] def setAliases(aliasList: Seq[String]): TableFunctionCall = {
     this.aliases = Some(aliasList)
     this
   }
@@ -347,7 +343,7 @@ case class PlannerTableFunctionCall(
     * @param extraNames additional names if the expression expands to multiple fields
     * @return field with an alias
     */
-  def as(name: Symbol, extraNames: Symbol*): PlannerTableFunctionCall = {
+  def as(name: Symbol, extraNames: Symbol*): TableFunctionCall = {
     // NOTE: this method is only a temporary solution until we
     // remove the deprecated table constructor. Otherwise Scala would be confused
     // about Table.as() and Expression.as(). In the future, we can rely on Expression.as() only.

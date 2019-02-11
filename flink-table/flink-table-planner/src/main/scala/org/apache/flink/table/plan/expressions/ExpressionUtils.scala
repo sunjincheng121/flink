@@ -40,76 +40,76 @@ object ExpressionUtils {
   }
 
   private[flink] def isTimeIntervalLiteral(expr: PlannerExpression): Boolean = expr match {
-    case PlannerLiteral(_, TimeIntervalTypeInfo.INTERVAL_MILLIS) => true
+    case Literal(_, TimeIntervalTypeInfo.INTERVAL_MILLIS) => true
     case _ => false
   }
 
   private[flink] def isRowCountLiteral(expr: PlannerExpression): Boolean = expr match {
-    case PlannerLiteral(_, RowIntervalTypeInfo.INTERVAL_ROWS) => true
+    case Literal(_, RowIntervalTypeInfo.INTERVAL_ROWS) => true
     case _ => false
   }
 
   private[flink] def isTimeAttribute(expr: PlannerExpression): Boolean = expr match {
-    case r: PlannerResolvedFieldReference if FlinkTypeFactory.isTimeIndicatorType(r.resultType) =>
+    case r: ResolvedFieldReference if FlinkTypeFactory.isTimeIndicatorType(r.resultType) =>
       true
     case _ => false
   }
 
   private[flink] def isRowtimeAttribute(expr: PlannerExpression): Boolean = expr match {
-    case r: PlannerResolvedFieldReference
+    case r: ResolvedFieldReference
       if FlinkTypeFactory.isRowtimeIndicatorType(r.resultType) =>
       true
     case _ => false
   }
 
   private[flink] def isProctimeAttribute(expr: PlannerExpression): Boolean = expr match {
-    case r: PlannerResolvedFieldReference
+    case r: ResolvedFieldReference
       if FlinkTypeFactory.isProctimeIndicatorType(r.resultType) =>
       true
     case _ => false
   }
 
   private[flink] def toTime(expr: PlannerExpression): FlinkTime = expr match {
-    case PlannerLiteral(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
+    case Literal(value: Long, TimeIntervalTypeInfo.INTERVAL_MILLIS) =>
       FlinkTime.milliseconds(value)
     case _ => throw new IllegalArgumentException()
   }
 
   private[flink] def toLong(expr: PlannerExpression): Long = expr match {
-    case PlannerLiteral(value: Long, RowIntervalTypeInfo.INTERVAL_ROWS) => value
+    case Literal(value: Long, RowIntervalTypeInfo.INTERVAL_ROWS) => value
     case _ => throw new IllegalArgumentException()
   }
 
   private[flink] def toMonthInterval(expr: PlannerExpression, multiplier: Int): PlannerExpression =
     expr match {
-    case PlannerLiteral(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
-      PlannerLiteral(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MONTHS)
+    case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
+      Literal(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MONTHS)
     case _ =>
-      PlannerCast(Mul(expr, PlannerLiteral(multiplier)), TimeIntervalTypeInfo.INTERVAL_MONTHS)
+      Cast(Mul(expr, Literal(multiplier)), TimeIntervalTypeInfo.INTERVAL_MONTHS)
   }
 
   private[flink] def toMilliInterval(expr: PlannerExpression, multiplier: Long): PlannerExpression =
     expr match {
-    case PlannerLiteral(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
-      PlannerLiteral(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MILLIS)
-    case PlannerLiteral(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
-      PlannerLiteral(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MILLIS)
+    case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
+      Literal(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MILLIS)
+    case Literal(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
+      Literal(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MILLIS)
     case _ =>
-      PlannerCast(Mul(expr, PlannerLiteral(multiplier)), TimeIntervalTypeInfo.INTERVAL_MILLIS)
+      Cast(Mul(expr, Literal(multiplier)), TimeIntervalTypeInfo.INTERVAL_MILLIS)
   }
 
   private[flink] def toRowInterval(expr: PlannerExpression): PlannerExpression = expr match {
-    case PlannerLiteral(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
-      PlannerLiteral(value.toLong, RowIntervalTypeInfo.INTERVAL_ROWS)
-    case PlannerLiteral(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
-      PlannerLiteral(value, RowIntervalTypeInfo.INTERVAL_ROWS)
+    case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
+      Literal(value.toLong, RowIntervalTypeInfo.INTERVAL_ROWS)
+    case Literal(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
+      Literal(value, RowIntervalTypeInfo.INTERVAL_ROWS)
     case _ =>
       throw new IllegalArgumentException("Invalid value for row interval literal.")
   }
 
   private[flink] def convertArray(array: Array[_]): PlannerExpression = {
     def createArray(): PlannerExpression = {
-      ArrayConstructor(array.map(PlannerLiteral(_)))
+      ArrayConstructor(array.map(Literal(_)))
     }
 
     array match {
@@ -138,7 +138,7 @@ object ExpressionUtils {
       case _: Array[Time] => createArray()
       case _: Array[Timestamp] => createArray()
       case bda: Array[BigDecimal] =>
-        ArrayConstructor(bda.map { bd => PlannerLiteral(bd.bigDecimal) })
+        ArrayConstructor(bda.map { bd => Literal(bd.bigDecimal) })
 
       case _ =>
         // nested

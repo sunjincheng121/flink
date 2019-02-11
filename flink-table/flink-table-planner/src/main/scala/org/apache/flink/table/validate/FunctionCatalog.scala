@@ -30,7 +30,7 @@ import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.sql.ScalarSqlFunctions
 import org.apache.flink.table.functions.utils.{AggSqlFunction, ScalarSqlFunction, TableSqlFunction}
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
-import org.apache.flink.table.plan.expressions.{PlannerAggFunctionCall, PlannerExpression, PlannerScalarFunctionCall, PlannerTableFunctionCall}
+import org.apache.flink.table.plan.expressions.{AggFunctionCall, PlannerExpression, ScalarFunctionCall, TableFunctionCall}
 
 import _root_.scala.collection.JavaConversions._
 import _root_.scala.collection.mutable
@@ -79,7 +79,7 @@ class FunctionCatalog {
           .find(f => f.getName.equalsIgnoreCase(name) && f.isInstanceOf[ScalarSqlFunction])
           .getOrElse(throw new ValidationException(s"Undefined scalar function: $name"))
           .asInstanceOf[ScalarSqlFunction]
-        PlannerScalarFunctionCall(scalarSqlFunction.getScalarFunction, children)
+        ScalarFunctionCall(scalarSqlFunction.getScalarFunction, children)
 
       // user-defined table function call
       case tf if classOf[TableFunction[_]].isAssignableFrom(tf) =>
@@ -89,7 +89,7 @@ class FunctionCatalog {
           .asInstanceOf[TableSqlFunction]
         val typeInfo = tableSqlFunction.getRowTypeInfo
         val function = tableSqlFunction.getTableFunction
-        PlannerTableFunctionCall(name, function, children, typeInfo)
+        TableFunctionCall(name, function, children, typeInfo)
 
       // user-defined aggregate function call
       case af if classOf[AggregateFunction[_, _]].isAssignableFrom(af) =>
@@ -100,7 +100,7 @@ class FunctionCatalog {
         val function = aggregateFunction.getFunction
         val returnType = aggregateFunction.returnType
         val accType = aggregateFunction.accType
-        PlannerAggFunctionCall(function, returnType, accType, children)
+        AggFunctionCall(function, returnType, accType, children)
 
       // general expression call
       case expression if classOf[PlannerExpression].isAssignableFrom(expression) =>
@@ -141,6 +141,59 @@ class FunctionCatalog {
   }
 
   /**
+    * Lookup and create an expression if we find a match.
+    */
+  def lookupFunctionWithExpressionArguments(name: String, children: Seq[Expression]): Expression = {
+    val funcClass = functionBuilders
+      .getOrElse(name.toLowerCase, throw new ValidationException(s"Undefined function: $name"))
+
+    // Instantiate a function using the provided `children`
+    funcClass match {
+
+      // user-defined scalar function call
+      case sf if classOf[ScalarFunction].isAssignableFrom(sf) =>
+        val scalarSqlFunction = sqlFunctions
+          .find(f => f.getName.equalsIgnoreCase(name) && f.isInstanceOf[ScalarSqlFunction])
+          .getOrElse(throw new ValidationException(s"Undefined scalar function: $name"))
+          .asInstanceOf[ScalarSqlFunction]
+        new org.apache.flink.table.expressions.Call(
+          new ScalarFunctionDefinition(scalarSqlFunction.getScalarFunction), children)
+
+      // user-defined table function call
+      case tf if classOf[TableFunction[_]].isAssignableFrom(tf) =>
+        val tableSqlFunction = sqlFunctions
+          .find(f => f.getName.equalsIgnoreCase(name) && f.isInstanceOf[TableSqlFunction])
+          .getOrElse(throw new ValidationException(s"Undefined table function: $name"))
+          .asInstanceOf[TableSqlFunction]
+        val typeInfo = tableSqlFunction.getRowTypeInfo
+        val function = tableSqlFunction.getTableFunction
+        new org.apache.flink.table.expressions.TableFunctionCall(
+          new TableFunctionDefinition(function, typeInfo), children)
+
+      // user-defined aggregate function call
+      case af if classOf[AggregateFunction[_, _]].isAssignableFrom(af) =>
+        val aggregateFunction = sqlFunctions
+          .find(f => f.getName.equalsIgnoreCase(name) && f.isInstanceOf[AggSqlFunction])
+          .getOrElse(throw new ValidationException(s"Undefined table function: $name"))
+          .asInstanceOf[AggSqlFunction]
+        val function = aggregateFunction.getFunction
+        val returnType = aggregateFunction.returnType
+        val accType = aggregateFunction.accType
+        new org.apache.flink.table.expressions.Call(
+          new AggregateFunctionDefinition(function, returnType, accType), children)
+
+      // general expression call
+      case _ =>
+        val functionDefinition = FunctionDefinitions.getDefinition(name)
+        if (functionDefinition != null) {
+          new org.apache.flink.table.expressions.Call(functionDefinition, children)
+        } else {
+          throw new ValidationException("Unsupported function.")
+        }
+    }
+  }
+
+  /**
     * Drop a function and return if the function existed.
     */
   def dropFunction(name: String): Boolean =
@@ -166,7 +219,7 @@ object FunctionCatalog {
     "lessThan" -> classOf[LessThan],
     "lessThanOrEqual" -> classOf[LessThanOrEqual],
     "notEquals" -> classOf[NotEqualTo],
-    "in" -> classOf[PlannerIn],
+    "in" -> classOf[In],
     "isNull" -> classOf[IsNull],
     "isNotNull" -> classOf[IsNotNull],
     "isTrue" -> classOf[IsTrue],

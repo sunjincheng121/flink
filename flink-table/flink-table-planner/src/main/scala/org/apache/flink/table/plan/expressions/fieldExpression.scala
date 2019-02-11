@@ -38,12 +38,12 @@ abstract class Attribute extends LeafPlannerExpression with NamedExpression {
   private[flink] def withName(newName: String): Attribute
 }
 
-case class PlannerUnresolvedFieldReference(name: String) extends Attribute {
+case class UnresolvedFieldReference(name: String) extends Attribute {
 
   override def toString = s"'$name"
 
   override private[flink] def withName(newName: String): Attribute =
-    PlannerUnresolvedFieldReference(newName)
+    UnresolvedFieldReference(newName)
 
   override private[flink] def resultType: TypeInformation[_] =
     throw UnresolvedException(s"Calling resultType on ${this.getClass}.")
@@ -52,7 +52,7 @@ case class PlannerUnresolvedFieldReference(name: String) extends Attribute {
     ValidationFailure(s"Unresolved reference $name.")
 }
 
-case class PlannerResolvedFieldReference(
+case class ResolvedFieldReference(
     name: String,
     resultType: TypeInformation[_]) extends Attribute {
 
@@ -66,12 +66,12 @@ case class PlannerResolvedFieldReference(
     if (newName == name) {
       this
     } else {
-      PlannerResolvedFieldReference(newName, resultType)
+      ResolvedFieldReference(newName, resultType)
     }
   }
 }
 
-case class PlannerAlias(child: PlannerExpression, name: String, extraNames: Seq[String] = Seq())
+case class Alias(child: PlannerExpression, name: String, extraNames: Seq[String] = Seq())
     extends UnaryPlannerExpression with NamedExpression {
 
   override def toString = s"$child as '$name"
@@ -89,9 +89,9 @@ case class PlannerAlias(child: PlannerExpression, name: String, extraNames: Seq[
 
   override private[flink] def toAttribute: Attribute = {
     if (valid) {
-      PlannerResolvedFieldReference(name, child.resultType)
+      ResolvedFieldReference(name, child.resultType)
     } else {
-      PlannerUnresolvedFieldReference(name)
+      UnresolvedFieldReference(name)
     }
   }
 
@@ -104,13 +104,9 @@ case class PlannerAlias(child: PlannerExpression, name: String, extraNames: Seq[
       ValidationSuccess
     }
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("as", children))
-  }
 }
 
-case class PlannerUnresolvedAlias(child: PlannerExpression)
+case class UnresolvedAlias(child: PlannerExpression)
   extends UnaryPlannerExpression with NamedExpression {
 
   override private[flink] def name: String =
@@ -125,7 +121,7 @@ case class PlannerUnresolvedAlias(child: PlannerExpression)
   override private[flink] lazy val valid = false
 }
 
-case class PlannerWindowReference(name: String, tpe: Option[TypeInformation[_]] = None)
+case class WindowReference(name: String, tpe: Option[TypeInformation[_]] = None)
   extends Attribute {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
@@ -145,7 +141,7 @@ case class PlannerWindowReference(name: String, tpe: Option[TypeInformation[_]] 
   override def toString: String = s"'$name"
 }
 
-case class PlannerTableReference(name: String, table: Table)
+case class TableReference(name: String, table: Table)
   extends LeafPlannerExpression with NamedExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
@@ -160,30 +156,30 @@ case class PlannerTableReference(name: String, table: Table)
   override def toString: String = s"$name"
 }
 
-abstract class PlannerTimeAttribute(val expression: PlannerExpression)
+abstract class TimeAttribute(val expression: PlannerExpression)
   extends UnaryPlannerExpression
   with WindowProperty {
 
   override private[flink] def child: PlannerExpression = expression
 }
 
-case class PlannerRowtimeAttribute(expr: PlannerExpression)
-  extends PlannerTimeAttribute(expr) {
+case class RowtimeAttribute(expr: PlannerExpression)
+  extends TimeAttribute(expr) {
 
   override private[flink] def validateInput(): ValidationResult = {
     child match {
-      case PlannerWindowReference(_, Some(tpe: TypeInformation[_]))
+      case WindowReference(_, Some(tpe: TypeInformation[_]))
         if isProctimeIndicatorType(tpe) =>
         ValidationFailure("A proctime window cannot provide a rowtime attribute.")
-      case PlannerWindowReference(_, Some(tpe: TypeInformation[_]))
+      case WindowReference(_, Some(tpe: TypeInformation[_]))
         if isRowtimeIndicatorType(tpe) =>
         // rowtime window
         ValidationSuccess
-      case PlannerWindowReference(_, Some(tpe))
+      case WindowReference(_, Some(tpe))
         if tpe == Types.LONG || tpe == Types.SQL_TIMESTAMP =>
         // batch time window
         ValidationSuccess
-      case PlannerWindowReference(_, _) =>
+      case WindowReference(_, _) =>
         ValidationFailure("Reference to a rowtime or proctime window required.")
       case any =>
         ValidationFailure(
@@ -194,11 +190,11 @@ case class PlannerRowtimeAttribute(expr: PlannerExpression)
 
   override def resultType: TypeInformation[_] = {
     child match {
-      case PlannerWindowReference(_, Some(tpe: TypeInformation[_]))
+      case WindowReference(_, Some(tpe: TypeInformation[_]))
         if isRowtimeIndicatorType(tpe) =>
         // rowtime window
         TimeIndicatorTypeInfo.ROWTIME_INDICATOR
-      case PlannerWindowReference(_, Some(tpe))
+      case WindowReference(_, Some(tpe))
         if tpe == Types.LONG || tpe == Types.SQL_TIMESTAMP =>
         // batch time window
         Types.SQL_TIMESTAMP
@@ -211,19 +207,15 @@ case class PlannerRowtimeAttribute(expr: PlannerExpression)
     NamedWindowProperty(name, this)
 
   override def toString: String = s"rowtime($child)"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("rowtime", children))
-  }
 }
 
-case class PlannerProctimeAttribute(expr: PlannerExpression) extends PlannerTimeAttribute(expr) {
+case class ProctimeAttribute(expr: PlannerExpression) extends TimeAttribute(expr) {
 
   override private[flink] def validateInput(): ValidationResult = {
     child match {
-      case PlannerWindowReference(_, Some(tpe: TypeInformation[_])) if isTimeIndicatorType(tpe) =>
+      case WindowReference(_, Some(tpe: TypeInformation[_])) if isTimeIndicatorType(tpe) =>
         ValidationSuccess
-      case PlannerWindowReference(_, _) =>
+      case WindowReference(_, _) =>
         ValidationFailure("Reference to a rowtime or proctime window required.")
       case any =>
         ValidationFailure(
@@ -239,22 +231,14 @@ case class PlannerProctimeAttribute(expr: PlannerExpression) extends PlannerTime
     NamedWindowProperty(name, this)
 
   override def toString: String = s"proctime($child)"
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("proctime", children))
-  }
 }
 
 /** Expression to access the timestamp of a StreamRecord. */
-case class PlannerStreamRecordTimestamp() extends LeafPlannerExpression {
+case class StreamRecordTimestamp() extends LeafPlannerExpression {
 
   override private[flink] def resultType = Types.LONG
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.getRexBuilder.makeCall(StreamRecordTimestampSqlFunction)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]): R = {
-    visitor.visitCall(PlannerCall("streamRecordTimestamp", children))
   }
 }

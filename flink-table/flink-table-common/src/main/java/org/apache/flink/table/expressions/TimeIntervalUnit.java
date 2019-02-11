@@ -18,9 +18,12 @@
 
 package org.apache.flink.table.expressions;
 
+import org.apache.flink.annotation.PublicEvolving;
+
 /**
  * The definition of time interval unit symbol.
  */
+@PublicEvolving
 public enum TimeIntervalUnit implements TableSymbol {
 	YEAR,
 	YEAR_TO_MONTH,

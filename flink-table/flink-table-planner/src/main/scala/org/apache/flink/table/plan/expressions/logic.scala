@@ -55,10 +55,6 @@ case class Not(child: PlannerExpression) extends UnaryPlannerExpression {
         s"but $child is of type ${child.resultType}")
     }
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("not", children))
-  }
 }
 
 case class And(left: PlannerExpression, right: PlannerExpression) extends BinaryPredicate {
@@ -68,10 +64,6 @@ case class And(left: PlannerExpression, right: PlannerExpression) extends Binary
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.and(left.toRexNode, right.toRexNode)
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("and", children))
-  }
 }
 
 case class Or(left: PlannerExpression, right: PlannerExpression) extends BinaryPredicate {
@@ -80,10 +72,6 @@ case class Or(left: PlannerExpression, right: PlannerExpression) extends BinaryP
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.or(left.toRexNode, right.toRexNode)
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("or", children))
   }
 }
 
@@ -114,9 +102,5 @@ case class If(
         s"If should have boolean condition and same type of ifTrue and ifFalse, get " +
           s"(${condition.resultType}, ${ifTrue.resultType}, ${ifFalse.resultType})")
     }
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("if", children))
   }
 }

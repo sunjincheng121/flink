@@ -130,19 +130,19 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   } reduceLeft(_ | _)
 
   lazy val currentRange: PackratParser[PlannerExpression] = CURRENT_RANGE ^^ {
-    _ => PlannerCurrentRange()
+    _ => CurrentRange()
   }
 
   lazy val currentRow: PackratParser[PlannerExpression] = CURRENT_ROW ^^ {
-    _ => PlannerCurrentRow()
+    _ => CurrentRow()
   }
 
   lazy val unboundedRange: PackratParser[PlannerExpression] = UNBOUNDED_RANGE ^^ {
-    _ => PlannerUnboundedRange()
+    _ => UnboundedRange()
   }
 
   lazy val unboundedRow: PackratParser[PlannerExpression] = UNBOUNDED_ROW ^^ {
-    _ => PlannerUnboundedRow()
+    _ => UnboundedRow()
   }
 
   lazy val overConstant: PackratParser[PlannerExpression] =
@@ -176,16 +176,16 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
     """-?(\d+(\.\d+)?|\d*\.\d+)([eE][+-]?\d+)?[fFdD]?""".r
 
   lazy val numberLiteral: PackratParser[PlannerExpression] =
-    (wholeNumber <~ ("l" | "L")) ^^ { n => PlannerLiteral(n.toLong) } |
-      (decimalNumber <~ ("p" | "P")) ^^ { n => PlannerLiteral(BigDecimal(n)) } |
+    (wholeNumber <~ ("l" | "L")) ^^ { n => Literal(n.toLong) } |
+      (decimalNumber <~ ("p" | "P")) ^^ { n => Literal(BigDecimal(n)) } |
       (floatingPointNumberFlink | decimalNumber) ^^ {
         n =>
           if (n.matches("""-?\d+""")) {
-            PlannerLiteral(n.toInt)
+            Literal(n.toInt)
           } else if (n.endsWith("f") || n.endsWith("F")) {
-            PlannerLiteral(n.toFloat)
+            Literal(n.toFloat)
           } else {
-            PlannerLiteral(n.toDouble)
+            Literal(n.toDouble)
           }
       }
 
@@ -193,36 +193,36 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   lazy val singleQuoteStringLiteral: Parser[PlannerExpression] = "'(?:''|[^'])*'".r ^^ {
     str =>
       val escaped = str.substring(1, str.length - 1).replace("''", "'")
-      PlannerLiteral(escaped)
+      Literal(escaped)
   }
 
   // string with double quotes such as "I ""like"" dogs."
   lazy val doubleQuoteStringLiteral: PackratParser[PlannerExpression] = "\"(?:\"\"|[^\"])*\"".r ^^ {
     str =>
       val escaped = str.substring(1, str.length - 1).replace("\"\"", "\"")
-      PlannerLiteral(escaped)
+      Literal(escaped)
   }
 
   lazy val boolLiteral: PackratParser[PlannerExpression] = (TRUE | FALSE) ^^ {
-    str => PlannerLiteral(str.toBoolean)
+    str => Literal(str.toBoolean)
   }
 
   lazy val nullLiteral: PackratParser[PlannerExpression] = NULL ~ "(" ~> dataType <~ ")" ^^ {
-    dt => PlannerNull(dt)
+    dt => Null(dt)
   }
 
   lazy val literalExpr: PackratParser[PlannerExpression] =
     numberLiteral | doubleQuoteStringLiteral | singleQuoteStringLiteral | boolLiteral
 
   lazy val fieldReference: PackratParser[NamedExpression] = (STAR | ident) ^^ {
-    sym => PlannerUnresolvedFieldReference(sym)
+    sym => UnresolvedFieldReference(sym)
   }
 
   lazy val atom: PackratParser[PlannerExpression] =
     ( "(" ~> expression <~ ")" ) | (fieldReference ||| literalExpr)
 
   lazy val over: PackratParser[PlannerExpression] = composite ~ OVER ~ fieldReference ^^ {
-    case agg ~ _ ~ windowRef => PlannerUnresolvedOverCall(agg, windowRef)
+    case agg ~ _ ~ windowRef => UnresolvedOverCall(agg, windowRef)
   }
 
   // suffix operators
@@ -235,7 +235,7 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
 
   lazy val suffixCast: PackratParser[PlannerExpression] =
     composite ~ "." ~ CAST ~ "(" ~ dataType ~ ")" ^^ {
-    case e ~ _ ~ _ ~ _ ~ dt ~ _ => PlannerCast(e, dt)
+    case e ~ _ ~ _ ~ _ ~ dt ~ _ => Cast(e, dt)
   }
 
   lazy val suffixTrim: PackratParser[PlannerExpression] =
@@ -276,23 +276,23 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
 
   lazy val suffixFunctionCall: PackratParser[PlannerExpression] =
     composite ~ "." ~ functionIdent ~ "(" ~ repsep(expression, ",") ~ ")" ^^ {
-    case operand ~ _ ~ name ~ _ ~ args ~ _ => PlannerCall(name.toUpperCase, operand :: args)
+    case operand ~ _ ~ name ~ _ ~ args ~ _ => Call(name.toUpperCase, operand :: args)
   }
 
   lazy val suffixFunctionCallOneArg: PackratParser[PlannerExpression] =
     composite ~ "." ~ functionIdent ^^ {
-      case operand ~ _ ~ name => PlannerCall(name.toUpperCase, Seq(operand))
+      case operand ~ _ ~ name => Call(name.toUpperCase, Seq(operand))
     }
 
   lazy val suffixToDate: PackratParser[PlannerExpression] =
-    composite <~ "." ~ TO_DATE ~ opt("()") ^^ { e => PlannerCast(e, SqlTimeTypeInfo.DATE) }
+    composite <~ "." ~ TO_DATE ~ opt("()") ^^ { e => Cast(e, SqlTimeTypeInfo.DATE) }
 
   lazy val suffixToTimestamp: PackratParser[PlannerExpression] =
     composite <~ "." ~ TO_TIMESTAMP ~ opt("()") ^^ {
-      e => PlannerCast(e, SqlTimeTypeInfo.TIMESTAMP) }
+      e => Cast(e, SqlTimeTypeInfo.TIMESTAMP) }
 
   lazy val suffixToTime: PackratParser[PlannerExpression] =
-    composite <~ "." ~ TO_TIME ~ opt("()") ^^ { e => PlannerCast(e, SqlTimeTypeInfo.TIME) }
+    composite <~ "." ~ TO_TIME ~ opt("()") ^^ { e => Cast(e, SqlTimeTypeInfo.TIME) }
 
   lazy val suffixTimeInterval : PackratParser[PlannerExpression] =
     composite ~ "." ~ (YEARS | QUARTERS | MONTHS | WEEKS | DAYS |  HOURS | MINUTES |
@@ -323,18 +323,18 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   lazy val suffixGet: PackratParser[PlannerExpression] =
     composite ~ "." ~ GET ~ "(" ~ literalExpr ~ ")" ^^ {
       case e ~ _ ~ _ ~ _ ~ index ~ _ =>
-        PlannerGetCompositeField(e, index.asInstanceOf[PlannerLiteral].value)
+        GetCompositeField(e, index.asInstanceOf[Literal].value)
   }
 
   lazy val suffixFlattening: PackratParser[PlannerExpression] =
-    composite <~ "." ~ FLATTEN ~ opt("()") ^^ { e => PlannerFlattening(e) }
+    composite <~ "." ~ FLATTEN ~ opt("()") ^^ { e => Flattening(e) }
 
   lazy val suffixDistinct: PackratParser[PlannerExpression] =
-    composite <~ "." ~ DISTINCT ~ opt("()") ^^ { e => PlannerDistinctAgg(e) }
+    composite <~ "." ~ DISTINCT ~ opt("()") ^^ { e => DistinctAgg(e) }
 
   lazy val suffixAs: PackratParser[PlannerExpression] =
     composite ~ "." ~ AS ~ "(" ~ rep1sep(fieldReference, ",") ~ ")" ^^ {
-      case e ~ _ ~ _ ~ _ ~ target ~ _ => PlannerAlias(e, target.head.name, target.tail.map(_.name))
+      case e ~ _ ~ _ ~ _ ~ target ~ _ => Alias(e, target.head.name, target.tail.map(_.name))
   }
 
   lazy val suffixed: PackratParser[PlannerExpression] =
@@ -364,7 +364,7 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
 
   lazy val prefixCast: PackratParser[PlannerExpression] =
     CAST ~ "(" ~ expression ~ "," ~ dataType ~ ")" ^^ {
-    case _ ~ _ ~ e ~ _ ~ dt ~ _ => PlannerCast(e, dt)
+    case _ ~ _ ~ e ~ _ ~ dt ~ _ => Cast(e, dt)
   }
 
   lazy val prefixIf: PackratParser[PlannerExpression] =
@@ -374,12 +374,12 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
 
   lazy val prefixFunctionCall: PackratParser[PlannerExpression] =
     functionIdent ~ "(" ~ repsep(expression, ",") ~ ")" ^^ {
-      case name ~ _ ~ args ~ _ => PlannerCall(name.toUpperCase, args)
+      case name ~ _ ~ args ~ _ => Call(name.toUpperCase, args)
     }
 
   lazy val prefixFunctionCallOneArg: PackratParser[PlannerExpression] =
     functionIdent ~ "(" ~ expression ~ ")" ^^ {
-      case name ~ _ ~ arg ~ _ => PlannerCall(name.toUpperCase, Seq(arg))
+      case name ~ _ ~ arg ~ _ => Call(name.toUpperCase, Seq(arg))
     }
 
   lazy val prefixTrim: PackratParser[PlannerExpression] =
@@ -415,29 +415,29 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   lazy val prefixGet: PackratParser[PlannerExpression] =
     GET ~ "(" ~ composite ~ ","  ~ literalExpr ~ ")" ^^ {
       case _ ~ _ ~ e ~ _ ~ index ~ _ =>
-        PlannerGetCompositeField(e, index.asInstanceOf[PlannerLiteral].value)
+        GetCompositeField(e, index.asInstanceOf[Literal].value)
   }
 
   lazy val prefixFlattening: PackratParser[PlannerExpression] =
-    FLATTEN ~ "(" ~> composite <~ ")" ^^ { e => PlannerFlattening(e) }
+    FLATTEN ~ "(" ~> composite <~ ")" ^^ { e => Flattening(e) }
 
   lazy val prefixToDate: PackratParser[PlannerExpression] =
-    TO_DATE ~ "(" ~> expression <~ ")" ^^ { e => PlannerCast(e, SqlTimeTypeInfo.DATE) }
+    TO_DATE ~ "(" ~> expression <~ ")" ^^ { e => Cast(e, SqlTimeTypeInfo.DATE) }
 
   lazy val prefixToTimestamp: PackratParser[PlannerExpression] =
-    TO_TIMESTAMP ~ "(" ~> expression <~ ")" ^^ { e => PlannerCast(e, SqlTimeTypeInfo.TIMESTAMP) }
+    TO_TIMESTAMP ~ "(" ~> expression <~ ")" ^^ { e => Cast(e, SqlTimeTypeInfo.TIMESTAMP) }
 
   lazy val prefixToTime: PackratParser[PlannerExpression] =
-    TO_TIME ~ "(" ~> expression <~ ")" ^^ { e => PlannerCast(e, SqlTimeTypeInfo.TIME) }
+    TO_TIME ~ "(" ~> expression <~ ")" ^^ { e => Cast(e, SqlTimeTypeInfo.TIME) }
 
   lazy val prefixDistinct: PackratParser[PlannerExpression] =
     functionIdent ~ "." ~ DISTINCT ~ "(" ~ repsep(expression, ",") ~ ")" ^^ {
-      case name ~ _ ~ _ ~ _ ~ args ~ _ => PlannerDistinctAgg(PlannerCall(name.toUpperCase, args))
+      case name ~ _ ~ _ ~ _ ~ args ~ _ => DistinctAgg(Call(name.toUpperCase, args))
   }
 
   lazy val prefixAs: PackratParser[PlannerExpression] =
     AS ~ "(" ~ expression ~ "," ~ rep1sep(fieldReference, ",") ~ ")" ^^ {
-    case _ ~ _ ~ e ~ _ ~ target ~ _ => PlannerAlias(e, target.head.name, target.tail.map(_.name))
+    case _ ~ _ ~ e ~ _ ~ target ~ _ => Alias(e, target.head.name, target.tail.map(_.name))
   }
 
   lazy val prefixed: PackratParser[PlannerExpression] =
@@ -531,24 +531,24 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   lazy val timeIndicator: PackratParser[PlannerExpression] = proctime | rowtime
 
   lazy val proctime: PackratParser[PlannerExpression] = fieldReference ~ "." ~ PROCTIME ^^ {
-    case f ~ _ ~ _ => PlannerProctimeAttribute(f)
+    case f ~ _ ~ _ => ProctimeAttribute(f)
   }
 
   lazy val rowtime: PackratParser[PlannerExpression] = fieldReference ~ "." ~ ROWTIME ^^ {
-    case f ~ _ ~ _ => PlannerRowtimeAttribute(f)
+    case f ~ _ ~ _ => RowtimeAttribute(f)
   }
 
   // alias
 
   lazy val alias: PackratParser[PlannerExpression] = logic ~ AS ~ fieldReference ^^ {
-      case e ~ _ ~ name => PlannerAlias(e, name.name)
+      case e ~ _ ~ name => Alias(e, name.name)
   } | logic ~ AS ~ "(" ~ rep1sep(fieldReference, ",") ~ ")" ^^ {
-    case e ~ _ ~ _ ~ names ~ _ => PlannerAlias(e, names.head.name, names.tail.map(_.name))
+    case e ~ _ ~ _ ~ names ~ _ => Alias(e, names.head.name, names.tail.map(_.name))
   } | logic
 
   lazy val aliasMapping: PackratParser[PlannerExpression] =
     fieldReference ~ AS ~ fieldReference ^^ {
-      case e ~ _ ~ name => PlannerAlias(e, name.name)
+      case e ~ _ ~ name => Alias(e, name.name)
   }
 
   lazy val expression: PackratParser[PlannerExpression] = overConstant | alias |

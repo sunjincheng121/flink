@@ -76,12 +76,12 @@ object ProjectionTranslator {
         identifyAggregationsAndProperties(b.right, tableEnv, l._1, l._2)
 
       // Functions calls
-      case c @ PlannerCall(name, args) =>
+      case c @ Call(name, args) =>
         args.foldLeft((aggNames, propNames)){
           (x, y) => identifyAggregationsAndProperties(y, tableEnv, x._1, x._2)
         }
 
-      case sfc @ PlannerScalarFunctionCall(clazz, args) =>
+      case sfc @ ScalarFunctionCall(clazz, args) =>
         args.foldLeft((aggNames, propNames)){
           (x, y) => identifyAggregationsAndProperties(y, tableEnv, x._1, x._2)
         }
@@ -119,7 +119,7 @@ object ProjectionTranslator {
     val projectedNames = new mutable.HashSet[String]
     exprs.map((exp: PlannerExpression) => replaceAggregationsAndProperties(exp, tableEnv,
       aggNames, propNames, projectedNames))
-        .map(PlannerUnresolvedAlias)
+        .map(UnresolvedAlias)
   }
 
   private def replaceAggregationsAndProperties(
@@ -133,23 +133,23 @@ object ProjectionTranslator {
       case agg: Aggregation =>
         val name = aggNames(agg)
         if (projectedNames.add(name)) {
-          PlannerUnresolvedFieldReference(name)
+          UnresolvedFieldReference(name)
         } else {
-          PlannerAlias(PlannerUnresolvedFieldReference(name), tableEnv.createUniqueAttributeName())
+          Alias(UnresolvedFieldReference(name), tableEnv.createUniqueAttributeName())
         }
       case prop: WindowProperty =>
         val name = propNames(prop)
         if (projectedNames.add(name)) {
-          PlannerUnresolvedFieldReference(name)
+          UnresolvedFieldReference(name)
         } else {
-          PlannerAlias(PlannerUnresolvedFieldReference(name), tableEnv.createUniqueAttributeName())
+          Alias(UnresolvedFieldReference(name), tableEnv.createUniqueAttributeName())
         }
-      case n @ PlannerAlias(agg: Aggregation, name, _) =>
+      case n @ Alias(agg: Aggregation, name, _) =>
         val aName = aggNames(agg)
-        PlannerAlias(PlannerUnresolvedFieldReference(aName), name)
-      case n @ PlannerAlias(prop: WindowProperty, name, _) =>
+        Alias(UnresolvedFieldReference(aName), name)
+      case n @ Alias(prop: WindowProperty, name, _) =>
         val pName = propNames(prop)
-        PlannerAlias(PlannerUnresolvedFieldReference(pName), name)
+        Alias(UnresolvedFieldReference(pName), name)
       case l: LeafPlannerExpression => l
       case u: UnaryPlannerExpression =>
         val c = replaceAggregationsAndProperties(u.child, tableEnv,
@@ -163,12 +163,12 @@ object ProjectionTranslator {
         b.makeCopy(Array(l, r))
 
       // Functions calls
-      case c @ PlannerCall(name, args) =>
+      case c @ Call(name, args) =>
         val newArgs = args.map((exp: PlannerExpression) =>
           replaceAggregationsAndProperties(exp, tableEnv, aggNames, propNames, projectedNames))
         c.makeCopy(Array(name, newArgs))
 
-      case sfc @ PlannerScalarFunctionCall(clazz, args) =>
+      case sfc @ ScalarFunctionCall(clazz, args) =>
         val newArgs: Seq[PlannerExpression] = args
           .map((exp: PlannerExpression) =>
             replaceAggregationsAndProperties(exp, tableEnv, aggNames, propNames, projectedNames))
@@ -210,12 +210,12 @@ object ProjectionTranslator {
     val projectList = new ListBuffer[PlannerExpression]
 
     exprs.foreach {
-      case n: PlannerUnresolvedFieldReference if n.name == "*" =>
-        projectList ++= parent.output.map(a => PlannerUnresolvedFieldReference(a.name))
+      case n: UnresolvedFieldReference if n.name == "*" =>
+        projectList ++= parent.output.map(a => UnresolvedFieldReference(a.name))
 
-      case PlannerFlattening(unresolved) =>
+      case Flattening(unresolved) =>
         // simulate a simple project to resolve fields using current parent
-        val project = Project(Seq(PlannerUnresolvedAlias(unresolved)), parent).validate(tableEnv)
+        val project = Project(Seq(UnresolvedAlias(unresolved)), parent).validate(tableEnv)
         val resolvedExpr = project
           .output
           .headOption
@@ -224,7 +224,7 @@ object ProjectionTranslator {
         val newProjects = resolvedExpr.resultType match {
           case ct: CompositeType[_] =>
             (0 until ct.getArity).map { idx =>
-              projectList += PlannerGetCompositeField(unresolved, ct.getFieldNames()(idx))
+              projectList += GetCompositeField(unresolved, ct.getFieldNames()(idx))
             }
           case _ =>
             projectList += unresolved
@@ -255,10 +255,10 @@ object ProjectionTranslator {
       tableEnv: TableEnvironment): PlannerExpression = {
 
     expr match {
-      case u: PlannerUnresolvedOverCall =>
+      case u: UnresolvedOverCall =>
         val overWindow = overWindows.find(_.alias.equals(u.alias))
         if (overWindow.isDefined) {
-          PlannerOverCall(
+          OverCall(
             u.agg,
             overWindow.get.partitionBy,
             overWindow.get.orderBy,
@@ -278,7 +278,7 @@ object ProjectionTranslator {
         b.makeCopy(Array(l, r))
 
       // Functions calls
-      case c @ PlannerCall(name, args: Seq[PlannerExpression]) =>
+      case c @ Call(name, args: Seq[PlannerExpression]) =>
         val newArgs =
           args.map(
             (exp: PlannerExpression) =>
@@ -286,7 +286,7 @@ object ProjectionTranslator {
         c.makeCopy(Array(name, newArgs))
 
       // Scala functions
-      case sfc @ PlannerScalarFunctionCall(clazz, args: Seq[PlannerExpression]) =>
+      case sfc @ ScalarFunctionCall(clazz, args: Seq[PlannerExpression]) =>
         val newArgs: Seq[PlannerExpression] =
           args.map(
             (exp: PlannerExpression) =>
@@ -322,24 +322,24 @@ object ProjectionTranslator {
       expr: PlannerExpression,
       fieldReferences: Set[NamedExpression]): Set[NamedExpression] = expr match {
 
-    case f: PlannerUnresolvedFieldReference =>
-      fieldReferences + PlannerUnresolvedAlias(f)
+    case f: UnresolvedFieldReference =>
+      fieldReferences + UnresolvedAlias(f)
 
     case b: BinaryPlannerExpression =>
       val l = identifyFieldReferences(b.left, fieldReferences)
       identifyFieldReferences(b.right, l)
 
     // Functions calls
-    case PlannerCall(_, args: Seq[PlannerExpression]) =>
+    case Call(_, args: Seq[PlannerExpression]) =>
       args.foldLeft(fieldReferences) {
         (fieldReferences, expr) => identifyFieldReferences(expr, fieldReferences)
       }
-    case PlannerScalarFunctionCall(_, args: Seq[PlannerExpression]) =>
+    case ScalarFunctionCall(_, args: Seq[PlannerExpression]) =>
       args.foldLeft(fieldReferences) {
         (fieldReferences, expr) => identifyFieldReferences(expr, fieldReferences)
       }
 
-    case PlannerAggFunctionCall(_, _, _, args) =>
+    case AggFunctionCall(_, _, _, args) =>
       args.foldLeft(fieldReferences) {
         (fieldReferences, expr) => identifyFieldReferences(expr, fieldReferences)
       }
@@ -389,10 +389,10 @@ object ProjectionTranslator {
         val r = replaceAggFunctionCall(b.right, tableEnv)
         b.makeCopy(Array(l, r))
       // Functions calls
-      case c @ PlannerCall(name, args) =>
+      case c @ Call(name, args) =>
         val function = tableEnv.getFunctionCatalog.lookupFunction(name, args)
         function match {
-          case a: PlannerAggFunctionCall => a
+          case a: AggFunctionCall => a
           case a: Aggregation => a
           case p: AbstractWindowProperty => p
           case _ =>
@@ -403,7 +403,7 @@ object ProjectionTranslator {
             c.makeCopy(Array(name, newArgs))
         }
       // Scala functions
-      case sfc @ PlannerScalarFunctionCall(clazz, args) =>
+      case sfc @ ScalarFunctionCall(clazz, args) =>
         val newArgs: Seq[PlannerExpression] =
           args.map(
             (exp: PlannerExpression) =>

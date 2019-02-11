@@ -31,7 +31,6 @@ import org.apache.flink.util.Preconditions
 import java.sql.{Date, Time, Timestamp}
 
 import org.apache.flink.table.expressions._
-import org.apache.flink.table.plan.expressions.DefaultPlannerExpressionVisitor
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.JavaConversions._
@@ -274,9 +273,9 @@ class RexNodeToExpressionConverter(
   private def lookupFunction(
       name: String,
       operands: Seq[Expression]): Option[Expression] = {
-    Try(functionCatalog.lookupFunction(name, operands.map(_.accept(new DefaultExpressionVisitor))))
+    Try(functionCatalog.lookupFunctionWithExpressionArguments(name, operands))
     match {
-      case Success(expr) => Some(expr.accept(new DefaultPlannerExpressionVisitor))
+      case Success(expr) => Some(expr)
       case Failure(_) => None
     }
   }

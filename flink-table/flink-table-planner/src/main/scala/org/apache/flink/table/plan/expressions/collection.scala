@@ -57,10 +57,6 @@ case class RowConstructor(elements: Seq[PlannerExpression]) extends PlannerExpre
     }
     ValidationSuccess
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("row", children))
-  }
 }
 
 case class ArrayConstructor(elements: Seq[PlannerExpression]) extends PlannerExpression {
@@ -92,10 +88,6 @@ case class ArrayConstructor(elements: Seq[PlannerExpression]) extends PlannerExp
     } else {
       ValidationSuccess
     }
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("array", children))
   }
 }
 
@@ -138,10 +130,6 @@ case class MapConstructor(elements: Seq[PlannerExpression]) extends PlannerExpre
     }
     ValidationSuccess
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("map", children))
-  }
 }
 
 case class ArrayElement(array: PlannerExpression) extends PlannerExpression {
@@ -168,10 +156,6 @@ case class ArrayElement(array: PlannerExpression) extends PlannerExpression {
       case other@_ => ValidationFailure(s"Array expected but was '$other'.")
     }
   }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("element", children))
-  }
 }
 
 case class Cardinality(container: PlannerExpression) extends PlannerExpression {
@@ -194,10 +178,6 @@ case class Cardinality(container: PlannerExpression) extends PlannerExpression {
       case ati: TypeInformation[_] if isArray(ati) => ValidationSuccess
       case other@_ => ValidationFailure(s"Array or map expected but was '$other'.")
     }
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("cardinality", children))
   }
 }
 
@@ -227,7 +207,7 @@ case class ItemAt(container: PlannerExpression, key: PlannerExpression) extends 
         if (key.resultType == INT_TYPE_INFO) {
           // check for common user mistake
           key match {
-            case PlannerLiteral(value: Int, INT_TYPE_INFO) if value < 1 =>
+            case Literal(value: Int, INT_TYPE_INFO) if value < 1 =>
               ValidationFailure(
                 s"Array element access needs an index starting at 1 but was $value.")
             case _ => ValidationSuccess
@@ -248,9 +228,5 @@ case class ItemAt(container: PlannerExpression, key: PlannerExpression) extends 
 
       case other@_ => ValidationFailure(s"Array or map expected but was '$other'.")
     }
-  }
-
-  override private[flink] def accept[R](visitor: PlannerExpressionVisitor[R]) = {
-    visitor.visitCall(PlannerCall("at", children))
   }
 }
