@@ -27,21 +27,12 @@ import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.orc.OrcRowInputFormat.Predicate;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.plan.expressions.Attribute;
-import org.apache.flink.table.plan.expressions.BinaryComparison;
-import org.apache.flink.table.plan.expressions.EqualTo;
-import org.apache.flink.table.plan.expressions.PlannerExpression;
-import org.apache.flink.table.plan.expressions.GreaterThan;
-import org.apache.flink.table.plan.expressions.GreaterThanOrEqual;
-import org.apache.flink.table.plan.expressions.IsNotNull;
-import org.apache.flink.table.plan.expressions.IsNull;
-import org.apache.flink.table.plan.expressions.LessThan;
-import org.apache.flink.table.plan.expressions.LessThanOrEqual;
-import org.apache.flink.table.plan.expressions.Literal;
-import org.apache.flink.table.plan.expressions.Not;
-import org.apache.flink.table.plan.expressions.NotEqualTo;
-import org.apache.flink.table.plan.expressions.Or;
-import org.apache.flink.table.plan.expressions.UnaryPlannerExpression;
+import org.apache.flink.table.expressions.Call;
+import org.apache.flink.table.expressions.Expression;
+import org.apache.flink.table.expressions.FieldReference;
+import org.apache.flink.table.expressions.FunctionDefinitions;
+import org.apache.flink.table.expressions.FunctionType;
+import org.apache.flink.table.expressions.Literal;
 import org.apache.flink.table.sources.BatchTableSource;
 import org.apache.flink.table.sources.FilterableTableSource;
 import org.apache.flink.table.sources.ProjectableTableSource;
@@ -189,11 +180,11 @@ public class OrcTableSource
 	}
 
 	@Override
-	public TableSource<Row> applyPredicate(List<PlannerExpression> predicates) {
+	public TableSource<Row> applyPredicate(List<Expression> predicates) {
 		ArrayList<Predicate> orcPredicates = new ArrayList<>();
 
 		// we do not remove any predicates from the list because ORC does not fully apply predicates
-		for (PlannerExpression pred : predicates) {
+		for (Expression pred : predicates) {
 			Predicate orcPred = toOrcPredicate(pred);
 			if (orcPred != null) {
 				LOG.info("Predicate [{}] converted into OrcPredicate [{}] and pushed into OrcTableSource for path {}.", pred, orcPred, path);
@@ -226,171 +217,166 @@ public class OrcTableSource
 
 	// Predicate conversion for filter push-down.
 
-	private Predicate toOrcPredicate(PlannerExpression pred) {
-		if (pred instanceof Or) {
-			Predicate c1 = toOrcPredicate(((Or) pred).left());
-			Predicate c2 = toOrcPredicate(((Or) pred).right());
-			if (c1 == null || c2 == null) {
-				return null;
-			} else {
-				return new OrcRowInputFormat.Or(c1, c2);
-			}
-		} else if (pred instanceof Not) {
-			Predicate c = toOrcPredicate(((Not) pred).child());
-			if (c == null) {
-				return null;
-			} else {
-				return new OrcRowInputFormat.Not(c);
-			}
-		} else if (pred instanceof BinaryComparison) {
-
-			BinaryComparison binComp = (BinaryComparison) pred;
-
-			if (!isValid(binComp)) {
-				// not a valid predicate
-				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
-				return null;
-			}
-			PredicateLeaf.Type litType = getLiteralType(binComp);
-			if (litType == null) {
-				// unsupported literal type
-				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
-				return null;
-			}
-
-			boolean literalOnRight = literalOnRight(binComp);
-			String colName = getColumnName(binComp);
-
-			// fetch literal and ensure it is serializable
-			Object literalObj = getLiteral(binComp);
-			Serializable literal;
-			// validate that literal is serializable
-			if (literalObj instanceof Serializable) {
-				literal = (Serializable) literalObj;
-			} else {
-				LOG.warn("Encountered a non-serializable literal of type {}. " +
-						"Cannot push predicate [{}] into OrcTableSource. " +
-						"This is a bug and should be reported.",
-						literalObj.getClass().getCanonicalName(), pred);
-				return null;
-			}
-
-			if (pred instanceof EqualTo) {
-				return new OrcRowInputFormat.Equals(colName, litType, literal);
-			} else if (pred instanceof NotEqualTo) {
-				return new OrcRowInputFormat.Not(
-					new OrcRowInputFormat.Equals(colName, litType, literal));
-			} else if (pred instanceof GreaterThan) {
-				if (literalOnRight) {
-					return new OrcRowInputFormat.Not(
-						new OrcRowInputFormat.LessThanEquals(colName, litType, literal));
+	private Predicate toOrcPredicate(Expression pred) {
+		if (pred instanceof Call) {
+			Call predCall = (Call) pred;
+			if (predCall.getFunctionDefinition() == FunctionDefinitions.OR) {
+				Predicate c1 = toOrcPredicate(predCall.getChildren().get(0));
+				Predicate c2 = toOrcPredicate(predCall.getChildren().get(1));
+				if (c1 == null || c2 == null) {
+					return null;
 				} else {
-					return new OrcRowInputFormat.LessThan(colName, litType, literal);
+					return new OrcRowInputFormat.Or(c1, c2);
 				}
-			} else if (pred instanceof GreaterThanOrEqual) {
-				if (literalOnRight) {
-					return new OrcRowInputFormat.Not(
-						new OrcRowInputFormat.LessThan(colName, litType, literal));
+			} else if (predCall.getFunctionDefinition() == FunctionDefinitions.NOT) {
+				Predicate c = toOrcPredicate(predCall.getChildren().get(0));
+				if (c == null) {
+					return null;
 				} else {
-					return new OrcRowInputFormat.LessThanEquals(colName, litType, literal);
+					return new OrcRowInputFormat.Not(c);
 				}
-			} else if (pred instanceof LessThan) {
-				if (literalOnRight) {
-					return new OrcRowInputFormat.LessThan(colName, litType, literal);
+			} else if (predCall.getFunctionDefinition().getFunctionType() == FunctionType.COMPARISON) {
+				Expression left = predCall.getChildren().get(0);
+				Expression right = predCall.getChildren().get(1);
+
+				if (!isValid(left, right)) {
+					// not a valid predicate
+					LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
+					return null;
+				}
+				PredicateLeaf.Type litType = getLiteralType(left, right);
+				if (litType == null) {
+					// unsupported literal type
+					LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
+					return null;
+				}
+
+				boolean literalOnRight = literalOnRight(left, right);
+				String colName = getColumnName(left, right);
+
+				// fetch literal and ensure it is serializable
+				Object literalObj = getLiteral(left, right);
+				Serializable literal;
+				// validate that literal is serializable
+				if (literalObj instanceof Serializable) {
+					literal = (Serializable) literalObj;
 				} else {
-					return new OrcRowInputFormat.Not(
-						new OrcRowInputFormat.LessThanEquals(colName, litType, literal));
+					LOG.warn("Encountered a non-serializable literal of type {}. " +
+							"Cannot push predicate [{}] into OrcTableSource. " +
+							"This is a bug and should be reported.",
+							literalObj.getClass().getCanonicalName(), pred);
+					return null;
 				}
-			} else if (pred instanceof LessThanOrEqual) {
-				if (literalOnRight) {
-					return new OrcRowInputFormat.LessThanEquals(colName, litType, literal);
-				} else {
+
+				if (predCall.getFunctionDefinition() == FunctionDefinitions.EQUALS) {
+					return new OrcRowInputFormat.Equals(colName, litType, literal);
+				} else if (predCall.getFunctionDefinition() == FunctionDefinitions.NOT_EQUALS) {
 					return new OrcRowInputFormat.Not(
-						new OrcRowInputFormat.LessThan(colName, litType, literal));
+						new OrcRowInputFormat.Equals(colName, litType, literal));
+				} else if (predCall.getFunctionDefinition() == FunctionDefinitions.GREATER_THAN) {
+					if (literalOnRight) {
+						return new OrcRowInputFormat.Not(
+							new OrcRowInputFormat.LessThanEquals(colName, litType, literal));
+					} else {
+						return new OrcRowInputFormat.LessThan(colName, litType, literal);
+					}
+				} else if (predCall.getFunctionDefinition() == FunctionDefinitions.GREATER_THAN_OR_EQUAL) {
+					if (literalOnRight) {
+						return new OrcRowInputFormat.Not(
+							new OrcRowInputFormat.LessThan(colName, litType, literal));
+					} else {
+						return new OrcRowInputFormat.LessThanEquals(colName, litType, literal);
+					}
+				} else if (predCall.getFunctionDefinition() == FunctionDefinitions.LESS_THAN) {
+					if (literalOnRight) {
+						return new OrcRowInputFormat.LessThan(colName, litType, literal);
+					} else {
+						return new OrcRowInputFormat.Not(
+							new OrcRowInputFormat.LessThanEquals(colName, litType, literal));
+					}
+				} else if (predCall.getFunctionDefinition() == FunctionDefinitions.LESS_THAN_OR_EQUAL) {
+					if (literalOnRight) {
+						return new OrcRowInputFormat.LessThanEquals(colName, litType, literal);
+					} else {
+						return new OrcRowInputFormat.Not(
+							new OrcRowInputFormat.LessThan(colName, litType, literal));
+					}
 				}
-			} else {
-				// unsupported predicate
-				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
-				return null;
-			}
-		} else if (pred instanceof UnaryPlannerExpression) {
+			} else if (predCall.getFunctionDefinition().getFunctionType() == FunctionType.OTHER) {
 
-			UnaryPlannerExpression unary = (UnaryPlannerExpression) pred;
-			if (!isValid(unary)) {
-				// not a valid predicate
-				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
-				return null;
-			}
-			PredicateLeaf.Type colType = toOrcType(((UnaryPlannerExpression) pred).child().resultType());
-			if (colType == null) {
-				// unsupported type
-				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
-				return null;
-			}
+				if (predCall.getChildren().size() != 1 || !isValid(predCall.getChildren().get(0))) {
+					// not a valid predicate
+					LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
+					return null;
+				}
+				PredicateLeaf.Type colType =
+					toOrcType(((FieldReference) (predCall.getChildren().get(0))).getResultType().get());
+				if (colType == null) {
+					// unsupported type
+					LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
+					return null;
+				}
 
-			String colName = getColumnName(unary);
+				String colName = getColumnName(predCall.getChildren().get(0));
 
-			if (pred instanceof IsNull) {
-				return new OrcRowInputFormat.IsNull(colName, colType);
-			} else if (pred instanceof IsNotNull) {
-				return new OrcRowInputFormat.Not(
-					new OrcRowInputFormat.IsNull(colName, colType));
-			} else {
-				// unsupported predicate
-				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
-				return null;
+				if (predCall.getFunctionDefinition() == FunctionDefinitions.IS_NULL) {
+					return new OrcRowInputFormat.IsNull(colName, colType);
+				} else if (predCall.getFunctionDefinition() == FunctionDefinitions.IS_NOT_NULL) {
+					return new OrcRowInputFormat.Not(
+						new OrcRowInputFormat.IsNull(colName, colType));
+				}
 			}
-		} else {
-			// unsupported predicate
-			LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
-			return null;
 		}
+
+		// unsupported predicate
+		LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
+		return null;
 	}
 
-	private boolean isValid(UnaryPlannerExpression unary) {
-		return unary.child() instanceof Attribute;
+	private boolean isValid(Expression expression) {
+		return expression instanceof FieldReference;
 	}
 
-	private boolean isValid(BinaryComparison comp) {
-		return (comp.left() instanceof Literal && comp.right() instanceof Attribute) ||
-			(comp.left() instanceof Attribute && comp.right() instanceof Literal);
+	private boolean isValid(Expression left, Expression right) {
+		return (left instanceof Literal && right instanceof FieldReference) ||
+			(left instanceof FieldReference && right instanceof Literal);
 	}
 
-	private boolean literalOnRight(BinaryComparison comp) {
-		if (comp.left() instanceof Literal && comp.right() instanceof Attribute) {
+	private boolean literalOnRight(Expression left, Expression right) {
+		if (left instanceof Literal && right instanceof FieldReference) {
 			return false;
-		} else if (comp.left() instanceof Attribute && comp.right() instanceof Literal) {
+		} else if (left instanceof FieldReference && right instanceof Literal) {
 			return true;
 		} else {
 			throw new RuntimeException("Invalid binary comparison.");
 		}
 	}
 
-	private String getColumnName(UnaryPlannerExpression unary) {
-		return ((Attribute) unary.child()).name();
+	private String getColumnName(Expression expression) {
+		return ((FieldReference) expression).getName();
 	}
 
-	private String getColumnName(BinaryComparison comp) {
-		if (literalOnRight(comp)) {
-			return ((Attribute) comp.left()).name();
+	private String getColumnName(Expression left, Expression right) {
+		if (literalOnRight(left, right)) {
+			return ((FieldReference) left).getName();
 		} else {
-			return ((Attribute) comp.right()).name();
+			return ((FieldReference) right).getName();
 		}
 	}
 
-	private PredicateLeaf.Type getLiteralType(BinaryComparison comp) {
-		if (literalOnRight(comp)) {
-			return toOrcType(((Literal) comp.right()).resultType());
+	private PredicateLeaf.Type getLiteralType(Expression left, Expression right) {
+		if (literalOnRight(left, right)) {
+			return toOrcType(((Literal) right).getType().get());
 		} else {
-			return toOrcType(((Literal) comp.left()).resultType());
+			return toOrcType(((Literal) left).getType().get());
 		}
 	}
 
-	private Object getLiteral(BinaryComparison comp) {
-		if (literalOnRight(comp)) {
-			return ((Literal) comp.right()).value();
+	private Object getLiteral(Expression left, Expression right) {
+		if (literalOnRight(left, right)) {
+			return ((Literal) right).getValue();
 		} else {
-			return ((Literal) comp.left()).value();
+			return ((Literal) left).getValue();
 		}
 	}
 

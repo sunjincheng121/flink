@@ -29,14 +29,14 @@ import org.apache.flink.api.java.typeutils.MapTypeInfo;
 import org.apache.flink.api.java.typeutils.ObjectArrayTypeInfo;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.plan.expressions.EqualTo;
-import org.apache.flink.table.plan.expressions.PlannerExpression;
-import org.apache.flink.table.plan.expressions.GetCompositeField;
-import org.apache.flink.table.plan.expressions.GreaterThan;
-import org.apache.flink.table.plan.expressions.ItemAt;
-import org.apache.flink.table.plan.expressions.Literal;
-import org.apache.flink.table.plan.expressions.ResolvedFieldReference;
+import org.apache.flink.table.expressions.Call;
+import org.apache.flink.table.expressions.Expression;
+import org.apache.flink.table.expressions.FieldReference;
+import org.apache.flink.table.expressions.FunctionDefinitions;
+import org.apache.flink.table.expressions.Literal;
 import org.apache.flink.types.Row;
+
+import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.io.sarg.PredicateLeaf;
@@ -178,32 +178,41 @@ public class OrcTableSourceTest {
 			.build();
 
 		// expressions for supported predicates
-		PlannerExpression pred1 = new GreaterThan(
-			new ResolvedFieldReference("int1", Types.INT),
-			new Literal(100, Types.INT));
-		PlannerExpression pred2 = new EqualTo(
-			new ResolvedFieldReference("string1", Types.STRING),
-			new Literal("hello", Types.STRING));
+		Expression pred1 = new Call(FunctionDefinitions.GREATER_THAN,
+			Lists.newArrayList(new FieldReference("int1", Types.INT),
+			new Literal(100, Types.INT)));
+		Expression pred2 = new Call(FunctionDefinitions.EQUALS,
+			Lists.newArrayList(new FieldReference("string1", Types.STRING),
+			new Literal("hello", Types.STRING)));
 		// unsupported predicate
-		PlannerExpression unsupportedPred = new EqualTo(
-			new GetCompositeField(
-				new ItemAt(
-					new ResolvedFieldReference(
-						"list",
-						ObjectArrayTypeInfo.getInfoFor(
-							Types.ROW_NAMED(new String[] {"int1", "string1"}, Types.INT, Types.STRING))),
-					new Literal(1, Types.INT)),
-				"int1"),
-			new Literal(1, Types.INT)
-			);
+		Expression unsupportedPred = new Call(FunctionDefinitions.EQUALS,
+			Lists.newArrayList(
+				new Call(
+					FunctionDefinitions.GET_COMPOSITE_FIELD,
+					Lists.newArrayList(
+						new Call(
+							FunctionDefinitions.AT,
+							Lists.newArrayList(
+								new FieldReference(
+									"list",
+									ObjectArrayTypeInfo.getInfoFor(
+										Types.ROW_NAMED(
+											new String[]{"int1", "string1"},
+											Types.INT,
+											Types.STRING))),
+								new Literal(1, Types.INT))),
+						new FieldReference("int1"))),
+				new Literal(1, Types.INT))
+		);
 		// invalid predicate
-		PlannerExpression invalidPred = new EqualTo(
-			new ResolvedFieldReference("long1", Types.LONG),
-			// some invalid, non-serializable literal (here an object of this test class)
-			new Literal(new OrcTableSourceTest(), Types.LONG)
+		Expression invalidPred = new Call(FunctionDefinitions.EQUALS,
+			Lists.newArrayList(
+				new FieldReference("long1", Types.LONG),
+				// some invalid, non-serializable literal (here an object of this test class)
+				new Literal(new OrcTableSourceTest(), Types.LONG))
 		);
 
-		ArrayList<PlannerExpression> preds = new ArrayList<>();
+		ArrayList<Expression> preds = new ArrayList<>();
 		preds.add(pred1);
 		preds.add(pred2);
 		preds.add(unsupportedPred);
