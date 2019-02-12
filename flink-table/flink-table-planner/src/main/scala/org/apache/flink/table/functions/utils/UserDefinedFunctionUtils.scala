@@ -37,7 +37,7 @@ import org.apache.flink.table.api.dataview._
 import org.apache.flink.table.api.{TableEnvironment, TableException, ValidationException}
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.dataview._
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction, UserDefinedFunction}
 import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.plan.schema.FlinkTableFunctionImpl
@@ -775,13 +775,13 @@ object UserDefinedFunctionUtils {
     */
   def createLogicalFunctionCall(
       tableEnv: TableEnvironment,
-      callExpr: Expression)
+      callExpr: PlannerExpression)
     : LogicalTableFunctionCall = {
 
     var alias: Option[Seq[String]] = None
 
     // unwrap an Expression until we get a TableFunctionCall
-    def unwrap(expr: Expression): TableFunctionCall = expr match {
+    def unwrap(expr: PlannerExpression): TableFunctionCall = expr match {
       case Alias(child, name, extraNames) =>
         alias = Some(Seq(name) ++ extraNames)
         unwrap(child)

@@ -21,7 +21,7 @@ import org.apache.calcite.rel.RelNode
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
-import org.apache.flink.table.expressions.{Alias, Asc, Expression, ExpressionParser, Ordering, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
+import org.apache.flink.table.plan.expressions.{Alias, Asc, PlannerExpression, ExpressionParser, Ordering, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
 import org.apache.flink.table.functions.TemporalTableFunction
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.table.plan.ProjectionTranslator._
@@ -124,7 +124,7 @@ class Table(
     *   tab.select('key, 'value.avg + " The average" as 'average)
     * }}}
     */
-  def select(fields: Expression*): Table = {
+  def select(fields: PlannerExpression*): Table = {
     val expandedFields = expandProjectList(fields, logicalPlan, tableEnv)
     val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, tableEnv)
     if (propNames.nonEmpty) {
@@ -213,8 +213,8 @@ class Table(
     *        [[TemporalTableFunction]] was created.
     */
   def createTemporalTableFunction(
-      timeAttribute: Expression,
-      primaryKey: Expression): TemporalTableFunction = {
+      timeAttribute: PlannerExpression,
+      primaryKey: PlannerExpression): TemporalTableFunction = {
     val temporalTable = TemporalTable(timeAttribute, primaryKey, logicalPlan)
       .validate(tableEnv)
       .asInstanceOf[TemporalTable]
@@ -225,7 +225,7 @@ class Table(
       validatePrimaryKeyExpression(temporalTable.primaryKey))
   }
 
-  private def validatePrimaryKeyExpression(expression: Expression): String = {
+  private def validatePrimaryKeyExpression(expression: PlannerExpression): String = {
     expression match {
       case fieldReference: ResolvedFieldReference =>
         fieldReference.name
@@ -245,7 +245,7 @@ class Table(
     *   tab.as('a, 'b)
     * }}}
     */
-  def as(fields: Expression*): Table = {
+  def as(fields: PlannerExpression*): Table = {
 
     logicalPlan match {
       case functionCall: LogicalTableFunctionCall if functionCall.child == null =>
@@ -301,7 +301,7 @@ class Table(
     *   tab.filter('name === "Fred")
     * }}}
     */
-  def filter(predicate: Expression): Table = {
+  def filter(predicate: PlannerExpression): Table = {
     new Table(tableEnv, Filter(predicate, logicalPlan).validate(tableEnv))
   }
 
@@ -330,7 +330,7 @@ class Table(
     *   tab.where('name === "Fred")
     * }}}
     */
-  def where(predicate: Expression): Table = {
+  def where(predicate: PlannerExpression): Table = {
     filter(predicate)
   }
 
@@ -358,7 +358,7 @@ class Table(
     *   tab.groupBy('key).select('key, 'value.avg)
     * }}}
     */
-  def groupBy(fields: Expression*): GroupedTable = {
+  def groupBy(fields: PlannerExpression*): GroupedTable = {
     new GroupedTable(this, fields)
   }
 
@@ -435,7 +435,7 @@ class Table(
     *   left.join(right, 'a === 'b).select('a, 'b, 'd)
     * }}}
     */
-  def join(right: Table, joinPredicate: Expression): Table = {
+  def join(right: Table, joinPredicate: PlannerExpression): Table = {
     join(right, Some(joinPredicate), JoinType.INNER)
   }
 
@@ -486,7 +486,7 @@ class Table(
     *   left.leftOuterJoin(right, 'a === 'b).select('a, 'b, 'd)
     * }}}
     */
-  def leftOuterJoin(right: Table, joinPredicate: Expression): Table = {
+  def leftOuterJoin(right: Table, joinPredicate: PlannerExpression): Table = {
     join(right, Some(joinPredicate), JoinType.LEFT_OUTER)
   }
 
@@ -520,7 +520,7 @@ class Table(
     *   left.rightOuterJoin(right, 'a === 'b).select('a, 'b, 'd)
     * }}}
     */
-  def rightOuterJoin(right: Table, joinPredicate: Expression): Table = {
+  def rightOuterJoin(right: Table, joinPredicate: PlannerExpression): Table = {
     join(right, Some(joinPredicate), JoinType.RIGHT_OUTER)
   }
 
@@ -554,7 +554,7 @@ class Table(
     *   left.fullOuterJoin(right, 'a === 'b).select('a, 'b, 'd)
     * }}}
     */
-  def fullOuterJoin(right: Table, joinPredicate: Expression): Table = {
+  def fullOuterJoin(right: Table, joinPredicate: PlannerExpression): Table = {
     join(right, Some(joinPredicate), JoinType.FULL_OUTER)
   }
 
@@ -563,7 +563,7 @@ class Table(
     join(right, Some(joinPredicateExpr), joinType)
   }
 
-  private def join(right: Table, joinPredicate: Option[Expression], joinType: JoinType): Table = {
+  private def join(right: Table, joinPredicate: Option[PlannerExpression], joinType: JoinType): Table = {
 
     // check if we join with a table or a table function
     if (!containsUnboundedUDTFCall(right.logicalPlan)) {
@@ -670,7 +670,7 @@ class Table(
     *   table.joinLateral(split('c) as ('s)).select('a, 'b, 'c, 's)
     * }}}
     */
-  def joinLateral(tableFunctionCall: Expression): Table = {
+  def joinLateral(tableFunctionCall: PlannerExpression): Table = {
     joinLateral(tableFunctionCall, None, JoinType.INNER)
   }
 
@@ -691,7 +691,7 @@ class Table(
     *   table.joinLateral(split('c) as ('s), 'a === 's).select('a, 'b, 'c, 's)
     * }}}
     */
-  def joinLateral(tableFunctionCall: Expression, joinPredicate: Expression): Table = {
+  def joinLateral(tableFunctionCall: PlannerExpression, joinPredicate: PlannerExpression): Table = {
     joinLateral(tableFunctionCall, Some(joinPredicate), JoinType.INNER)
   }
 
@@ -762,7 +762,7 @@ class Table(
     *   table.leftOuterJoinLateral(split('c) as ('s)).select('a, 'b, 'c, 's)
     * }}}
     */
-  def leftOuterJoinLateral(tableFunctionCall: Expression): Table = {
+  def leftOuterJoinLateral(tableFunctionCall: PlannerExpression): Table = {
     joinLateral(tableFunctionCall, None, JoinType.LEFT_OUTER)
   }
 
@@ -784,13 +784,13 @@ class Table(
     *   table.leftOuterJoinLateral(split('c) as ('s), 'a === 's).select('a, 'b, 'c, 's)
     * }}}
     */
-  def leftOuterJoinLateral(tableFunctionCall: Expression, joinPredicate: Expression): Table = {
+  def leftOuterJoinLateral(tableFunctionCall: PlannerExpression, joinPredicate: PlannerExpression): Table = {
     joinLateral(tableFunctionCall, Some(joinPredicate), JoinType.LEFT_OUTER)
   }
 
   private def joinLateral(
-      callExpr: Expression,
-      joinPredicate: Option[Expression],
+      callExpr: PlannerExpression,
+      joinPredicate: Option[PlannerExpression],
       joinType: JoinType): Table = {
 
     // check join type
@@ -966,7 +966,7 @@ class Table(
     *   tab.orderBy('name.desc)
     * }}}
     */
-  def orderBy(fields: Expression*): Table = {
+  def orderBy(fields: PlannerExpression*): Table = {
     val order: Seq[Ordering] = fields.map {
       case o: Ordering => o
       case e => Asc(e)
@@ -1242,7 +1242,7 @@ class Table(
   */
 class GroupedTable(
   private[flink] val table: Table,
-  private[flink] val groupKey: Seq[Expression]) {
+  private[flink] val groupKey: Seq[PlannerExpression]) {
 
   /**
     * Performs a selection operation on a grouped table. Similar to an SQL SELECT statement.
@@ -1254,7 +1254,7 @@ class GroupedTable(
     *   tab.groupBy('key).select('key, 'value.avg + " The average" as 'average)
     * }}}
     */
-  def select(fields: Expression*): Table = {
+  def select(fields: PlannerExpression*): Table = {
     val expandedFields = expandProjectList(fields, table.logicalPlan, table.tableEnv)
     val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, table.tableEnv)
     if (propNames.nonEmpty) {
@@ -1311,7 +1311,7 @@ class WindowedTable(
     *   tab.window([window] as 'w)).groupBy('w, 'key).select('key, 'value.avg)
     * }}}
     */
-  def groupBy(fields: Expression*): WindowGroupedTable = {
+  def groupBy(fields: PlannerExpression*): WindowGroupedTable = {
     val fieldsWithoutWindow = fields.filterNot(window.alias.equals(_))
     if (fields.size != fieldsWithoutWindow.size + 1) {
       throw new ValidationException("GroupBy must contain exactly one window alias.")
@@ -1347,7 +1347,7 @@ class OverWindowedTable(
     private[flink] val table: Table,
     private[flink] val overWindows: Array[OverWindow]) {
 
-  def select(fields: Expression*): Table = {
+  def select(fields: PlannerExpression*): Table = {
     val expandedFields = expandProjectList(
       fields,
       table.logicalPlan,
@@ -1381,7 +1381,7 @@ class OverWindowedTable(
 
 class WindowGroupedTable(
     private[flink] val table: Table,
-    private[flink] val groupKeys: Seq[Expression],
+    private[flink] val groupKeys: Seq[PlannerExpression],
     private[flink] val window: Window) {
 
   /**
@@ -1394,7 +1394,7 @@ class WindowGroupedTable(
     *   windowGroupedTable.select('key, 'window.start, 'value.avg as 'valavg)
     * }}}
     */
-  def select(fields: Expression*): Table = {
+  def select(fields: PlannerExpression*): Table = {
     val expandedFields = expandProjectList(fields, table.logicalPlan, table.tableEnv)
     val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, table.tableEnv)
 

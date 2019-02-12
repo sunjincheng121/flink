@@ -27,21 +27,21 @@ import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.orc.OrcRowInputFormat.Predicate;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.expressions.Attribute;
-import org.apache.flink.table.expressions.BinaryComparison;
-import org.apache.flink.table.expressions.EqualTo;
-import org.apache.flink.table.expressions.Expression;
-import org.apache.flink.table.expressions.GreaterThan;
-import org.apache.flink.table.expressions.GreaterThanOrEqual;
-import org.apache.flink.table.expressions.IsNotNull;
-import org.apache.flink.table.expressions.IsNull;
-import org.apache.flink.table.expressions.LessThan;
-import org.apache.flink.table.expressions.LessThanOrEqual;
-import org.apache.flink.table.expressions.Literal;
-import org.apache.flink.table.expressions.Not;
-import org.apache.flink.table.expressions.NotEqualTo;
-import org.apache.flink.table.expressions.Or;
-import org.apache.flink.table.expressions.UnaryExpression;
+import org.apache.flink.table.plan.expressions.Attribute;
+import org.apache.flink.table.plan.expressions.BinaryPlannerComparison;
+import org.apache.flink.table.plan.expressions.EqualTo;
+import org.apache.flink.table.plan.expressions.PlannerExpression;
+import org.apache.flink.table.plan.expressions.GreaterThan;
+import org.apache.flink.table.plan.expressions.GreaterThanOrEqual;
+import org.apache.flink.table.plan.expressions.IsNotNull;
+import org.apache.flink.table.plan.expressions.IsNull;
+import org.apache.flink.table.plan.expressions.LessThan;
+import org.apache.flink.table.plan.expressions.LessThanOrEqual;
+import org.apache.flink.table.plan.expressions.Literal;
+import org.apache.flink.table.plan.expressions.Not;
+import org.apache.flink.table.plan.expressions.NotEqualTo;
+import org.apache.flink.table.plan.expressions.Or;
+import org.apache.flink.table.plan.expressions.UnaryPlannerExpression;
 import org.apache.flink.table.sources.BatchTableSource;
 import org.apache.flink.table.sources.FilterableTableSource;
 import org.apache.flink.table.sources.ProjectableTableSource;
@@ -189,11 +189,11 @@ public class OrcTableSource
 	}
 
 	@Override
-	public TableSource<Row> applyPredicate(List<Expression> predicates) {
+	public TableSource<Row> applyPredicate(List<PlannerExpression> predicates) {
 		ArrayList<Predicate> orcPredicates = new ArrayList<>();
 
 		// we do not remove any predicates from the list because ORC does not fully apply predicates
-		for (Expression pred : predicates) {
+		for (PlannerExpression pred : predicates) {
 			Predicate orcPred = toOrcPredicate(pred);
 			if (orcPred != null) {
 				LOG.info("Predicate [{}] converted into OrcPredicate [{}] and pushed into OrcTableSource for path {}.", pred, orcPred, path);
@@ -226,7 +226,7 @@ public class OrcTableSource
 
 	// Predicate conversion for filter push-down.
 
-	private Predicate toOrcPredicate(Expression pred) {
+	private Predicate toOrcPredicate(PlannerExpression pred) {
 		if (pred instanceof Or) {
 			Predicate c1 = toOrcPredicate(((Or) pred).left());
 			Predicate c2 = toOrcPredicate(((Or) pred).right());
@@ -242,9 +242,9 @@ public class OrcTableSource
 			} else {
 				return new OrcRowInputFormat.Not(c);
 			}
-		} else if (pred instanceof BinaryComparison) {
+		} else if (pred instanceof BinaryPlannerComparison) {
 
-			BinaryComparison binComp = (BinaryComparison) pred;
+			BinaryPlannerComparison binComp = (BinaryPlannerComparison) pred;
 
 			if (!isValid(binComp)) {
 				// not a valid predicate
@@ -313,15 +313,15 @@ public class OrcTableSource
 				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
 				return null;
 			}
-		} else if (pred instanceof UnaryExpression) {
+		} else if (pred instanceof UnaryPlannerExpression) {
 
-			UnaryExpression unary = (UnaryExpression) pred;
+			UnaryPlannerExpression unary = (UnaryPlannerExpression) pred;
 			if (!isValid(unary)) {
 				// not a valid predicate
 				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
 				return null;
 			}
-			PredicateLeaf.Type colType = toOrcType(((UnaryExpression) pred).child().resultType());
+			PredicateLeaf.Type colType = toOrcType(((UnaryPlannerExpression) pred).child().resultType());
 			if (colType == null) {
 				// unsupported type
 				LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
@@ -347,16 +347,16 @@ public class OrcTableSource
 		}
 	}
 
-	private boolean isValid(UnaryExpression unary) {
+	private boolean isValid(UnaryPlannerExpression unary) {
 		return unary.child() instanceof Attribute;
 	}
 
-	private boolean isValid(BinaryComparison comp) {
+	private boolean isValid(BinaryPlannerComparison comp) {
 		return (comp.left() instanceof Literal && comp.right() instanceof Attribute) ||
 			(comp.left() instanceof Attribute && comp.right() instanceof Literal);
 	}
 
-	private boolean literalOnRight(BinaryComparison comp) {
+	private boolean literalOnRight(BinaryPlannerComparison comp) {
 		if (comp.left() instanceof Literal && comp.right() instanceof Attribute) {
 			return false;
 		} else if (comp.left() instanceof Attribute && comp.right() instanceof Literal) {
@@ -366,11 +366,11 @@ public class OrcTableSource
 		}
 	}
 
-	private String getColumnName(UnaryExpression unary) {
+	private String getColumnName(UnaryPlannerExpression unary) {
 		return ((Attribute) unary.child()).name();
 	}
 
-	private String getColumnName(BinaryComparison comp) {
+	private String getColumnName(BinaryPlannerComparison comp) {
 		if (literalOnRight(comp)) {
 			return ((Attribute) comp.left()).name();
 		} else {
@@ -378,7 +378,7 @@ public class OrcTableSource
 		}
 	}
 
-	private PredicateLeaf.Type getLiteralType(BinaryComparison comp) {
+	private PredicateLeaf.Type getLiteralType(BinaryPlannerComparison comp) {
 		if (literalOnRight(comp)) {
 			return toOrcType(((Literal) comp.right()).resultType());
 		} else {
@@ -386,7 +386,7 @@ public class OrcTableSource
 		}
 	}
 
-	private Object getLiteral(BinaryComparison comp) {
+	private Object getLiteral(BinaryPlannerComparison comp) {
 		if (literalOnRight(comp)) {
 			return ((Literal) comp.right()).value();
 		} else {

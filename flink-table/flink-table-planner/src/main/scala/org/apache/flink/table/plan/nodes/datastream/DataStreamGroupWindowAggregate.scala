@@ -29,8 +29,8 @@ import org.apache.flink.streaming.api.windowing.windows.{Window => DataStreamWin
 import org.apache.flink.table.api.{StreamQueryConfig, StreamTableEnvironment, TableException}
 import org.apache.flink.table.calcite.FlinkRelBuilder.NamedWindowProperty
 import org.apache.flink.table.codegen.AggregationCodeGenerator
-import org.apache.flink.table.expressions.ExpressionUtils._
-import org.apache.flink.table.expressions.ResolvedFieldReference
+import org.apache.flink.table.plan.expressions.ExpressionUtils._
+import org.apache.flink.table.plan.expressions.ResolvedFieldReference
 import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.plan.nodes.CommonAggregate
 import org.apache.flink.table.plan.nodes.datastream.DataStreamGroupWindowAggregate._

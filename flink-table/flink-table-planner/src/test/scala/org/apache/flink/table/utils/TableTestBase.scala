@@ -31,7 +31,7 @@ import org.apache.flink.table.api.java.{BatchTableEnvironment => JavaBatchTableE
 import org.apache.flink.table.api.scala.{BatchTableEnvironment => ScalaBatchTableEnv, StreamTableEnvironment => ScalaStreamTableEnv}
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{Table, TableSchema}
-import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.plan.expressions.PlannerExpression
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
 import org.junit.Assert.assertEquals
 import org.junit.{ComparisonFailure, Rule}
@@ -71,12 +71,12 @@ abstract class TableTestUtil {
 
   private var counter = 0
 
-  def addTable[T: TypeInformation](fields: Expression*): Table = {
+  def addTable[T: TypeInformation](fields: PlannerExpression*): Table = {
     counter += 1
     addTable[T](s"Table$counter", fields: _*)
   }
 
-  def addTable[T: TypeInformation](name: String, fields: Expression*): Table
+  def addTable[T: TypeInformation](name: String, fields: PlannerExpression*): Table
 
   def addFunction[T: TypeInformation](name: String, function: TableFunction[T]): TableFunction[T]
 
@@ -194,7 +194,7 @@ case class BatchTableTestUtil() extends TableTestUtil {
 
   def addTable[T: TypeInformation](
       name: String,
-      fields: Expression*)
+      fields: PlannerExpression*)
     : Table = {
     val ds = mock(classOf[DataSet[T]])
     val jDs = mock(classOf[JDataSet[T]])
@@ -280,7 +280,7 @@ case class StreamTableTestUtil() extends TableTestUtil {
 
   def addTable[T: TypeInformation](
       name: String,
-      fields: Expression*)
+      fields: PlannerExpression*)
     : Table = {
 
     val table = env.fromElements().toTable(tableEnv, fields: _*)

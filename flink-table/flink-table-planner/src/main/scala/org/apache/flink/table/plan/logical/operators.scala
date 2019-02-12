@@ -31,8 +31,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
 import org.apache.flink.table.api.{StreamTableEnvironment, TableEnvironment, Types, UnresolvedException}
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
-import org.apache.flink.table.expressions.ExpressionUtils.isRowCountLiteral
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions.ExpressionUtils.isRowCountLiteral
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.TableFunction
 import org.apache.flink.table.functions.utils.TableSqlFunction
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
@@ -101,8 +101,8 @@ case class Project(
     } else {
       // remove AS expressions, according to Calcite they should not be in a final RexNode
       projectList.map {
-        case Alias(e: Expression, _, _) => e
-        case e: Expression => e
+        case Alias(e: PlannerExpression, _, _) => e
+        case e: PlannerExpression => e
       }
     }
 
@@ -113,7 +113,7 @@ case class Project(
   }
 }
 
-case class AliasNode(aliasList: Seq[Expression], child: LogicalNode) extends UnaryNode {
+case class AliasNode(aliasList: Seq[PlannerExpression], child: LogicalNode) extends UnaryNode {
   override def output: Seq[Attribute] =
     throw UnresolvedException("Invalid call to output on AliasNode")
 
@@ -186,7 +186,7 @@ case class Limit(offset: Int, fetch: Int = -1, child: LogicalNode) extends Unary
   }
 }
 
-case class Filter(condition: Expression, child: LogicalNode) extends UnaryNode {
+case class Filter(condition: PlannerExpression, child: LogicalNode) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 
   override protected[logical] def construct(relBuilder: RelBuilder): RelBuilder = {
@@ -205,7 +205,7 @@ case class Filter(condition: Expression, child: LogicalNode) extends UnaryNode {
 }
 
 case class Aggregate(
-    groupingExpressions: Seq[Expression],
+    groupingExpressions: Seq[PlannerExpression],
     aggregateExpressions: Seq[NamedExpression],
     child: LogicalNode) extends UnaryNode {
 
@@ -234,7 +234,7 @@ case class Aggregate(
     aggregateExprs.foreach(validateAggregateExpression)
     groupingExprs.foreach(validateGroupingExpression)
 
-    def validateAggregateExpression(expr: Expression): Unit = expr match {
+    def validateAggregateExpression(expr: PlannerExpression): Unit = expr match {
       case distinctExpr: DistinctAgg =>
         distinctExpr.child match {
           case _: DistinctAgg => failValidation(
@@ -266,7 +266,7 @@ case class Aggregate(
       case e => e.children.foreach(validateAggregateExpression)
     }
 
-    def validateGroupingExpression(expr: Expression): Unit = {
+    def validateGroupingExpression(expr: PlannerExpression): Unit = {
       if (!expr.resultType.isKeyType) {
         failValidation(
           s"expression $expr cannot be used as a grouping expression " +
@@ -375,7 +375,7 @@ case class Join(
     left: LogicalNode,
     right: LogicalNode,
     joinType: JoinType,
-    condition: Option[Expression],
+    condition: Option[PlannerExpression],
     correlated: Boolean) extends BinaryNode {
 
   override def output: Seq[Attribute] = {
@@ -418,7 +418,7 @@ case class Join(
 
   override def resolveExpressions(tableEnv: TableEnvironment): LogicalNode = {
     val node = super.resolveExpressions(tableEnv).asInstanceOf[Join]
-    val partialFunction: PartialFunction[Expression, Expression] = {
+    val partialFunction: PartialFunction[PlannerExpression, PlannerExpression] = {
       case field: ResolvedFieldReference => JoinFieldReference(
         field.name,
         field.resultType,
@@ -467,15 +467,15 @@ case class Join(
     resolvedJoin
   }
 
-  private def testJoinCondition(expression: Expression): Unit = {
+  private def testJoinCondition(expression: PlannerExpression): Unit = {
 
-    def checkIfJoinCondition(exp: BinaryComparison) = exp.children match {
+    def checkIfJoinCondition(exp: BinaryPlannerComparison) = exp.children match {
       case (x: JoinFieldReference) :: (y: JoinFieldReference) :: Nil
         if x.isFromLeftInput != y.isFromLeftInput => true
       case _ => false
     }
 
-    def checkIfFilterCondition(exp: BinaryComparison) = exp.children match {
+    def checkIfFilterCondition(exp: BinaryPlannerComparison) = exp.children match {
       case (x: JoinFieldReference) :: (y: JoinFieldReference) :: Nil => false
       case (x: JoinFieldReference) :: (_) :: Nil => true
       case (_) :: (y: JoinFieldReference) :: Nil => true
@@ -489,14 +489,14 @@ case class Join(
       case _ => false
     }
 
-    def validateConditions(exp: Expression, isAndBranch: Boolean): Unit = exp match {
+    def validateConditions(exp: PlannerExpression, isAndBranch: Boolean): Unit = exp match {
       case x: And => x.children.foreach(validateConditions(_, isAndBranch))
       case x: Or => x.children.foreach(validateConditions(_, isAndBranch = false))
       case x: EqualTo =>
         if (isAndBranch && checkIfJoinCondition(x)) {
           equiJoinPredicateFound = true
         }
-      case x: BinaryComparison =>
+      case x: BinaryPlannerComparison =>
       // The boolean literal should be a valid condition type.
       case x: Literal if x.resultType == Types.BOOLEAN =>
       case x => failValidation(
@@ -553,7 +553,7 @@ case class LogicalRelNode(
 }
 
 case class WindowAggregate(
-    groupingExpressions: Seq[Expression],
+    groupingExpressions: Seq[PlannerExpression],
     window: LogicalWindow,
     propertyExpressions: Seq[NamedExpression],
     aggregateExpressions: Seq[NamedExpression],
@@ -628,7 +628,7 @@ case class WindowAggregate(
     aggregateExprs.foreach(validateAggregateExpression)
     groupingExprs.foreach(validateGroupingExpression)
 
-    def validateAggregateExpression(expr: Expression): Unit = expr match {
+    def validateAggregateExpression(expr: PlannerExpression): Unit = expr match {
       // check aggregate function
       case aggExpr: Aggregation
         if aggExpr.getSqlAggFunction.requiresOver =>
@@ -654,7 +654,7 @@ case class WindowAggregate(
       case e => e.children.foreach(validateAggregateExpression)
     }
 
-    def validateGroupingExpression(expr: Expression): Unit = {
+    def validateGroupingExpression(expr: PlannerExpression): Unit = {
       if (!expr.resultType.isKeyType) {
         failValidation(
           s"Expression $expr cannot be used as a grouping expression " +
@@ -689,8 +689,8 @@ case class WindowAggregate(
 }
 
 case class TemporalTable(
-    timeAttribute: Expression,
-    primaryKey: Expression,
+    timeAttribute: PlannerExpression,
+    primaryKey: PlannerExpression,
     child: LogicalNode)
   extends UnaryNode {
 
@@ -714,7 +714,7 @@ case class TemporalTable(
 case class LogicalTableFunctionCall(
     functionName: String,
     tableFunction: TableFunction[_],
-    parameters: Seq[Expression],
+    parameters: Seq[PlannerExpression],
     resultType: TypeInformation[_],
     fieldNames: Array[String],
     child: LogicalNode)

@@ -50,7 +50,7 @@ import org.apache.flink.table.calcite.{FlinkPlannerImpl, FlinkRelBuilder, FlinkT
 import org.apache.flink.table.catalog.{ExternalCatalog, ExternalCatalogSchema}
 import org.apache.flink.table.codegen.{ExpressionReducer, FunctionCodeGenerator, GeneratedFunction}
 import org.apache.flink.table.descriptors.{ConnectorDescriptor, TableDescriptor}
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
 import org.apache.flink.table.plan.cost.DataSetCostFactory
@@ -1001,7 +1001,7 @@ abstract class TableEnvironment(val config: TableConfig) {
     * used if the input type has a defined field order (tuple, case class, Row) and no of fields
     * references a field of the input type.
     */
-  protected def isReferenceByPosition(ct: CompositeType[_], fields: Array[Expression]): Boolean = {
+  protected def isReferenceByPosition(ct: CompositeType[_], fields: Array[PlannerExpression]): Boolean = {
     if (!ct.isInstanceOf[TupleTypeInfoBase[_]]) {
       return false
     }
@@ -1038,16 +1038,16 @@ abstract class TableEnvironment(val config: TableConfig) {
 
   /**
     * Returns field names and field positions for a given [[TypeInformation]] and [[Array]] of
-    * [[Expression]]. It does not handle time attributes but considers them in indices.
+    * [[PlannerExpression]]. It does not handle time attributes but considers them in indices.
     *
-    * @param inputType The [[TypeInformation]] against which the [[Expression]]s are evaluated.
+    * @param inputType The [[TypeInformation]] against which the [[PlannerExpression]]s are evaluated.
     * @param exprs     The expressions that define the field names.
     * @tparam A The type of the TypeInformation.
     * @return A tuple of two arrays holding the field names and corresponding field positions.
     */
   protected def getFieldInfo[A](
       inputType: TypeInformation[A],
-      exprs: Array[Expression])
+      exprs: Array[PlannerExpression])
     : (Array[String], Array[Int]) = {
 
     TableEnvironment.validateType(inputType)

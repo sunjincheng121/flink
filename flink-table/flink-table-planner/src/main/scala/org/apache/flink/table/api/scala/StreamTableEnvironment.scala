@@ -20,7 +20,7 @@ package org.apache.flink.table.api.scala
 import org.apache.flink.api.scala._
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.api.{StreamQueryConfig, Table, TableConfig, TableEnvironment}
-import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.plan.expressions.PlannerExpression
 import org.apache.flink.table.functions.{AggregateFunction, TableFunction}
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
 import org.apache.flink.streaming.api.scala.asScalaStream
@@ -82,7 +82,7 @@ class StreamTableEnvironment @deprecated(
     * @tparam T The type of the [[DataStream]].
     * @return The converted [[Table]].
     */
-  def fromDataStream[T](dataStream: DataStream[T], fields: Expression*): Table = {
+  def fromDataStream[T](dataStream: DataStream[T], fields: PlannerExpression*): Table = {
 
     val name = createUniqueTableName()
     registerDataStreamInternal(name, dataStream.javaStream, fields.toArray)
@@ -124,7 +124,7 @@ class StreamTableEnvironment @deprecated(
     * @param fields The field names of the registered table.
     * @tparam T The type of the [[DataStream]] to register.
     */
-  def registerDataStream[T](name: String, dataStream: DataStream[T], fields: Expression*): Unit = {
+  def registerDataStream[T](name: String, dataStream: DataStream[T], fields: PlannerExpression*): Unit = {
 
     checkValidTableName(name)
     registerDataStreamInternal(name, dataStream.javaStream, fields.toArray)

@@ -25,7 +25,7 @@ import org.apache.calcite.rex._
 import org.apache.flink.table.api.scala.{Session, Slide, Tumble}
 import org.apache.flink.table.api.{TableException, Window}
 import org.apache.flink.table.calcite.FlinkTypeFactory
-import org.apache.flink.table.expressions.{Expression, Literal, ResolvedFieldReference, WindowReference}
+import org.apache.flink.table.plan.expressions.{PlannerExpression, Literal, ResolvedFieldReference, WindowReference}
 import org.apache.flink.table.plan.rules.common.LogicalWindowAggregateRule
 import org.apache.flink.table.typeutils.TimeIntervalTypeInfo
 import org.apache.flink.table.validate.BasicOperatorTable
@@ -57,7 +57,7 @@ class DataSetLogicalWindowAggregateRule
         case _ => throw new TableException("Only constant window descriptors are supported")
       }
 
-    def getFieldReference(operand: RexNode): Expression = {
+    def getFieldReference(operand: RexNode): PlannerExpression = {
       operand match {
         case ref: RexInputRef =>
           // resolve field name of window attribute

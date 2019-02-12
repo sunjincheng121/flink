@@ -27,7 +27,7 @@ import org.apache.flink.streaming.api.datastream.DataStream
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
 import org.apache.flink.table.api.TableSchema
 import org.apache.flink.table.api.Types._
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.sources.{BatchTableSource, FilterableTableSource, StreamTableSource, TableSource}
 import org.apache.flink.types.Row
 
@@ -94,7 +94,7 @@ class TestFilterableTableSource(
     rowTypeInfo: RowTypeInfo,
     data: Seq[Row],
     filterableFields: Set[String] = Set(),
-    filterPredicates: Seq[Expression] = Seq(),
+    filterPredicates: Seq[PlannerExpression] = Seq(),
     val filterPushedDown: Boolean = false)
   extends BatchTableSource[Row]
     with StreamTableSource[Row]
@@ -125,8 +125,8 @@ class TestFilterableTableSource(
 
   override def getReturnType: TypeInformation[Row] = rowTypeInfo
 
-  override def applyPredicate(predicates: JList[Expression]): TableSource[Row] = {
-    val predicatesToUse = new mutable.ListBuffer[Expression]()
+  override def applyPredicate(predicates: JList[PlannerExpression]): TableSource[Row] = {
+    val predicatesToUse = new mutable.ListBuffer[PlannerExpression]()
     val iterator = predicates.iterator()
     while (iterator.hasNext) {
       val expr = iterator.next()
@@ -150,14 +150,14 @@ class TestFilterableTableSource(
     rows.filter(shouldKeep)
   }
 
-  private def shouldPushDown(expr: Expression): Boolean = {
+  private def shouldPushDown(expr: PlannerExpression): Boolean = {
     expr match {
-      case binExpr: BinaryComparison => shouldPushDown(binExpr)
+      case binExpr: BinaryPlannerComparison => shouldPushDown(binExpr)
       case _ => false
     }
   }
 
-  private def shouldPushDown(expr: BinaryComparison): Boolean = {
+  private def shouldPushDown(expr: BinaryPlannerComparison): Boolean = {
     (expr.left, expr.right) match {
       case (f: ResolvedFieldReference, v: Literal) =>
         filterableFields.contains(f.name)
@@ -171,12 +171,12 @@ class TestFilterableTableSource(
 
   private def shouldKeep(row: Row): Boolean = {
     filterPredicates.isEmpty || filterPredicates.forall {
-      case expr: BinaryComparison => binaryFilterApplies(expr, row)
+      case expr: BinaryPlannerComparison => binaryFilterApplies(expr, row)
       case expr => throw new RuntimeException(expr + " not supported!")
     }
   }
 
-  private def binaryFilterApplies(expr: BinaryComparison, row: Row): Boolean = {
+  private def binaryFilterApplies(expr: BinaryPlannerComparison, row: Row): Boolean = {
     val (lhsValue, rhsValue) = extractValues(expr, row)
 
     expr match {
@@ -195,7 +195,7 @@ class TestFilterableTableSource(
     }
   }
 
-  private def extractValues(expr: BinaryComparison, row: Row)
+  private def extractValues(expr: BinaryPlannerComparison, row: Row)
     : (Comparable[Any], Comparable[Any]) = {
 
     (expr.left, expr.right) match {

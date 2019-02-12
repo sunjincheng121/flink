@@ -23,24 +23,24 @@ import java.sql.{Date, Time, Timestamp}
 import org.apache.calcite.avatica.util.DateTimeUtils._
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.api.{CurrentRange, CurrentRow, TableException, UnboundedRange, UnboundedRow}
-import org.apache.flink.table.expressions.ExpressionUtils.{convertArray, toMilliInterval, toMonthInterval, toRowInterval}
+import org.apache.flink.table.plan.expressions.ExpressionUtils.{convertArray, toMilliInterval, toMonthInterval, toRowInterval}
 import org.apache.flink.table.api.Table
-import org.apache.flink.table.expressions.TimeIntervalUnit.TimeIntervalUnit
-import org.apache.flink.table.expressions.TimePointUnit.TimePointUnit
-import org.apache.flink.table.expressions._
+import org.apache.flink.table.plan.expressions.TimeIntervalUnit.TimeIntervalUnit
+import org.apache.flink.table.plan.expressions.TimePointUnit.TimePointUnit
+import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.functions.{AggregateFunction, DistinctAggregateFunction, ScalarFunction, TableFunction}
 
 import scala.language.implicitConversions
 
 /**
- * These are all the operations that can be used to construct an [[Expression]] AST for expression
+ * These are all the operations that can be used to construct an [[PlannerExpression]] AST for expression
  * operations.
  *
  * These operations must be kept in sync with the parser in
- * [[org.apache.flink.table.expressions.ExpressionParser]].
+ * [[org.apache.flink.table.plan.expressions.ExpressionParser]].
  */
 trait ImplicitExpressionOperations {
-  private[flink] def expr: Expression
+  private[flink] def expr: PlannerExpression
 
   /**
     * Enables literals on left side of binary expressions.
@@ -49,47 +49,47 @@ trait ImplicitExpressionOperations {
     *
     * @return expression
     */
-  def toExpr: Expression = expr
+  def toExpr: PlannerExpression = expr
 
   /**
     * Boolean AND in three-valued logic.
     */
-  def && (other: Expression) = And(expr, other)
+  def && (other: PlannerExpression) = And(expr, other)
 
   /**
     * Boolean OR in three-valued logic.
     */
-  def || (other: Expression) = Or(expr, other)
+  def || (other: PlannerExpression) = Or(expr, other)
 
   /**
     * Greater than.
     */
-  def > (other: Expression) = GreaterThan(expr, other)
+  def > (other: PlannerExpression) = GreaterThan(expr, other)
 
   /**
     * Greater than or equal.
     */
-  def >= (other: Expression) = GreaterThanOrEqual(expr, other)
+  def >= (other: PlannerExpression) = GreaterThanOrEqual(expr, other)
 
   /**
     * Less than.
     */
-  def < (other: Expression) = LessThan(expr, other)
+  def < (other: PlannerExpression) = LessThan(expr, other)
 
   /**
     * Less than or equal.
     */
-  def <= (other: Expression) = LessThanOrEqual(expr, other)
+  def <= (other: PlannerExpression) = LessThanOrEqual(expr, other)
 
   /**
     * Equals.
     */
-  def === (other: Expression) = EqualTo(expr, other)
+  def === (other: PlannerExpression) = EqualTo(expr, other)
 
   /**
     * Not equal.
     */
-  def !== (other: Expression) = NotEqualTo(expr, other)
+  def !== (other: PlannerExpression) = NotEqualTo(expr, other)
 
   /**
     * Whether boolean expression is not true; returns null if boolean is null.
@@ -99,7 +99,7 @@ trait ImplicitExpressionOperations {
   /**
     * Returns negative numeric.
     */
-  def unary_- = UnaryMinus(expr)
+  def unary_- = UnaryPlannerMinus(expr)
 
   /**
     * Returns numeric.
@@ -139,28 +139,28 @@ trait ImplicitExpressionOperations {
   /**
     * Returns left plus right.
     */
-  def + (other: Expression) = Plus(expr, other)
+  def + (other: PlannerExpression) = Plus(expr, other)
 
   /**
     * Returns left minus right.
     */
-  def - (other: Expression) = Minus(expr, other)
+  def - (other: PlannerExpression) = Minus(expr, other)
 
   /**
     * Returns left divided by right.
     */
-  def / (other: Expression) = Div(expr, other)
+  def / (other: PlannerExpression) = Div(expr, other)
 
   /**
     * Returns left multiplied by right.
     */
-  def * (other: Expression) = Mul(expr, other)
+  def * (other: PlannerExpression) = Mul(expr, other)
 
   /**
     * Returns the remainder (modulus) of left divided by right.
     * The result is negative only if left is negative.
     */
-  def % (other: Expression) = mod(other)
+  def % (other: PlannerExpression) = mod(other)
 
   /**
     * Returns the sum of the numeric field across all input values.
@@ -260,7 +260,7 @@ trait ImplicitExpressionOperations {
     *
     * e.g. "42".in(1, 2, 3) leads to false.
     */
-  def in(elements: Expression*) = In(expr, elements)
+  def in(elements: PlannerExpression*) = In(expr, elements)
 
   /**
     * Returns true if an expression exists in a given table sub-query. The sub-query table
@@ -291,7 +291,7 @@ trait ImplicitExpressionOperations {
     * @param ifTrue expression to be evaluated if condition holds
     * @param ifFalse expression to be evaluated if condition does not hold
     */
-  def ?(ifTrue: Expression, ifFalse: Expression) = {
+  def ?(ifTrue: PlannerExpression, ifFalse: PlannerExpression) = {
     If(expr, ifTrue, ifFalse)
   }
 
@@ -300,7 +300,7 @@ trait ImplicitExpressionOperations {
   /**
     * Calculates the remainder of division the given number by another one.
     */
-  def mod(other: Expression) = Mod(expr, other)
+  def mod(other: PlannerExpression) = Mod(expr, other)
 
   /**
     * Calculates the Euler's number raised to the given power.
@@ -330,12 +330,12 @@ trait ImplicitExpressionOperations {
   /**
     * Calculates the logarithm of the given value to the given base.
     */
-  def log(base: Expression) = Log(base, expr)
+  def log(base: PlannerExpression) = Log(base, expr)
 
   /**
     * Calculates the given number raised to the power of the other value.
     */
-  def power(other: Expression) = Power(expr, other)
+  def power(other: PlannerExpression) = Power(expr, other)
 
   /**
     * Calculates the hyperbolic cosine of a given value.
@@ -425,7 +425,7 @@ trait ImplicitExpressionOperations {
   /**
     * Rounds the given number to integer places right to the decimal point.
     */
-  def round(places: Expression) = Round(expr, places)
+  def round(places: PlannerExpression) = Round(expr, places)
 
   /**
     * Returns a string representation of an integer numeric value in binary format. Returns null if
@@ -448,7 +448,7 @@ trait ImplicitExpressionOperations {
     * n can be negative to cause n digits left of the decimal point of the value to become zero.
     * E.g. truncate(42.345, 2) to 42.34.
     */
-  def truncate(n: Expression) = Truncate(expr, n)
+  def truncate(n: PlannerExpression) = Truncate(expr, n)
 
   /**
     * Returns a number of truncated to 0 decimal places.
@@ -465,7 +465,7 @@ trait ImplicitExpressionOperations {
     * @param length number of characters of the substring
     * @return substring
     */
-  def substring(beginIndex: Expression, length: Expression) =
+  def substring(beginIndex: PlannerExpression, length: PlannerExpression) =
     Substring(expr, beginIndex, length)
 
   /**
@@ -474,7 +474,7 @@ trait ImplicitExpressionOperations {
     * @param beginIndex first character of the substring (starting at 1, inclusive)
     * @return substring
     */
-  def substring(beginIndex: Expression) =
+  def substring(beginIndex: PlannerExpression) =
     new Substring(expr, beginIndex)
 
   /**
@@ -488,7 +488,7 @@ trait ImplicitExpressionOperations {
   def trim(
       removeLeading: Boolean = true,
       removeTrailing: Boolean = true,
-      character: Expression = TrimConstants.TRIM_DEFAULT_CHAR) = {
+      character: PlannerExpression = TrimConstants.TRIM_DEFAULT_CHAR) = {
     if (removeLeading && removeTrailing) {
       Trim(TrimMode.BOTH, character, expr)
     } else if (removeLeading) {
@@ -504,7 +504,7 @@ trait ImplicitExpressionOperations {
     * Returns a new string which replaces all the occurrences of the search target
     * with the replacement string (non-overlapping).
     */
-  def replace(search: Expression, replacement: Expression) =
+  def replace(search: PlannerExpression, replacement: PlannerExpression) =
     Replace(expr, search, replacement)
 
   /**
@@ -535,14 +535,14 @@ trait ImplicitExpressionOperations {
     *
     * e.g. "Jo_n%" matches all strings that start with "Jo(arbitrary letter)n"
     */
-  def like(pattern: Expression) = Like(expr, pattern)
+  def like(pattern: PlannerExpression) = Like(expr, pattern)
 
   /**
     * Returns true, if a string matches the specified SQL regex pattern.
     *
     * e.g. "A+" matches all strings that consist of at least one A
     */
-  def similar(pattern: Expression) = Similar(expr, pattern)
+  def similar(pattern: PlannerExpression) = Similar(expr, pattern)
 
   /**
     * Returns the position of string in an other string starting at 1.
@@ -550,7 +550,7 @@ trait ImplicitExpressionOperations {
     *
     * e.g. "a".position("bbbbba") leads to 6
     */
-  def position(haystack: Expression) = Position(expr, haystack)
+  def position(haystack: PlannerExpression) = Position(expr, haystack)
 
   /**
     * Returns a string left-padded with the given pad string to a length of len characters. If
@@ -558,7 +558,7 @@ trait ImplicitExpressionOperations {
     *
     * e.g. "hi".lpad(4, '??') returns "??hi",  "hi".lpad(1, '??') returns "h"
     */
-  def lpad(len: Expression, pad: Expression) = Lpad(expr, len, pad)
+  def lpad(len: PlannerExpression, pad: PlannerExpression) = Lpad(expr, len, pad)
 
   /**
     * Returns a string right-padded with the given pad string to a length of len characters. If
@@ -566,7 +566,7 @@ trait ImplicitExpressionOperations {
     *
     * e.g. "hi".rpad(4, '??') returns "hi??",  "hi".rpad(1, '??') returns "h"
     */
-  def rpad(len: Expression, pad: Expression) = Rpad(expr, len, pad)
+  def rpad(len: PlannerExpression, pad: PlannerExpression) = Rpad(expr, len, pad)
 
   /**
     * For windowing function to config over window
@@ -575,7 +575,7 @@ trait ImplicitExpressionOperations {
     *   .window(Over partitionBy 'c orderBy 'rowtime preceding 2.rows following CURRENT_ROW as 'w)
     *   .select('c, 'a, 'a.count over 'w, 'a.sum over 'w)
     */
-  def over(alias: Expression): Expression = {
+  def over(alias: PlannerExpression): PlannerExpression = {
     expr match {
       case _: Aggregation => UnresolvedOverCall(
         expr.asInstanceOf[Aggregation],
@@ -590,7 +590,7 @@ trait ImplicitExpressionOperations {
     *
     * e.g. "xxxxxtest".overlay("xxxx", 6) leads to "xxxxxxxxx"
     */
-  def overlay(newString: Expression, starting: Expression) = new Overlay(expr, newString, starting)
+  def overlay(newString: PlannerExpression, starting: PlannerExpression) = new Overlay(expr, newString, starting)
 
   /**
     * Replaces a substring of string with a string starting at a position (starting at 1).
@@ -598,26 +598,26 @@ trait ImplicitExpressionOperations {
     *
     * e.g. "xxxxxtest".overlay("xxxx", 6, 2) leads to "xxxxxxxxxst"
     */
-  def overlay(newString: Expression, starting: Expression, length: Expression) =
+  def overlay(newString: PlannerExpression, starting: PlannerExpression, length: PlannerExpression) =
     Overlay(expr, newString, starting, length)
 
   /**
     * Returns a string with all substrings that match the regular expression consecutively
     * being replaced.
     */
-  def regexpReplace(regex: Expression, replacement: Expression) =
+  def regexpReplace(regex: PlannerExpression, replacement: PlannerExpression) =
     RegexpReplace(expr, regex, replacement)
 
   /**
     * Returns a string extracted with a specified regular expression and a regex match group index.
     */
-  def regexpExtract(regex: Expression, extractIndex: Expression) =
+  def regexpExtract(regex: PlannerExpression, extractIndex: PlannerExpression) =
     RegexpExtract(expr, regex, extractIndex)
 
   /**
     * Returns a string extracted with a specified regular expression.
     */
-  def regexpExtract(regex: Expression) =
+  def regexpExtract(regex: PlannerExpression) =
     RegexpExtract(expr, regex, null)
 
   /**
@@ -643,7 +643,7 @@ trait ImplicitExpressionOperations {
   /**
     * Returns a string that repeats the base string n times.
     */
-  def repeat(n: Expression) = Repeat(expr, n)
+  def repeat(n: PlannerExpression) = Repeat(expr, n)
 
   // Temporal operations
 
@@ -690,126 +690,126 @@ trait ImplicitExpressionOperations {
     *
     * @return interval of months
     */
-  def year: Expression = toMonthInterval(expr, 12)
+  def year: PlannerExpression = toMonthInterval(expr, 12)
 
   /**
     * Creates an interval of the given number of years.
     *
     * @return interval of months
     */
-  def years: Expression = year
+  def years: PlannerExpression = year
 
   /**
    * Creates an interval of the given number of quarters.
    *
    * @return interval of months
    */
-  def quarter: Expression = toMonthInterval(expr, 3)
+  def quarter: PlannerExpression = toMonthInterval(expr, 3)
 
   /**
    * Creates an interval of the given number of quarters.
    *
    * @return interval of months
    */
-  def quarters: Expression = quarter
+  def quarters: PlannerExpression = quarter
 
   /**
     * Creates an interval of the given number of months.
     *
     * @return interval of months
     */
-  def month: Expression = toMonthInterval(expr, 1)
+  def month: PlannerExpression = toMonthInterval(expr, 1)
 
   /**
     * Creates an interval of the given number of months.
     *
     * @return interval of months
     */
-  def months: Expression = month
+  def months: PlannerExpression = month
 
   /**
     * Creates an interval of the given number of weeks.
     *
     * @return interval of milliseconds
     */
-  def week: Expression = toMilliInterval(expr, 7 * MILLIS_PER_DAY)
+  def week: PlannerExpression = toMilliInterval(expr, 7 * MILLIS_PER_DAY)
 
   /**
     * Creates an interval of the given number of weeks.
     *
     * @return interval of milliseconds
     */
-  def weeks: Expression = week
+  def weeks: PlannerExpression = week
 
   /**
     * Creates an interval of the given number of days.
     *
     * @return interval of milliseconds
     */
-  def day: Expression = toMilliInterval(expr, MILLIS_PER_DAY)
+  def day: PlannerExpression = toMilliInterval(expr, MILLIS_PER_DAY)
 
   /**
     * Creates an interval of the given number of days.
     *
     * @return interval of milliseconds
     */
-  def days: Expression = day
+  def days: PlannerExpression = day
 
   /**
     * Creates an interval of the given number of hours.
     *
     * @return interval of milliseconds
     */
-  def hour: Expression = toMilliInterval(expr, MILLIS_PER_HOUR)
+  def hour: PlannerExpression = toMilliInterval(expr, MILLIS_PER_HOUR)
 
   /**
     * Creates an interval of the given number of hours.
     *
     * @return interval of milliseconds
     */
-  def hours: Expression = hour
+  def hours: PlannerExpression = hour
 
   /**
     * Creates an interval of the given number of minutes.
     *
     * @return interval of milliseconds
     */
-  def minute: Expression = toMilliInterval(expr, MILLIS_PER_MINUTE)
+  def minute: PlannerExpression = toMilliInterval(expr, MILLIS_PER_MINUTE)
 
   /**
     * Creates an interval of the given number of minutes.
     *
     * @return interval of milliseconds
     */
-  def minutes: Expression = minute
+  def minutes: PlannerExpression = minute
 
   /**
     * Creates an interval of the given number of seconds.
     *
     * @return interval of milliseconds
     */
-  def second: Expression = toMilliInterval(expr, MILLIS_PER_SECOND)
+  def second: PlannerExpression = toMilliInterval(expr, MILLIS_PER_SECOND)
 
   /**
     * Creates an interval of the given number of seconds.
     *
     * @return interval of milliseconds
     */
-  def seconds: Expression = second
+  def seconds: PlannerExpression = second
 
   /**
     * Creates an interval of the given number of milliseconds.
     *
     * @return interval of milliseconds
     */
-  def milli: Expression = toMilliInterval(expr, 1)
+  def milli: PlannerExpression = toMilliInterval(expr, 1)
 
   /**
     * Creates an interval of the given number of milliseconds.
     *
     * @return interval of milliseconds
     */
-  def millis: Expression = milli
+  def millis: PlannerExpression = milli
 
   // Row interval type
 
@@ -818,7 +818,7 @@ trait ImplicitExpressionOperations {
     *
     * @return interval of rows
     */
-  def rows: Expression = toRowInterval(expr)
+  def rows: PlannerExpression = toRowInterval(expr)
 
   // Advanced type helper functions
 
@@ -852,7 +852,7 @@ trait ImplicitExpressionOperations {
     * @param index key or position of the element (array index starting at 1)
     * @return value of the element
     */
-  def at(index: Expression) = ItemAt(expr, index)
+  def at(index: PlannerExpression) = ItemAt(expr, index)
 
   /**
     * Returns the number of elements of an array or number of entries of a map.
@@ -934,7 +934,7 @@ trait ImplicitExpressionOperations {
     * @param hashLength bit length of the result (either 224, 256, 384, or 512)
     * @return string or null if one of the arguments is null.
     */
-  def sha2(hashLength: Expression) = Sha2(expr, hashLength)
+  def sha2(hashLength: PlannerExpression) = Sha2(expr, hashLength)
 
   /**
     * Returns true if the given expression is between lowerBound and upperBound (both inclusive).
@@ -944,7 +944,7 @@ trait ImplicitExpressionOperations {
     * @param upperBound numeric or comparable expression
     * @return boolean or null
     */
-  def between(lowerBound: Expression, upperBound: Expression) =
+  def between(lowerBound: PlannerExpression, upperBound: PlannerExpression) =
     Between(expr, lowerBound, upperBound)
 
   /**
@@ -956,12 +956,12 @@ trait ImplicitExpressionOperations {
     * @param upperBound numeric or comparable expression
     * @return boolean or null
     */
-  def notBetween(lowerBound: Expression, upperBound: Expression) =
+  def notBetween(lowerBound: PlannerExpression, upperBound: PlannerExpression) =
     NotBetween(expr, lowerBound, upperBound)
 }
 
 /**
- * Implicit conversions from Scala Literals to Expression [[Literal]] and from [[Expression]]
+ * Implicit conversions from Scala Literals to Expression [[Literal]] and from [[PlannerExpression]]
  * to [[ImplicitExpressionOperations]].
  */
 trait ImplicitExpressionConversions {
@@ -972,7 +972,7 @@ trait ImplicitExpressionConversions {
   implicit val CURRENT_ROW = CurrentRow()
   implicit val CURRENT_RANGE = CurrentRange()
 
-  implicit class WithOperations(e: Expression) extends ImplicitExpressionOperations {
+  implicit class WithOperations(e: PlannerExpression) extends ImplicitExpressionOperations {
     def expr = e
   }
 
@@ -1036,13 +1036,13 @@ trait ImplicitExpressionConversions {
   }
 
   implicit class ScalarFunctionCallExpression(val s: ScalarFunction) {
-    def apply(params: Expression*): Expression = {
+    def apply(params: PlannerExpression*): PlannerExpression = {
       ScalarFunctionCall(s, params)
     }
   }
 
   implicit class TableFunctionCallExpression[T: TypeInformation](val t: TableFunction[T]) {
-    def apply(params: Expression*): TableFunctionCall = {
+    def apply(params: PlannerExpression*): TableFunctionCall = {
       val resultType = if (t.getResultType == null) {
         implicitly[TypeInformation[T]]
       } else {
@@ -1060,23 +1060,23 @@ trait ImplicitExpressionConversions {
     )
   }
 
-  implicit def symbol2FieldExpression(sym: Symbol): Expression = UnresolvedFieldReference(sym.name)
-  implicit def byte2Literal(b: Byte): Expression = Literal(b)
-  implicit def short2Literal(s: Short): Expression = Literal(s)
-  implicit def int2Literal(i: Int): Expression = Literal(i)
-  implicit def long2Literal(l: Long): Expression = Literal(l)
-  implicit def double2Literal(d: Double): Expression = Literal(d)
-  implicit def float2Literal(d: Float): Expression = Literal(d)
-  implicit def string2Literal(str: String): Expression = Literal(str)
-  implicit def boolean2Literal(bool: Boolean): Expression = Literal(bool)
-  implicit def javaDec2Literal(javaDec: JBigDecimal): Expression = Literal(javaDec)
-  implicit def scalaDec2Literal(scalaDec: BigDecimal): Expression =
+  implicit def symbol2FieldExpression(sym: Symbol): PlannerExpression = UnresolvedFieldReference(sym.name)
+  implicit def byte2Literal(b: Byte): PlannerExpression = Literal(b)
+  implicit def short2Literal(s: Short): PlannerExpression = Literal(s)
+  implicit def int2Literal(i: Int): PlannerExpression = Literal(i)
+  implicit def long2Literal(l: Long): PlannerExpression = Literal(l)
+  implicit def double2Literal(d: Double): PlannerExpression = Literal(d)
+  implicit def float2Literal(d: Float): PlannerExpression = Literal(d)
+  implicit def string2Literal(str: String): PlannerExpression = Literal(str)
+  implicit def boolean2Literal(bool: Boolean): PlannerExpression = Literal(bool)
+  implicit def javaDec2Literal(javaDec: JBigDecimal): PlannerExpression = Literal(javaDec)
+  implicit def scalaDec2Literal(scalaDec: BigDecimal): PlannerExpression =
     Literal(scalaDec.bigDecimal)
-  implicit def sqlDate2Literal(sqlDate: Date): Expression = Literal(sqlDate)
-  implicit def sqlTime2Literal(sqlTime: Time): Expression = Literal(sqlTime)
-  implicit def sqlTimestamp2Literal(sqlTimestamp: Timestamp): Expression =
+  implicit def sqlDate2Literal(sqlDate: Date): PlannerExpression = Literal(sqlDate)
+  implicit def sqlTime2Literal(sqlTime: Time): PlannerExpression = Literal(sqlTime)
+  implicit def sqlTimestamp2Literal(sqlTimestamp: Timestamp): PlannerExpression =
     Literal(sqlTimestamp)
-  implicit def array2ArrayConstructor(array: Array[_]): Expression = convertArray(array)
+  implicit def array2ArrayConstructor(array: Array[_]): PlannerExpression = convertArray(array)
   implicit def userDefinedAggFunctionConstructor[T: TypeInformation, ACC: TypeInformation]
       (udagg: AggregateFunction[T, ACC]): UDAGGExpression[T, ACC] = UDAGGExpression(udagg)
   implicit def toDistinct(agg: Aggregation): DistinctAgg = DistinctAgg(agg)
@@ -1101,7 +1101,7 @@ object currentDate {
   /**
     * Returns the current SQL date in UTC time zone.
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     CurrentDate()
   }
 }
@@ -1114,7 +1114,7 @@ object currentTime {
   /**
     * Returns the current SQL time in UTC time zone.
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     CurrentTime()
   }
 }
@@ -1127,7 +1127,7 @@ object currentTimestamp {
   /**
     * Returns the current SQL timestamp in UTC time zone.
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     CurrentTimestamp()
   }
 }
@@ -1140,7 +1140,7 @@ object localTime {
   /**
     * Returns the current SQL time in local time zone.
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     LocalTime()
   }
 }
@@ -1153,7 +1153,7 @@ object localTimestamp {
   /**
     * Returns the current SQL timestamp in local time zone.
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     LocalTimestamp()
   }
 }
@@ -1178,10 +1178,10 @@ object temporalOverlaps {
     * e.g. temporalOverlaps("2:55:00".toTime, 1.hour, "3:30:00".toTime, 2.hour) leads to true
     */
   def apply(
-      leftTimePoint: Expression,
-      leftTemporal: Expression,
-      rightTimePoint: Expression,
-      rightTemporal: Expression): Expression = {
+      leftTimePoint: PlannerExpression,
+      leftTemporal: PlannerExpression,
+      rightTimePoint: PlannerExpression,
+      rightTemporal: PlannerExpression): PlannerExpression = {
     TemporalOverlaps(leftTimePoint, leftTemporal, rightTimePoint, rightTemporal)
   }
 }
@@ -1208,8 +1208,8 @@ object dateFormat {
     * @return The formatted timestamp as string.
     */
   def apply(
-    timestamp: Expression,
-    format: Expression
+    timestamp: PlannerExpression,
+    format: PlannerExpression
   ): Expression = {
     DateFormat(timestamp, format)
   }
@@ -1236,8 +1236,8 @@ object timestampDiff {
     */
   def apply(
       timePointUnit: TimePointUnit,
-      timePoint1: Expression,
-      timePoint2: Expression)
+      timePoint1: PlannerExpression,
+      timePoint2: PlannerExpression)
     : Expression = {
     TimestampDiff(timePointUnit, timePoint1, timePoint2)
   }
@@ -1251,7 +1251,7 @@ object array {
   /**
     * Creates an array of literals. The array will be an array of objects (not primitives).
     */
-  def apply(head: Expression, tail: Expression*): Expression = {
+  def apply(head: PlannerExpression, tail: PlannerExpression*): PlannerExpression = {
     ArrayConstructor(head +: tail.toSeq)
   }
 }
@@ -1264,7 +1264,7 @@ object row {
   /**
     * Creates a row of expressions.
     */
-  def apply(head: Expression, tail: Expression*): Expression = {
+  def apply(head: PlannerExpression, tail: PlannerExpression*): PlannerExpression = {
     RowConstructor(head +: tail.toSeq)
   }
 }
@@ -1277,7 +1277,7 @@ object map {
   /**
     * Creates a map of expressions. The map will be a map between two objects (not primitives).
     */
-  def apply(key: Expression, value: Expression, tail: Expression*): Expression = {
+  def apply(key: PlannerExpression, value: PlannerExpression, tail: PlannerExpression*): PlannerExpression = {
     MapConstructor(Seq(key, value) ++ tail.toSeq)
   }
 }
@@ -1290,7 +1290,7 @@ object pi {
   /**
     * Returns a value that is closer than any other value to pi.
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     Pi()
   }
 }
@@ -1303,7 +1303,7 @@ object e {
   /**
     * Returns a value that is closer than any other value to e.
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     E()
   }
 }
@@ -1316,7 +1316,7 @@ object rand {
   /**
     * Returns a pseudorandom double value between 0.0 (inclusive) and 1.0 (exclusive).
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     new Rand()
   }
 
@@ -1325,7 +1325,7 @@ object rand {
     * initial seed. Two rand() functions will return identical sequences of numbers if they
     * have same initial seed.
     */
-  def apply(seed: Expression): Expression = {
+  def apply(seed: PlannerExpression): PlannerExpression = {
     Rand(seed)
   }
 }
@@ -1340,7 +1340,7 @@ object randInteger {
     * Returns a pseudorandom integer value between 0.0 (inclusive) and the specified
     * value (exclusive).
     */
-  def apply(bound: Expression): Expression = {
+  def apply(bound: PlannerExpression): PlannerExpression = {
    new RandInteger(bound)
   }
 
@@ -1349,7 +1349,7 @@ object randInteger {
     * (exclusive) with a initial seed. Two randInteger() functions will return identical sequences
     * of numbers if they have same initial seed and same bound.
     */
-  def apply(seed: Expression, bound: Expression): Expression = {
+  def apply(seed: PlannerExpression, bound: PlannerExpression): PlannerExpression = {
     RandInteger(seed, bound)
   }
 }
@@ -1364,7 +1364,7 @@ object concat {
     * Returns the string that results from concatenating the arguments.
     * Returns NULL if any argument is NULL.
     */
-  def apply(string: Expression, strings: Expression*): Expression = {
+  def apply(string: PlannerExpression, strings: PlannerExpression*): PlannerExpression = {
     Concat(Seq(string) ++ strings)
   }
 }
@@ -1377,7 +1377,7 @@ object atan2 {
   /**
     * Calculates the arc tangent of a given coordinate.
     */
-  def apply(y: Expression, x: Expression): Expression = {
+  def apply(y: PlannerExpression, x: PlannerExpression): PlannerExpression = {
     Atan2(y, x)
   }
 }
@@ -1390,7 +1390,7 @@ object atan2 {
   * values after the separator argument.
   **/
 object concat_ws {
-  def apply(separator: Expression, string: Expression, strings: Expression*): Expression = {
+  def apply(separator: PlannerExpression, string: PlannerExpression, strings: PlannerExpression*): PlannerExpression = {
     ConcatWs(separator, Seq(string) ++ strings)
   }
 }
@@ -1409,7 +1409,7 @@ object uuid {
     * generated) UUID. The UUID is generated using a cryptographically strong pseudo random number
     * generator.
     */
-  def apply(): Expression = {
+  def apply(): PlannerExpression = {
     UUID()
   }
 }

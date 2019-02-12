@@ -19,7 +19,7 @@
 package org.apache.flink.table.api.scala
 
 import org.apache.flink.table.api.{OverWindow, TumbleWithSize, OverWindowWithPreceding, SlideWithSize, SessionWithGap}
-import org.apache.flink.table.expressions.{Expression, ExpressionParser}
+import org.apache.flink.table.plan.expressions.{PlannerExpression, ExpressionParser}
 
 /**
   * Helper object for creating a tumbling window. Tumbling windows are consecutive, non-overlapping
@@ -36,7 +36,7 @@ object Tumble {
     * @param size the size of the window as time or row-count interval.
     * @return a partially defined tumbling window
     */
-  def over(size: Expression): TumbleWithSize = new TumbleWithSize(size)
+  def over(size: PlannerExpression): TumbleWithSize = new TumbleWithSize(size)
 }
 
 /**
@@ -62,7 +62,7 @@ object Slide {
     * @param size the size of the window as time or row-count interval
     * @return a partially specified sliding window
     */
-  def over(size: Expression): SlideWithSize = new SlideWithSize(size)
+  def over(size: PlannerExpression): SlideWithSize = new SlideWithSize(size)
 }
 
 /**
@@ -81,7 +81,7 @@ object Session {
     *            closing the session window.
     * @return a partially defined session window
     */
-  def withGap(gap: Expression): SessionWithGap = new SessionWithGap(gap)
+  def withGap(gap: PlannerExpression): SessionWithGap = new SessionWithGap(gap)
 }
 
 /**
@@ -96,8 +96,8 @@ object Over {
     *
     * For batch tables, refer to a timestamp or long attribute.
     */
-  def orderBy(orderBy: Expression): OverWindowWithOrderBy = {
-    new OverWindowWithOrderBy(Seq[Expression](), orderBy)
+  def orderBy(orderBy: PlannerExpression): OverWindowWithOrderBy = {
+    new OverWindowWithOrderBy(Seq[PlannerExpression](), orderBy)
   }
 
   /**
@@ -106,12 +106,12 @@ object Over {
     * @param partitionBy some partition keys.
     * @return A partitionedOver instance that only contains the orderBy method.
     */
-  def partitionBy(partitionBy: Expression*): PartitionedOver = {
+  def partitionBy(partitionBy: PlannerExpression*): PartitionedOver = {
     PartitionedOver(partitionBy.toArray)
   }
 }
 
-case class PartitionedOver(partitionBy: Array[Expression]) {
+case class PartitionedOver(partitionBy: Array[PlannerExpression]) {
 
   /**
     * Specifies the time attribute on which rows are grouped.
@@ -120,12 +120,12 @@ case class PartitionedOver(partitionBy: Array[Expression]) {
     *
     * For batch tables, refer to a timestamp or long attribute.
     */
-  def orderBy(orderBy: Expression): OverWindowWithOrderBy = {
+  def orderBy(orderBy: PlannerExpression): OverWindowWithOrderBy = {
     OverWindowWithOrderBy(partitionBy, orderBy)
   }
 }
 
-case class OverWindowWithOrderBy(partitionBy: Seq[Expression], orderBy: Expression) {
+case class OverWindowWithOrderBy(partitionBy: Seq[PlannerExpression], orderBy: PlannerExpression) {
 
   /**
     * Set the preceding offset (based on time or row-count intervals) for over window.
@@ -133,7 +133,7 @@ case class OverWindowWithOrderBy(partitionBy: Seq[Expression], orderBy: Expressi
     * @param preceding preceding offset relative to the current row.
     * @return this over window
     */
-  def preceding(preceding: Expression): OverWindowWithPreceding = {
+  def preceding(preceding: PlannerExpression): OverWindowWithPreceding = {
     new OverWindowWithPreceding(partitionBy, orderBy, preceding)
   }
 
@@ -151,7 +151,7 @@ case class OverWindowWithOrderBy(partitionBy: Seq[Expression], orderBy: Expressi
     * @param alias alias for this over window
     * @return over window
     */
-  def as(alias: Expression): OverWindow = {
+  def as(alias: PlannerExpression): OverWindow = {
     OverWindow(alias, partitionBy, orderBy, UNBOUNDED_RANGE, CURRENT_RANGE)
   }
 }

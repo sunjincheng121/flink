@@ -20,7 +20,7 @@ package org.apache.flink.table.api.java
 
 import org.apache.flink.table.api.scala.{CURRENT_RANGE, UNBOUNDED_RANGE}
 import org.apache.flink.table.api.{OverWindow, TumbleWithSize, OverWindowWithPreceding, SlideWithSize, SessionWithGap}
-import org.apache.flink.table.expressions.{Expression, ExpressionParser}
+import org.apache.flink.table.plan.expressions.{PlannerExpression, ExpressionParser}
 
 /**
   * Helper class for creating a tumbling window. Tumbling windows are consecutive, non-overlapping
@@ -99,7 +99,7 @@ object Over {
     */
   def orderBy(orderBy: String): OverWindowWithOrderBy = {
     val orderByExpr = ExpressionParser.parseExpression(orderBy)
-    new OverWindowWithOrderBy(Array[Expression](), orderByExpr)
+    new OverWindowWithOrderBy(Array[PlannerExpression](), orderByExpr)
   }
 
   /**
@@ -114,7 +114,7 @@ object Over {
   }
 }
 
-class PartitionedOver(private val partitionByExpr: Array[Expression]) {
+class PartitionedOver(private val partitionByExpr: Array[PlannerExpression]) {
 
   /**
     * Specifies the time attribute on which rows are grouped.
@@ -131,8 +131,8 @@ class PartitionedOver(private val partitionByExpr: Array[Expression]) {
 
 
 class OverWindowWithOrderBy(
-  private val partitionByExpr: Array[Expression],
-  private val orderByExpr: Expression) {
+  private val partitionByExpr: Array[PlannerExpression],
+  private val orderByExpr: PlannerExpression) {
 
   /**
     * Set the preceding offset (based on time or row-count intervals) for over window.
@@ -159,7 +159,7 @@ class OverWindowWithOrderBy(
     * @param alias alias for this over window
     * @return over window
     */
-  def as(alias: Expression): OverWindow = {
+  def as(alias: PlannerExpression): OverWindow = {
     OverWindow(alias, partitionByExpr, orderByExpr, UNBOUNDED_RANGE, CURRENT_RANGE)
   }
 }
