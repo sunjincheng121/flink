@@ -39,7 +39,8 @@ object ProjectionTranslator {
     */
   def extractAggregationsAndProperties(
       exprs: Seq[PlannerExpression],
-      tableEnv: TableEnvironment): (Map[PlannerExpression, String], Map[PlannerExpression, String]) = {
+      tableEnv: TableEnvironment)
+  : (Map[PlannerExpression, String], Map[PlannerExpression, String]) = {
     exprs.foldLeft((Map[PlannerExpression, String](), Map[PlannerExpression, String]())) {
       (x, y) => identifyAggregationsAndProperties(y, tableEnv, x._1, x._2)
     }
@@ -50,7 +51,8 @@ object ProjectionTranslator {
       exp: PlannerExpression,
       tableEnv: TableEnvironment,
       aggNames: Map[PlannerExpression, String],
-      propNames: Map[PlannerExpression, String]) : (Map[PlannerExpression, String], Map[PlannerExpression, String]) = {
+      propNames: Map[PlannerExpression, String])
+  : (Map[PlannerExpression, String], Map[PlannerExpression, String]) = {
 
     exp match {
       case agg: Aggregation =>
@@ -197,7 +199,7 @@ object ProjectionTranslator {
   }
 
   /**
-    * Expands an UnresolvedFieldReference("*") to parent's full project list.
+    * Expands an FieldReference("*") to parent's full project list.
     */
   def expandProjectList(
       exprs: Seq[PlannerExpression],
@@ -248,9 +250,9 @@ object ProjectionTranslator {
     * @return an expression with correct resolved OverCall
     */
   private def replaceOverCall(
-    expr: PlannerExpression,
-    overWindows: Array[OverWindow],
-    tableEnv: TableEnvironment): PlannerExpression = {
+      expr: PlannerExpression,
+      overWindows: Array[OverWindow],
+      tableEnv: TableEnvironment): PlannerExpression = {
 
     expr match {
       case u: UnresolvedOverCall =>
@@ -373,7 +375,8 @@ object ProjectionTranslator {
     * @param tableEnv the TableEnvironment
     * @return an expression with correct AggFunctionCall type for UDAGG functions
     */
-  def replaceAggFunctionCall(field: PlannerExpression, tableEnv: TableEnvironment): PlannerExpression = {
+  def replaceAggFunctionCall(
+      field: PlannerExpression, tableEnv: TableEnvironment): PlannerExpression = {
     field match {
       case l: LeafPlannerExpression => l
 

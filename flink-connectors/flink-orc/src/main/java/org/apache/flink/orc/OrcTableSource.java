@@ -28,7 +28,7 @@ import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.orc.OrcRowInputFormat.Predicate;
 import org.apache.flink.table.api.TableSchema;
 import org.apache.flink.table.plan.expressions.Attribute;
-import org.apache.flink.table.plan.expressions.BinaryPlannerComparison;
+import org.apache.flink.table.plan.expressions.BinaryComparison;
 import org.apache.flink.table.plan.expressions.EqualTo;
 import org.apache.flink.table.plan.expressions.PlannerExpression;
 import org.apache.flink.table.plan.expressions.GreaterThan;
@@ -242,9 +242,9 @@ public class OrcTableSource
 			} else {
 				return new OrcRowInputFormat.Not(c);
 			}
-		} else if (pred instanceof BinaryPlannerComparison) {
+		} else if (pred instanceof BinaryComparison) {
 
-			BinaryPlannerComparison binComp = (BinaryPlannerComparison) pred;
+			BinaryComparison binComp = (BinaryComparison) pred;
 
 			if (!isValid(binComp)) {
 				// not a valid predicate
@@ -351,12 +351,12 @@ public class OrcTableSource
 		return unary.child() instanceof Attribute;
 	}
 
-	private boolean isValid(BinaryPlannerComparison comp) {
+	private boolean isValid(BinaryComparison comp) {
 		return (comp.left() instanceof Literal && comp.right() instanceof Attribute) ||
 			(comp.left() instanceof Attribute && comp.right() instanceof Literal);
 	}
 
-	private boolean literalOnRight(BinaryPlannerComparison comp) {
+	private boolean literalOnRight(BinaryComparison comp) {
 		if (comp.left() instanceof Literal && comp.right() instanceof Attribute) {
 			return false;
 		} else if (comp.left() instanceof Attribute && comp.right() instanceof Literal) {
@@ -370,7 +370,7 @@ public class OrcTableSource
 		return ((Attribute) unary.child()).name();
 	}
 
-	private String getColumnName(BinaryPlannerComparison comp) {
+	private String getColumnName(BinaryComparison comp) {
 		if (literalOnRight(comp)) {
 			return ((Attribute) comp.left()).name();
 		} else {
@@ -378,7 +378,7 @@ public class OrcTableSource
 		}
 	}
 
-	private PredicateLeaf.Type getLiteralType(BinaryPlannerComparison comp) {
+	private PredicateLeaf.Type getLiteralType(BinaryComparison comp) {
 		if (literalOnRight(comp)) {
 			return toOrcType(((Literal) comp.right()).resultType());
 		} else {
@@ -386,7 +386,7 @@ public class OrcTableSource
 		}
 	}
 
-	private Object getLiteral(BinaryPlannerComparison comp) {
+	private Object getLiteral(BinaryComparison comp) {
 		if (literalOnRight(comp)) {
 			return ((Literal) comp.right()).value();
 		} else {

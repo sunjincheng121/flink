@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.flink.table
+package org.apache.flink.table.plan
 
 /**
  * This package contains the base class of AST nodes and all the expression language AST classes.

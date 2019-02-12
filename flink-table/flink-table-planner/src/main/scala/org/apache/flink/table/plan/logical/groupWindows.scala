@@ -36,7 +36,8 @@ case class TumblingGroupWindow(
     alias,
     timeField) {
 
-  override def resolveExpressions(resolve: (PlannerExpression) => PlannerExpression): LogicalWindow =
+  override def resolveExpressions(
+      resolve: (PlannerExpression) => PlannerExpression): LogicalWindow =
     TumblingGroupWindow(
       resolve(alias),
       resolve(timeField),
@@ -89,7 +90,8 @@ case class SlidingGroupWindow(
     alias,
     timeField) {
 
-  override def resolveExpressions(resolve: (PlannerExpression) => PlannerExpression): LogicalWindow =
+  override def resolveExpressions(
+      resolve: (PlannerExpression) => PlannerExpression): LogicalWindow =
     SlidingGroupWindow(
       resolve(alias),
       resolve(timeField),
@@ -152,7 +154,8 @@ case class SessionGroupWindow(
     alias,
     timeField) {
 
-  override def resolveExpressions(resolve: (PlannerExpression) => PlannerExpression): LogicalWindow =
+  override def resolveExpressions(
+      resolve: (PlannerExpression) => PlannerExpression): LogicalWindow =
     SessionGroupWindow(
       resolve(alias),
       resolve(timeField),

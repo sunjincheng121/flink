@@ -24,7 +24,8 @@ import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.typeutils.TypeCoercion
 import org.apache.flink.table.validate._
 
-case class Cast(child: PlannerExpression, resultType: TypeInformation[_]) extends UnaryPlannerExpression {
+case class Cast(child: PlannerExpression, resultType: TypeInformation[_])
+  extends UnaryPlannerExpression {
 
   override def toString = s"$child.cast($resultType)"
 

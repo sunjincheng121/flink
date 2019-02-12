@@ -24,15 +24,16 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.{LocalEnvironment, DataSet => JDataSet}
 import org.apache.flink.api.scala.{DataSet, ExecutionEnvironment}
 import org.apache.flink.streaming.api.TimeCharacteristic
-import org.apache.flink.streaming.api.environment.{LocalStreamEnvironment}
+import org.apache.flink.streaming.api.environment.LocalStreamEnvironment
 import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.table.api.java.{BatchTableEnvironment => JavaBatchTableEnv, StreamTableEnvironment => JavaStreamTableEnv}
 import org.apache.flink.table.api.scala.{BatchTableEnvironment => ScalaBatchTableEnv, StreamTableEnvironment => ScalaStreamTableEnv}
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{Table, TableSchema}
-import org.apache.flink.table.plan.expressions.PlannerExpression
+import org.apache.flink.table.expressions.{Expression, DefaultExpressionVisitor}
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
+import org.apache.flink.table.plan.expressions.PlannerExpression
 import org.junit.Assert.assertEquals
 import org.junit.{ComparisonFailure, Rule}
 import org.junit.rules.ExpectedException
@@ -44,6 +45,14 @@ import util.control.Breaks._
   * Test base for testing Table API / SQL plans.
   */
 class TableTestBase {
+
+  implicit def expression2PlannerExpression(expression: Expression): PlannerExpression = {
+    expression.accept(new DefaultExpressionVisitor)
+  }
+
+  implicit def symbol2PlannerExpression(expression: Symbol): PlannerExpression = {
+    expression.accept(new DefaultExpressionVisitor)
+  }
 
   // used for accurate exception information checking.
   val expectedException = ExpectedException.none()
@@ -71,12 +80,12 @@ abstract class TableTestUtil {
 
   private var counter = 0
 
-  def addTable[T: TypeInformation](fields: PlannerExpression*): Table = {
+  def addTable[T: TypeInformation](fields: Expression*): Table = {
     counter += 1
     addTable[T](s"Table$counter", fields: _*)
   }
 
-  def addTable[T: TypeInformation](name: String, fields: PlannerExpression*): Table
+  def addTable[T: TypeInformation](name: String, fields: Expression*): Table
 
   def addFunction[T: TypeInformation](name: String, function: TableFunction[T]): TableFunction[T]
 
@@ -194,7 +203,7 @@ case class BatchTableTestUtil() extends TableTestUtil {
 
   def addTable[T: TypeInformation](
       name: String,
-      fields: PlannerExpression*)
+      fields: Expression*)
     : Table = {
     val ds = mock(classOf[DataSet[T]])
     val jDs = mock(classOf[JDataSet[T]])
@@ -280,7 +289,7 @@ case class StreamTableTestUtil() extends TableTestUtil {
 
   def addTable[T: TypeInformation](
       name: String,
-      fields: PlannerExpression*)
+      fields: Expression*)
     : Table = {
 
     val table = env.fromElements().toTable(tableEnv, fields: _*)

@@ -21,9 +21,9 @@ import org.apache.calcite.avatica.util.DateTimeUtils.{MILLIS_PER_DAY, MILLIS_PER
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.api._
 import org.apache.flink.table.plan.expressions.ExpressionUtils.{toMilliInterval, toMonthInterval}
-import org.apache.flink.table.plan.expressions.TimeIntervalUnit.TimeIntervalUnit
-import org.apache.flink.table.plan.expressions.TimePointUnit.TimePointUnit
-import org.apache.flink.table.plan.expressions.TrimMode.TrimMode
+import org.apache.flink.table.plan.expressions.PlannerTimeIntervalUnit.TimeIntervalUnit
+import org.apache.flink.table.plan.expressions.PlannerTimePointUnit.PlannerTimePointUnit
+import org.apache.flink.table.plan.expressions.PlannerTrimMode.PlannerTrimMode
 
 import _root_.scala.language.implicitConversions
 import _root_.scala.util.parsing.combinator.{JavaTokenParsers, PackratParsers}
@@ -117,16 +117,16 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
 
   // symbols
 
-  lazy val timeIntervalUnit: PackratParser[PlannerExpression] = TimeIntervalUnit.values map {
+  lazy val timeIntervalUnit: PackratParser[PlannerExpression] = PlannerTimeIntervalUnit.values map {
     case unit: TimeIntervalUnit => literal(unit.toString) ^^^ unit.toExpr
   } reduceLeft(_ | _)
 
-  lazy val timePointUnit: PackratParser[PlannerExpression] = TimePointUnit.values map {
-    case unit: TimePointUnit => literal(unit.toString) ^^^ unit.toExpr
+  lazy val timePointUnit: PackratParser[PlannerExpression] = PlannerTimePointUnit.values map {
+    case unit: PlannerTimePointUnit => literal(unit.toString) ^^^ unit.toExpr
   } reduceLeft(_ | _)
 
-  lazy val trimMode: PackratParser[PlannerExpression] = TrimMode.values map {
-    case mode: TrimMode => literal(mode.toString) ^^^ mode.toExpr
+  lazy val trimMode: PackratParser[PlannerExpression] = PlannerTrimMode.values map {
+    case mode: PlannerTrimMode => literal(mode.toString) ^^^ mode.toExpr
   } reduceLeft(_ | _)
 
   lazy val currentRange: PackratParser[PlannerExpression] = CURRENT_RANGE ^^ {
@@ -245,7 +245,7 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
 
   lazy val suffixTrimWithoutArgs: PackratParser[PlannerExpression] =
     composite <~ "." ~ TRIM ~ opt("()") ^^ {
-      e => Trim(TrimMode.BOTH, TrimConstants.TRIM_DEFAULT_CHAR, e)
+      e => Trim(PlannerTrimMode.BOTH, TrimConstants.TRIM_DEFAULT_CHAR, e)
     }
 
   lazy val suffixIf: PackratParser[PlannerExpression] =
@@ -288,7 +288,8 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
     composite <~ "." ~ TO_DATE ~ opt("()") ^^ { e => Cast(e, SqlTimeTypeInfo.DATE) }
 
   lazy val suffixToTimestamp: PackratParser[PlannerExpression] =
-    composite <~ "." ~ TO_TIMESTAMP ~ opt("()") ^^ { e => Cast(e, SqlTimeTypeInfo.TIMESTAMP) }
+    composite <~ "." ~ TO_TIMESTAMP ~ opt("()") ^^ {
+      e => Cast(e, SqlTimeTypeInfo.TIMESTAMP) }
 
   lazy val suffixToTime: PackratParser[PlannerExpression] =
     composite <~ "." ~ TO_TIME ~ opt("()") ^^ { e => Cast(e, SqlTimeTypeInfo.TIME) }
@@ -386,8 +387,9 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
       case _ ~ _ ~ mode ~ _ ~ trimCharacter ~ _ ~ operand ~ _ => Trim(mode, trimCharacter, operand)
     }
 
-  lazy val prefixTrimWithoutArgs: PackratParser[PlannerExpression] = TRIM ~ "(" ~ expression ~ ")" ^^ {
-    case _ ~ _ ~ operand ~ _ => Trim(TrimMode.BOTH, TrimConstants.TRIM_DEFAULT_CHAR, operand)
+  lazy val prefixTrimWithoutArgs: PackratParser[PlannerExpression] =
+    TRIM ~ "(" ~ expression ~ ")" ^^ {
+    case _ ~ _ ~ operand ~ _ => Trim(PlannerTrimMode.BOTH, TrimConstants.TRIM_DEFAULT_CHAR, operand)
   }
 
   lazy val prefixExtract: PackratParser[PlannerExpression] =
@@ -457,14 +459,15 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
 
   // suffix/prefix composite
 
-  lazy val composite: PackratParser[PlannerExpression] = over | suffixed | nullLiteral | prefixed | atom |
+  lazy val composite: PackratParser[PlannerExpression] =
+    over | suffixed | nullLiteral | prefixed | atom |
     failure("Composite expression expected.")
 
   // unary ops
 
   lazy val unaryNot: PackratParser[PlannerExpression] = "!" ~> composite ^^ { e => Not(e) }
 
-  lazy val unaryMinus: PackratParser[PlannerExpression] = "-" ~> composite ^^ { e => UnaryPlannerMinus(e) }
+  lazy val unaryMinus: PackratParser[PlannerExpression] = "-" ~> composite ^^ { e => UnaryMinus(e) }
 
   lazy val unaryPlus: PackratParser[PlannerExpression] = "+" ~> composite ^^ { e => e }
 
@@ -543,7 +546,8 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
     case e ~ _ ~ _ ~ names ~ _ => Alias(e, names.head.name, names.tail.map(_.name))
   } | logic
 
-  lazy val aliasMapping: PackratParser[PlannerExpression] = fieldReference ~ AS ~ fieldReference ^^ {
+  lazy val aliasMapping: PackratParser[PlannerExpression] =
+    fieldReference ~ AS ~ fieldReference ^^ {
       case e ~ _ ~ name => Alias(e, name.name)
   }
 

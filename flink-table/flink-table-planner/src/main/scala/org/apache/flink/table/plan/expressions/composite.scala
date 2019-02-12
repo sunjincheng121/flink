@@ -40,7 +40,8 @@ case class Flattening(child: PlannerExpression) extends UnaryPlannerExpression {
     ValidationFailure(s"Unresolved flattening of $child")
 }
 
-case class GetCompositeField(child: PlannerExpression, key: Any) extends UnaryPlannerExpression {
+case class GetCompositeField(child: PlannerExpression, key: Any)
+  extends UnaryPlannerExpression {
 
   private var fieldIndex: Option[Int] = None
 

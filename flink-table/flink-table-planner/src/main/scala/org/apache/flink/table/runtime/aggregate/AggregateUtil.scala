@@ -1686,9 +1686,9 @@ object AggregateUtil {
 
 
   private def getTimeFieldPosition(
-    timeField: PlannerExpression,
-    inputType: RelDataType,
-    isParserCaseSensitive: Boolean): Int = {
+      timeField: PlannerExpression,
+      inputType: RelDataType,
+      isParserCaseSensitive: Boolean): Int = {
 
     timeField match {
       case ResolvedFieldReference(name, _) =>

@@ -18,7 +18,7 @@
 package org.apache.flink.table.functions
 
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.table.plan.expressions.{AggFunctionCall, DistinctAgg, PlannerExpression}
+import org.apache.flink.table.expressions.{AggregateFunctionDefinition, DistinctAgg, Expression, ExpressionUtils}
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils.{getAccumulatorTypeOfAggregateFunction, getResultTypeOfAggregateFunction}
 
 /**
@@ -28,7 +28,7 @@ import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils.{getAccum
 private[flink] case class DistinctAggregateFunction[T: TypeInformation, ACC: TypeInformation]
     (aggFunction: AggregateFunction[T, ACC]) {
 
-  def distinct(params: PlannerExpression*): PlannerExpression = {
+  def distinct(params: Expression*): Expression = {
     val resultTypeInfo: TypeInformation[_] = getResultTypeOfAggregateFunction(
       aggFunction,
       implicitly[TypeInformation[T]])
@@ -37,7 +37,12 @@ private[flink] case class DistinctAggregateFunction[T: TypeInformation, ACC: Typ
       aggFunction,
       implicitly[TypeInformation[ACC]])
 
-    DistinctAgg(
-      AggFunctionCall(aggFunction, resultTypeInfo, accTypeInfo, params))
+    new DistinctAgg(
+      ExpressionUtils.call(
+        new AggregateFunctionDefinition(
+          aggFunction,
+          resultTypeInfo,
+          accTypeInfo),
+        params))
   }
 }

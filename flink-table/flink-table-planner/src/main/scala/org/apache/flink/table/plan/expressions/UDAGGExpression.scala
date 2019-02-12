@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.flink.table.plan.expressions
+package org.apache.flink.table.expressions
 
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.functions.AggregateFunction
@@ -25,15 +25,15 @@ import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils.{getAccum
   * A class which creates a call to an aggregateFunction
   */
 case class UDAGGExpression[T: TypeInformation, ACC: TypeInformation](
-  aggregateFunction: AggregateFunction[T, ACC]) {
+    aggregateFunction: AggregateFunction[T, ACC]) {
 
   /**
     * Creates a call to an [[AggregateFunction]].
     *
     * @param params actual parameters of function
-    * @return a [[AggFunctionCall]]
+    * @return a [[Call]]
     */
-  def apply(params: PlannerExpression*): AggFunctionCall = {
+  def apply(params: Expression*): Call = {
     val resultTypeInfo: TypeInformation[_] = getResultTypeOfAggregateFunction(
       aggregateFunction,
       implicitly[TypeInformation[T]])
@@ -42,6 +42,11 @@ case class UDAGGExpression[T: TypeInformation, ACC: TypeInformation](
       aggregateFunction,
       implicitly[TypeInformation[ACC]])
 
-    AggFunctionCall(aggregateFunction, resultTypeInfo, accTypeInfo, params)
+    ExpressionUtils.call(
+      new AggregateFunctionDefinition(
+        aggregateFunction,
+        resultTypeInfo,
+        accTypeInfo),
+      params)
   }
 }

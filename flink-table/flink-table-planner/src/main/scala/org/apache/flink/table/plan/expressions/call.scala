@@ -41,7 +41,8 @@ import _root_.scala.collection.JavaConverters._
   * General expression for unresolved function calls. The function can be a built-in
   * scalar function or a user-defined scalar function.
   */
-case class Call(functionName: String, args: Seq[PlannerExpression]) extends PlannerExpression {
+case class Call(functionName: String, args: Seq[PlannerExpression])
+  extends PlannerExpression {
 
   override private[flink] def children: Seq[PlannerExpression] = args
 
@@ -64,7 +65,8 @@ case class Call(functionName: String, args: Seq[PlannerExpression]) extends Plan
   * @param agg The aggregation of the over call.
   * @param alias The alias of the referenced over window.
   */
-case class UnresolvedOverCall(agg: PlannerExpression, alias: PlannerExpression) extends PlannerExpression {
+case class UnresolvedOverCall(agg: PlannerExpression, alias: PlannerExpression)
+  extends PlannerExpression {
 
   override private[flink] def validateInput() =
     ValidationFailure(s"Over window with alias $alias could not be resolved.")
@@ -84,11 +86,11 @@ case class UnresolvedOverCall(agg: PlannerExpression, alias: PlannerExpression) 
   * @param following      The upper bound of the window
   */
 case class OverCall(
-                     agg: PlannerExpression,
-                     partitionBy: Seq[PlannerExpression],
-                     orderBy: PlannerExpression,
-                     preceding: PlannerExpression,
-                     following: PlannerExpression) extends PlannerExpression {
+    agg: PlannerExpression,
+    partitionBy: Seq[PlannerExpression],
+    orderBy: PlannerExpression,
+    preceding: PlannerExpression,
+    following: PlannerExpression) extends PlannerExpression {
 
   override def toString: String = s"$agg OVER (" +
     s"PARTITION BY (${partitionBy.mkString(", ")}) " +
@@ -138,9 +140,9 @@ case class OverCall(
   }
 
   private def createBound(
-                           relBuilder: RelBuilder,
-                           bound: PlannerExpression,
-                           sqlKind: SqlKind): RexWindowBound = {
+    relBuilder: RelBuilder,
+    bound: PlannerExpression,
+    sqlKind: SqlKind): RexWindowBound = {
 
     bound match {
       case _: UnboundedRow | _: UnboundedRange =>
@@ -205,7 +207,8 @@ case class OverCall(
 
     // check preceding is valid
     preceding match {
-      case _: CurrentRow | _: CurrentRange | _: UnboundedRow | _: UnboundedRange =>
+      case _: CurrentRow | _: CurrentRange
+           | _: UnboundedRow | _: UnboundedRange =>
         ValidationSuccess
       case Literal(v: Long, _: RowIntervalTypeInfo) if v > 0 =>
         ValidationSuccess
@@ -221,7 +224,8 @@ case class OverCall(
 
     // check following is valid
     following match {
-      case _: CurrentRow | _: CurrentRange | _: UnboundedRow | _: UnboundedRange =>
+      case _: CurrentRow | _: CurrentRange
+           | _: UnboundedRow | _: UnboundedRange =>
         ValidationSuccess
       case Literal(v: Long, _: RowIntervalTypeInfo) if v > 0 =>
         ValidationSuccess
@@ -310,10 +314,10 @@ case class ScalarFunctionCall(
   * @param resultType type information of returned table
   */
 case class TableFunctionCall(
-                              functionName: String,
-                              tableFunction: TableFunction[_],
-                              parameters: Seq[PlannerExpression],
-                              resultType: TypeInformation[_])
+    functionName: String,
+    tableFunction: TableFunction[_],
+    parameters: Seq[PlannerExpression],
+    resultType: TypeInformation[_])
   extends PlannerExpression {
 
   private var aliases: Option[Seq[String]] = None
@@ -346,6 +350,8 @@ case class TableFunctionCall(
     this.aliases = Some(name.name +: extraNames.map(_.name))
     this
   }
+
+  def alias(): Option[Seq[String]] = aliases
 
   /**
     * Converts an API class to a logical node for planning.

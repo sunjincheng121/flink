@@ -52,7 +52,8 @@ object Literal {
   }
 }
 
-case class Literal(value: Any, resultType: TypeInformation[_]) extends LeafPlannerExpression {
+case class Literal(value: Any, resultType: TypeInformation[_])
+  extends LeafPlannerExpression {
   override def toString: String = resultType match {
     case _: BasicTypeInfo[_] => value.toString
     case _@SqlTimeTypeInfo.DATE => value.toString + ".toDate"

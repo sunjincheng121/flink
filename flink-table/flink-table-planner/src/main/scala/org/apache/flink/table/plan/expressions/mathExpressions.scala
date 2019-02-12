@@ -118,8 +118,9 @@ case class Cosh(child: PlannerExpression) extends UnaryPlannerExpression {
   override def toString = s"cosh($child)"
 }
 
-case class Log(base: PlannerExpression, antilogarithm: PlannerExpression) extends PlannerExpression with InputTypeSpec {
-  def this(antilogarithm: PlannerExpression) = this(null, antilogarithm)
+case class Log(base: PlannerExpression, antilogarithm: PlannerExpression)
+  extends PlannerExpression with InputTypeSpec {
+  def this(antilogarithm: PlannerExpression) = this(E(), antilogarithm)
 
   override private[flink] def resultType: TypeInformation[_] = DOUBLE_TYPE_INFO
 
@@ -152,7 +153,8 @@ case class Ln(child: PlannerExpression) extends UnaryPlannerExpression with Inpu
   }
 }
 
-case class Power(left: PlannerExpression, right: PlannerExpression) extends BinaryPlannerExpression with InputTypeSpec {
+case class Power(left: PlannerExpression, right: PlannerExpression)
+  extends BinaryPlannerExpression with InputTypeSpec {
   override private[flink] def resultType: TypeInformation[_] = DOUBLE_TYPE_INFO
 
   override private[flink] def expectedTypes: Seq[TypeInformation[_]] =
@@ -356,7 +358,8 @@ case class Sign(child: PlannerExpression) extends UnaryPlannerExpression {
   }
 }
 
-case class Round(left: PlannerExpression, right: PlannerExpression) extends BinaryPlannerExpression {
+case class Round(left: PlannerExpression, right: PlannerExpression)
+  extends BinaryPlannerExpression {
   override private[flink] def resultType: TypeInformation[_] = left.resultType
 
   override private[flink] def validateInput(): ValidationResult = {
@@ -423,7 +426,8 @@ case class Rand(seed: PlannerExpression) extends PlannerExpression with InputTyp
   }
 }
 
-case class RandInteger(seed: PlannerExpression, bound: PlannerExpression) extends PlannerExpression with InputTypeSpec {
+case class RandInteger(seed: PlannerExpression, bound: PlannerExpression)
+  extends PlannerExpression with InputTypeSpec {
 
   def this(bound: PlannerExpression) = this(null, bound)
 
@@ -494,7 +498,8 @@ case class UUID() extends LeafPlannerExpression {
   }
 }
 
-case class Truncate(base: PlannerExpression, num: PlannerExpression) extends PlannerExpression with InputTypeSpec {
+case class Truncate(base: PlannerExpression, num: PlannerExpression)
+    extends PlannerExpression with InputTypeSpec {
   def this(base: PlannerExpression) = this(base, null)
 
   override private[flink] def resultType: TypeInformation[_] = base.resultType

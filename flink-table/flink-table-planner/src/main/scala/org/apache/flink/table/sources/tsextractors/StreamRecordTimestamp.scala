@@ -20,7 +20,9 @@ package org.apache.flink.table.sources.tsextractors
 
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.api.ValidationException
-import org.apache.flink.table.plan.expressions.{PlannerExpression, ResolvedFieldReference}
+import org.apache.flink.table.expressions.{Call, Expression, FieldReference, FunctionDefinitions}
+
+import _root_.scala.collection.JavaConversions._
 
 /**
   * Extracts the timestamp of a StreamRecord into a rowtime attribute.
@@ -37,10 +39,12 @@ final class StreamRecordTimestamp extends TimestampExtractor {
   override def validateArgumentFields(physicalFieldTypes: Array[TypeInformation[_]]): Unit = { }
 
   /**
-    * Returns an [[PlannerExpression]] that extracts the timestamp of a StreamRecord.
+    * Returns an [[Expression]] that extracts the timestamp of a StreamRecord.
     */
-  override def getExpression(fieldAccesses: Array[ResolvedFieldReference]): PlannerExpression = {
-    org.apache.flink.table.expressions.StreamRecordTimestamp()
+  override def getExpression(
+      fieldAccesses: Array[FieldReference],
+      fieldTypes: Array[TypeInformation[_]]): Expression = {
+    new Call(FunctionDefinitions.STREAM_RECORD_TIMESTAMP, List())
   }
 
   override def equals(obj: Any): Boolean = obj match {

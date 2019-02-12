@@ -22,7 +22,7 @@ import org.apache.calcite.avatica.util.TimeUnit
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{SqlParserException, ValidationException}
 import org.apache.flink.table.codegen.CodeGenException
-import org.apache.flink.table.plan.expressions.TimePointUnit
+import org.apache.flink.table.expressions.TimePointUnit
 import org.apache.flink.table.plan.expressions.utils.ScalarTypesTestBase
 import org.junit.Test
 

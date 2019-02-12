@@ -21,7 +21,10 @@ package org.apache.flink.table.api
 import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeInfo}
-import org.apache.flink.table.api.scala.{CURRENT_RANGE, CURRENT_ROW}
+
+trait UnresolvedOverWindow
+
+abstract class Window
 
 /**
   * Over window is similar to the traditional OVER SQL.
@@ -31,7 +34,7 @@ case class OverWindow(
     private[flink] val partitionBy: Seq[PlannerExpression],
     private[flink] val orderBy: PlannerExpression,
     private[flink] val preceding: PlannerExpression,
-    private[flink] val following: PlannerExpression)
+    private[flink] val following: PlannerExpression) extends UnresolvedOverWindow
 
 case class CurrentRow() extends PlannerExpression {
   override private[flink] def resultType = RowIntervalTypeInfo.INTERVAL_ROWS
@@ -65,6 +68,51 @@ case class UnboundedRange() extends PlannerExpression {
   override def toString = "UNBOUNDED RANGE"
 }
 
+case class PartitionedOver(partitionBy: Array[PlannerExpression]) {
+
+  /**
+    * Specifies the time attribute on which rows are grouped.
+    *
+    * For streaming tables call [[orderBy 'rowtime or orderBy 'proctime]] to specify time mode.
+    *
+    * For batch tables, refer to a timestamp or long attribute.
+    */
+  def orderBy(orderBy: PlannerExpression): OverWindowWithOrderBy = {
+    OverWindowWithOrderBy(partitionBy, orderBy)
+  }
+}
+
+case class OverWindowWithOrderBy(partitionBy: Seq[PlannerExpression], orderBy: PlannerExpression) {
+
+  /**
+    * Set the preceding offset (based on time or row-count intervals) for over window.
+    *
+    * @param preceding preceding offset relative to the current row.
+    * @return this over window
+    */
+  def preceding(preceding: PlannerExpression): OverWindowWithPreceding = {
+    new OverWindowWithPreceding(partitionBy, orderBy, preceding)
+  }
+
+  /**
+    * Assigns an alias for this window that the following `select()` clause can refer to.
+    *
+    * @param alias alias for this over window
+    * @return over window
+    */
+  def as(alias: String): OverWindow = as(ExpressionParser.parseExpression(alias))
+
+  /**
+    * Assigns an alias for this window that the following `select()` clause can refer to.
+    *
+    * @param alias alias for this over window
+    * @return over window
+    */
+  def as(alias: PlannerExpression): OverWindow = {
+    OverWindow(alias, partitionBy, orderBy, UnboundedRange(), CurrentRange())
+  }
+}
+
 /**
   * A partially defined over window.
   */
@@ -94,9 +142,9 @@ class OverWindowWithPreceding(
     // set following to CURRENT_ROW / CURRENT_RANGE if not defined
     if (null == following) {
       if (preceding.resultType.isInstanceOf[RowIntervalTypeInfo]) {
-        following = CURRENT_ROW
+        following = CurrentRow()
       } else {
-        following = CURRENT_RANGE
+        following = CurrentRange()
       }
     }
     OverWindow(alias, partitionBy, orderBy, preceding, following)
@@ -137,7 +185,7 @@ class OverWindowWithPreceding(
   * For finite batch tables, window provides shortcuts for time-based groupBy.
   *
   */
-abstract class Window(val alias: PlannerExpression, val timeField: PlannerExpression) {
+abstract class PlannerWindow(val alias: PlannerExpression, val timeField: PlannerExpression) {
 
   /**
     * Converts an API class to a logical window for planning.
@@ -234,7 +282,7 @@ class TumbleWithSizeOnTimeWithAlias(
     alias: PlannerExpression,
     timeField: PlannerExpression,
     size: PlannerExpression)
-  extends Window(
+  extends PlannerWindow(
     alias,
     timeField) {
 
@@ -277,7 +325,8 @@ class SlideWithSize(size: PlannerExpression) {
     * @param slide the slide of the window either as time or row-count interval.
     * @return a sliding window
     */
-  def every(slide: PlannerExpression): SlideWithSizeAndSlide = new SlideWithSizeAndSlide(size, slide)
+  def every(slide: PlannerExpression): SlideWithSizeAndSlide =
+    new SlideWithSizeAndSlide(size, slide)
 
   /**
     * Specifies the window's slide as time or row-count interval.
@@ -336,7 +385,10 @@ class SlideWithSizeAndSlide(size: PlannerExpression, slide: PlannerExpression) {
 /**
   * Sliding window on time.
   */
-class SlideWithSizeAndSlideOnTime(timeField: PlannerExpression, size: PlannerExpression, slide: PlannerExpression) {
+class SlideWithSizeAndSlideOnTime(
+    timeField: PlannerExpression,
+    size: PlannerExpression,
+    slide: PlannerExpression) {
 
   /**
     * Assigns an alias for this window that the following `groupBy()` and `select()` clause can
@@ -369,7 +421,7 @@ class SlideWithSizeAndSlideOnTimeWithAlias(
     timeField: PlannerExpression,
     size: PlannerExpression,
     slide: PlannerExpression)
-  extends Window(
+  extends PlannerWindow(
     alias,
     timeField) {
 
@@ -469,7 +521,7 @@ class SessionWithGapOnTimeWithAlias(
     alias: PlannerExpression,
     timeField: PlannerExpression,
     gap: PlannerExpression)
-  extends Window(
+  extends PlannerWindow(
     alias,
     timeField) {
 

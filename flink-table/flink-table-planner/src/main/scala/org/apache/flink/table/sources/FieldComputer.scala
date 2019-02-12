@@ -20,7 +20,7 @@ package org.apache.flink.table.sources
 
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.api.ValidationException
-import org.apache.flink.table.plan.expressions.{PlannerExpression, ResolvedFieldReference}
+import org.apache.flink.table.expressions.{Expression, FieldReference}
 
 /**
   * The [[FieldComputer]] interface returns an expression to compute the field of the table schema
@@ -53,11 +53,14 @@ abstract class FieldComputer[T] {
   def validateArgumentFields(argumentFieldTypes: Array[TypeInformation[_]]): Unit
 
   /**
-    * Returns the [[PlannerExpression]] that computes the value of the field.
+    * Returns the [[Expression]] that computes the value of the field.
     *
     * @param fieldAccesses Field access expressions for the argument fields.
+    * @param fieldTypes The types of the physical input fields.
     * @return The expression to extract the timestamp from the [[TableSource]] return type.
     */
-  def getExpression(fieldAccesses: Array[ResolvedFieldReference]): PlannerExpression
+  def getExpression(
+      fieldAccesses: Array[FieldReference],
+      fieldTypes: Array[TypeInformation[_]]): Expression
 
 }

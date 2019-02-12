@@ -28,7 +28,7 @@ import org.apache.flink.table.validate._
 
 import scala.collection.JavaConversions._
 
-abstract class BinaryPlannerArithmetic extends BinaryPlannerExpression {
+abstract class BinaryArithmetic extends BinaryPlannerExpression {
   private[flink] def sqlOperator: SqlOperator
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
@@ -52,7 +52,7 @@ abstract class BinaryPlannerArithmetic extends BinaryPlannerExpression {
   }
 }
 
-case class Plus(left: PlannerExpression, right: PlannerExpression) extends BinaryPlannerArithmetic {
+case class Plus(left: PlannerExpression, right: PlannerExpression) extends BinaryArithmetic {
   override def toString = s"($left + $right)"
 
   private[flink] val sqlOperator = SqlStdOperatorTable.PLUS
@@ -99,7 +99,7 @@ case class Plus(left: PlannerExpression, right: PlannerExpression) extends Binar
   }
 }
 
-case class UnaryPlannerMinus(child: PlannerExpression) extends UnaryPlannerExpression {
+case class UnaryMinus(child: PlannerExpression) extends UnaryPlannerExpression {
   override def toString = s"-($child)"
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
@@ -120,7 +120,7 @@ case class UnaryPlannerMinus(child: PlannerExpression) extends UnaryPlannerExpre
   }
 }
 
-case class Minus(left: PlannerExpression, right: PlannerExpression) extends BinaryPlannerArithmetic {
+case class Minus(left: PlannerExpression, right: PlannerExpression) extends BinaryArithmetic {
   override def toString = s"($left - $right)"
 
   private[flink] val sqlOperator = SqlStdOperatorTable.MINUS
@@ -143,19 +143,19 @@ case class Minus(left: PlannerExpression, right: PlannerExpression) extends Bina
   }
 }
 
-case class Div(left: PlannerExpression, right: PlannerExpression) extends BinaryPlannerArithmetic {
+case class Div(left: PlannerExpression, right: PlannerExpression) extends BinaryArithmetic {
   override def toString = s"($left / $right)"
 
   private[flink] val sqlOperator = SqlStdOperatorTable.DIVIDE
 }
 
-case class Mul(left: PlannerExpression, right: PlannerExpression) extends BinaryPlannerArithmetic {
+case class Mul(left: PlannerExpression, right: PlannerExpression) extends BinaryArithmetic {
   override def toString = s"($left * $right)"
 
   private[flink] val sqlOperator = SqlStdOperatorTable.MULTIPLY
 }
 
-case class Mod(left: PlannerExpression, right: PlannerExpression) extends BinaryPlannerArithmetic {
+case class Mod(left: PlannerExpression, right: PlannerExpression) extends BinaryArithmetic {
   override def toString = s"($left % $right)"
 
   private[flink] val sqlOperator = SqlStdOperatorTable.MOD

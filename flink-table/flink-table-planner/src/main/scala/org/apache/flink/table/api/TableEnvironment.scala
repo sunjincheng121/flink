@@ -1001,7 +1001,8 @@ abstract class TableEnvironment(val config: TableConfig) {
     * used if the input type has a defined field order (tuple, case class, Row) and no of fields
     * references a field of the input type.
     */
-  protected def isReferenceByPosition(ct: CompositeType[_], fields: Array[PlannerExpression]): Boolean = {
+  protected def isReferenceByPosition(
+      ct: CompositeType[_], fields: Array[PlannerExpression]): Boolean = {
     if (!ct.isInstanceOf[TupleTypeInfoBase[_]]) {
       return false
     }
@@ -1040,7 +1041,8 @@ abstract class TableEnvironment(val config: TableConfig) {
     * Returns field names and field positions for a given [[TypeInformation]] and [[Array]] of
     * [[PlannerExpression]]. It does not handle time attributes but considers them in indices.
     *
-    * @param inputType The [[TypeInformation]] against which the [[PlannerExpression]]s are evaluated.
+    * @param inputType The [[TypeInformation]] against which the [[PlannerExpression]]s are
+    *                  evaluated.
     * @param exprs     The expressions that define the field names.
     * @tparam A The type of the TypeInformation.
     * @return A tuple of two arrays holding the field names and corresponding field positions.

@@ -50,17 +50,21 @@ object ExpressionUtils {
   }
 
   private[flink] def isTimeAttribute(expr: PlannerExpression): Boolean = expr match {
-    case r: ResolvedFieldReference if FlinkTypeFactory.isTimeIndicatorType(r.resultType) => true
+    case r: ResolvedFieldReference if FlinkTypeFactory.isTimeIndicatorType(r.resultType) =>
+      true
     case _ => false
   }
 
   private[flink] def isRowtimeAttribute(expr: PlannerExpression): Boolean = expr match {
-    case r: ResolvedFieldReference if FlinkTypeFactory.isRowtimeIndicatorType(r.resultType) => true
+    case r: ResolvedFieldReference
+      if FlinkTypeFactory.isRowtimeIndicatorType(r.resultType) =>
+      true
     case _ => false
   }
 
   private[flink] def isProctimeAttribute(expr: PlannerExpression): Boolean = expr match {
-    case r: ResolvedFieldReference if FlinkTypeFactory.isProctimeIndicatorType(r.resultType) =>
+    case r: ResolvedFieldReference
+      if FlinkTypeFactory.isProctimeIndicatorType(r.resultType) =>
       true
     case _ => false
   }
@@ -76,14 +80,16 @@ object ExpressionUtils {
     case _ => throw new IllegalArgumentException()
   }
 
-  private[flink] def toMonthInterval(expr: PlannerExpression, multiplier: Int): PlannerExpression = expr match {
+  private[flink] def toMonthInterval(expr: PlannerExpression, multiplier: Int): PlannerExpression =
+    expr match {
     case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
       Literal(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MONTHS)
     case _ =>
       Cast(Mul(expr, Literal(multiplier)), TimeIntervalTypeInfo.INTERVAL_MONTHS)
   }
 
-  private[flink] def toMilliInterval(expr: PlannerExpression, multiplier: Long): PlannerExpression = expr match {
+  private[flink] def toMilliInterval(expr: PlannerExpression, multiplier: Long): PlannerExpression =
+    expr match {
     case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
       Literal(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MILLIS)
     case Literal(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
@@ -131,7 +137,8 @@ object ExpressionUtils {
       case _: Array[Date] => createArray()
       case _: Array[Time] => createArray()
       case _: Array[Timestamp] => createArray()
-      case bda: Array[BigDecimal] => ArrayConstructor(bda.map { bd => Literal(bd.bigDecimal) })
+      case bda: Array[BigDecimal] =>
+        ArrayConstructor(bda.map { bd => Literal(bd.bigDecimal) })
 
       case _ =>
         // nested

@@ -59,7 +59,8 @@ case class Project(
             case ne: NamedExpression => ne
             case expr if !expr.valid => u
             case c @ Cast(ne: NamedExpression, tp) => Alias(c, s"${ne.name}-$tp")
-            case gcf: GetCompositeField => Alias(gcf, gcf.aliasName().getOrElse(s"_c$i"))
+            case gcf: GetCompositeField =>
+              Alias(gcf, gcf.aliasName().getOrElse(s"_c$i"))
             case other => Alias(other, s"_c$i")
           }
           case _ =>
@@ -205,9 +206,9 @@ case class Filter(condition: PlannerExpression, child: LogicalNode) extends Unar
 }
 
 case class Aggregate(
-    groupingExpressions: Seq[PlannerExpression],
-    aggregateExpressions: Seq[NamedExpression],
-    child: LogicalNode) extends UnaryNode {
+  groupingExpressions: Seq[PlannerExpression],
+  aggregateExpressions: Seq[NamedExpression],
+  child: LogicalNode) extends UnaryNode {
 
   override def output: Seq[Attribute] = {
     (groupingExpressions ++ aggregateExpressions) map {
@@ -372,11 +373,11 @@ case class Intersect(left: LogicalNode, right: LogicalNode, all: Boolean) extend
 }
 
 case class Join(
-    left: LogicalNode,
-    right: LogicalNode,
-    joinType: JoinType,
-    condition: Option[PlannerExpression],
-    correlated: Boolean) extends BinaryNode {
+  left: LogicalNode,
+  right: LogicalNode,
+  joinType: JoinType,
+  condition: Option[PlannerExpression],
+  correlated: Boolean) extends BinaryNode {
 
   override def output: Seq[Attribute] = {
     left.output ++ right.output
@@ -469,13 +470,13 @@ case class Join(
 
   private def testJoinCondition(expression: PlannerExpression): Unit = {
 
-    def checkIfJoinCondition(exp: BinaryPlannerComparison) = exp.children match {
+    def checkIfJoinCondition(exp: BinaryComparison) = exp.children match {
       case (x: JoinFieldReference) :: (y: JoinFieldReference) :: Nil
         if x.isFromLeftInput != y.isFromLeftInput => true
       case _ => false
     }
 
-    def checkIfFilterCondition(exp: BinaryPlannerComparison) = exp.children match {
+    def checkIfFilterCondition(exp: BinaryComparison) = exp.children match {
       case (x: JoinFieldReference) :: (y: JoinFieldReference) :: Nil => false
       case (x: JoinFieldReference) :: (_) :: Nil => true
       case (_) :: (y: JoinFieldReference) :: Nil => true
@@ -496,7 +497,7 @@ case class Join(
         if (isAndBranch && checkIfJoinCondition(x)) {
           equiJoinPredicateFound = true
         }
-      case x: BinaryPlannerComparison =>
+      case x: BinaryComparison =>
       // The boolean literal should be a valid condition type.
       case x: Literal if x.resultType == Types.BOOLEAN =>
       case x => failValidation(

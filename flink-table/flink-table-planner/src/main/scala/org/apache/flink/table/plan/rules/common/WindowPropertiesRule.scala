@@ -69,12 +69,16 @@ abstract class WindowPropertiesBaseRule(rulePredicate: RelOptRuleOperand, ruleNa
     val timeProperties = windowType match {
       case 'streamRowtime =>
         Seq(
-          NamedWindowProperty(propertyName(w, "rowtime"), RowtimeAttribute(w.aliasAttribute)),
-          NamedWindowProperty(propertyName(w, "proctime"), ProctimeAttribute(w.aliasAttribute)))
+          NamedWindowProperty(
+            propertyName(w, "rowtime"), RowtimeAttribute(w.aliasAttribute)),
+          NamedWindowProperty(
+            propertyName(w, "proctime"), ProctimeAttribute(w.aliasAttribute)))
       case 'streamProctime =>
-        Seq(NamedWindowProperty(propertyName(w, "proctime"), ProctimeAttribute(w.aliasAttribute)))
+        Seq(NamedWindowProperty(
+          propertyName(w, "proctime"), ProctimeAttribute(w.aliasAttribute)))
       case 'batchRowtime =>
-        Seq(NamedWindowProperty(propertyName(w, "rowtime"), RowtimeAttribute(w.aliasAttribute)))
+        Seq(NamedWindowProperty(
+          propertyName(w, "rowtime"), RowtimeAttribute(w.aliasAttribute)))
       case _ =>
         throw new TableException("Unknown window type encountered. Please report this bug.")
     }

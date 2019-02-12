@@ -28,7 +28,8 @@ import org.apache.flink.table.api.StreamTableEnvironment
 import org.apache.flink.table.typeutils.TypeCheckUtils._
 import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, ValidationSuccess}
 
-case class In(expression: PlannerExpression, elements: Seq[PlannerExpression]) extends PlannerExpression  {
+case class In(expression: PlannerExpression, elements: Seq[PlannerExpression])
+  extends PlannerExpression  {
 
   override def toString = s"$expression.in(${elements.mkString(", ")})"
 

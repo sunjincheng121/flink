@@ -41,7 +41,7 @@ import org.apache.flink.table.api.scala.BatchTableEnvironment
 import org.apache.flink.table.api.{TableConfig, TableEnvironment}
 import org.apache.flink.table.calcite.FlinkPlannerImpl
 import org.apache.flink.table.codegen.{Compiler, FunctionCodeGenerator, GeneratedFunction}
-import org.apache.flink.table.plan.expressions.{PlannerExpression, ExpressionParser}
+import org.apache.flink.table.expressions.Expression
 import org.apache.flink.table.functions.ScalarFunction
 import org.apache.flink.table.plan.nodes.dataset.{DataSetCalc, DataSetScan}
 import org.apache.flink.table.plan.rules.FlinkRuleSets
@@ -195,7 +195,7 @@ abstract class ExpressionTestBase {
     testExprs += ((sqlExpr, extractRexNode(optimized), expected))
   }
 
-  private def addTableApiTestExpr(tableApiExpr: PlannerExpression, expected: String): Unit = {
+  private def addTableApiTestExpr(tableApiExpr: Expression, expected: String): Unit = {
     // create RelNode from Table API expression
     val env = context._2.asInstanceOf[BatchTableEnvironment]
     val converted = env
@@ -216,14 +216,23 @@ abstract class ExpressionTestBase {
   }
 
   private def addTableApiTestExpr(tableApiString: String, expected: String): Unit = {
-    addTableApiTestExpr(ExpressionParser.parseExpression(tableApiString), expected)
+    // create RelNode from Table API expression
+    val env = context._2.asInstanceOf[BatchTableEnvironment]
+    val converted = env
+      .scan(tableName)
+      .select(tableApiString)
+      .getRelNode
+
+    val optimized = env.optimize(converted)
+
+    testExprs += ((tableApiString, extractRexNode(optimized), expected))
   }
 
   def testAllApis(
-                   expr: PlannerExpression,
-                   exprString: String,
-                   sqlExpr: String,
-                   expected: String)
+      expr: Expression,
+      exprString: String,
+      sqlExpr: String,
+      expected: String)
     : Unit = {
     addTableApiTestExpr(expr, expected)
     addTableApiTestExpr(exprString, expected)
@@ -231,9 +240,9 @@ abstract class ExpressionTestBase {
   }
 
   def testTableApi(
-                    expr: PlannerExpression,
-                    exprString: String,
-                    expected: String)
+      expr: Expression,
+      exprString: String,
+      expected: String)
     : Unit = {
     addTableApiTestExpr(expr, expected)
     addTableApiTestExpr(exprString, expected)

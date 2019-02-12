@@ -25,7 +25,7 @@ import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.calcite.FlinkRelBuilder
-import org.apache.flink.table.plan.expressions.TimeIntervalUnit.TimeIntervalUnit
+import org.apache.flink.table.plan.expressions.PlannerTimeIntervalUnit.TimeIntervalUnit
 import org.apache.flink.table.functions.sql.ScalarSqlFunctions
 import org.apache.flink.table.typeutils.TypeCheckUtils.isTimeInterval
 import org.apache.flink.table.typeutils.{TimeIntervalTypeInfo, TypeCheckUtils}
@@ -33,7 +33,8 @@ import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, Val
 
 import scala.collection.JavaConversions._
 
-case class Extract(timeIntervalUnit: PlannerExpression, temporal: PlannerExpression) extends PlannerExpression {
+case class Extract(timeIntervalUnit: PlannerExpression, temporal: PlannerExpression)
+  extends PlannerExpression {
 
   override private[flink] def children: Seq[PlannerExpression] = timeIntervalUnit :: temporal :: Nil
 
@@ -46,20 +47,20 @@ case class Extract(timeIntervalUnit: PlannerExpression, temporal: PlannerExpress
     }
 
     timeIntervalUnit match {
-      case SymbolPlannerExpression(TimeIntervalUnit.YEAR)
-           | SymbolPlannerExpression(TimeIntervalUnit.QUARTER)
-           | SymbolPlannerExpression(TimeIntervalUnit.MONTH)
-           | SymbolPlannerExpression(TimeIntervalUnit.WEEK)
-           | SymbolPlannerExpression(TimeIntervalUnit.DAY)
+      case SymbolPlannerExpression(PlannerTimeIntervalUnit.YEAR)
+           | SymbolPlannerExpression(PlannerTimeIntervalUnit.QUARTER)
+           | SymbolPlannerExpression(PlannerTimeIntervalUnit.MONTH)
+           | SymbolPlannerExpression(PlannerTimeIntervalUnit.WEEK)
+           | SymbolPlannerExpression(PlannerTimeIntervalUnit.DAY)
         if temporal.resultType == SqlTimeTypeInfo.DATE
           || temporal.resultType == SqlTimeTypeInfo.TIMESTAMP
           || temporal.resultType == TimeIntervalTypeInfo.INTERVAL_MILLIS
           || temporal.resultType == TimeIntervalTypeInfo.INTERVAL_MONTHS =>
         ValidationSuccess
 
-      case SymbolPlannerExpression(TimeIntervalUnit.HOUR)
-           | SymbolPlannerExpression(TimeIntervalUnit.MINUTE)
-           | SymbolPlannerExpression(TimeIntervalUnit.SECOND)
+      case SymbolPlannerExpression(PlannerTimeIntervalUnit.HOUR)
+           | SymbolPlannerExpression(PlannerTimeIntervalUnit.MINUTE)
+           | SymbolPlannerExpression(PlannerTimeIntervalUnit.SECOND)
         if temporal.resultType == SqlTimeTypeInfo.TIME
           || temporal.resultType == SqlTimeTypeInfo.TIMESTAMP
           || temporal.resultType == TimeIntervalTypeInfo.INTERVAL_MILLIS =>
@@ -83,8 +84,8 @@ case class Extract(timeIntervalUnit: PlannerExpression, temporal: PlannerExpress
 }
 
 abstract class TemporalCeilFloor(
-                                  timeIntervalUnit: PlannerExpression,
-                                  temporal: PlannerExpression)
+    timeIntervalUnit: PlannerExpression,
+    temporal: PlannerExpression)
   extends PlannerExpression {
 
   override private[flink] def children: Seq[PlannerExpression] = timeIntervalUnit :: temporal :: Nil
@@ -106,13 +107,13 @@ abstract class TemporalCeilFloor(
     }
 
     (unit.get, temporal.resultType) match {
-      case (TimeIntervalUnit.YEAR | TimeIntervalUnit.MONTH,
+      case (PlannerTimeIntervalUnit.YEAR | PlannerTimeIntervalUnit.MONTH,
           SqlTimeTypeInfo.DATE | SqlTimeTypeInfo.TIMESTAMP) =>
         ValidationSuccess
-      case (TimeIntervalUnit.DAY, SqlTimeTypeInfo.TIMESTAMP) =>
+      case (PlannerTimeIntervalUnit.DAY, SqlTimeTypeInfo.TIMESTAMP) =>
         ValidationSuccess
-      case (TimeIntervalUnit.HOUR | TimeIntervalUnit.MINUTE | TimeIntervalUnit.SECOND,
-          SqlTimeTypeInfo.TIME | SqlTimeTypeInfo.TIMESTAMP) =>
+      case (PlannerTimeIntervalUnit.HOUR | PlannerTimeIntervalUnit.MINUTE
+            | PlannerTimeIntervalUnit.SECOND, SqlTimeTypeInfo.TIME | SqlTimeTypeInfo.TIMESTAMP) =>
         ValidationSuccess
       case _ =>
         ValidationFailure(s"Temporal ceil/floor operator does not support " +
@@ -122,8 +123,8 @@ abstract class TemporalCeilFloor(
 }
 
 case class TemporalFloor(
-                          timeIntervalUnit: PlannerExpression,
-                          temporal: PlannerExpression)
+    timeIntervalUnit: PlannerExpression,
+    temporal: PlannerExpression)
   extends TemporalCeilFloor(
     timeIntervalUnit,
     temporal) {
@@ -136,8 +137,8 @@ case class TemporalFloor(
 }
 
 case class TemporalCeil(
-                         timeIntervalUnit: PlannerExpression,
-                         temporal: PlannerExpression)
+    timeIntervalUnit: PlannerExpression,
+    temporal: PlannerExpression)
   extends TemporalCeilFloor(
     timeIntervalUnit,
     temporal) {
@@ -215,7 +216,7 @@ case class Quarter(child: PlannerExpression) extends UnaryPlannerExpression with
     Plus(
       Div(
         Minus(
-          Extract(TimeIntervalUnit.MONTH, child),
+          Extract(PlannerTimeIntervalUnit.MONTH, child),
           Literal(1L)),
         Literal(TimeUnit.QUARTER.multiplier.longValue())),
       Literal(1L)
@@ -227,10 +228,10 @@ case class Quarter(child: PlannerExpression) extends UnaryPlannerExpression with
   * Determines whether two anchored time intervals overlap.
   */
 case class TemporalOverlaps(
-                             leftTimePoint: PlannerExpression,
-                             leftTemporal: PlannerExpression,
-                             rightTimePoint: PlannerExpression,
-                             rightTemporal: PlannerExpression)
+    leftTimePoint: PlannerExpression,
+    leftTemporal: PlannerExpression,
+    rightTimePoint: PlannerExpression,
+    rightTemporal: PlannerExpression)
   extends PlannerExpression {
 
   override private[flink] def children: Seq[PlannerExpression] =
@@ -330,7 +331,8 @@ case class TemporalOverlaps(
   }
 }
 
-case class DateFormat(timestamp: PlannerExpression, format: PlannerExpression) extends PlannerExpression {
+case class DateFormat(timestamp: PlannerExpression, format: PlannerExpression)
+  extends PlannerExpression {
   override private[flink] def children = timestamp :: format :: Nil
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder) =
@@ -342,9 +344,9 @@ case class DateFormat(timestamp: PlannerExpression, format: PlannerExpression) e
 }
 
 case class TimestampDiff(
-                          timePointUnit: PlannerExpression,
-                          timePoint1: PlannerExpression,
-                          timePoint2: PlannerExpression)
+    timePointUnit: PlannerExpression,
+    timePoint1: PlannerExpression,
+    timePoint2: PlannerExpression)
   extends PlannerExpression {
 
   override private[flink] def children: Seq[PlannerExpression] =
@@ -364,14 +366,14 @@ case class TimestampDiff(
     }
 
     timePointUnit match {
-      case SymbolPlannerExpression(TimePointUnit.YEAR)
-           | SymbolPlannerExpression(TimePointUnit.QUARTER)
-           | SymbolPlannerExpression(TimePointUnit.MONTH)
-           | SymbolPlannerExpression(TimePointUnit.WEEK)
-           | SymbolPlannerExpression(TimePointUnit.DAY)
-           | SymbolPlannerExpression(TimePointUnit.HOUR)
-           | SymbolPlannerExpression(TimePointUnit.MINUTE)
-           | SymbolPlannerExpression(TimePointUnit.SECOND)
+      case SymbolPlannerExpression(PlannerTimePointUnit.YEAR)
+           | SymbolPlannerExpression(PlannerTimePointUnit.QUARTER)
+           | SymbolPlannerExpression(PlannerTimePointUnit.MONTH)
+           | SymbolPlannerExpression(PlannerTimePointUnit.WEEK)
+           | SymbolPlannerExpression(PlannerTimePointUnit.DAY)
+           | SymbolPlannerExpression(PlannerTimePointUnit.HOUR)
+           | SymbolPlannerExpression(PlannerTimePointUnit.MINUTE)
+           | SymbolPlannerExpression(PlannerTimePointUnit.SECOND)
         if timePoint1.resultType == SqlTimeTypeInfo.DATE
           || timePoint1.resultType == SqlTimeTypeInfo.TIMESTAMP
           || timePoint2.resultType == SqlTimeTypeInfo.DATE

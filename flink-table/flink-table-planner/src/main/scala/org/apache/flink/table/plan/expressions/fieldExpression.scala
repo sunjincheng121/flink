@@ -106,7 +106,8 @@ case class Alias(child: PlannerExpression, name: String, extraNames: Seq[String]
   }
 }
 
-case class UnresolvedAlias(child: PlannerExpression) extends UnaryPlannerExpression with NamedExpression {
+case class UnresolvedAlias(child: PlannerExpression)
+  extends UnaryPlannerExpression with NamedExpression {
 
   override private[flink] def name: String =
     throw UnresolvedException("Invalid call to name on UnresolvedAlias")
@@ -120,7 +121,8 @@ case class UnresolvedAlias(child: PlannerExpression) extends UnaryPlannerExpress
   override private[flink] lazy val valid = false
 }
 
-case class WindowReference(name: String, tpe: Option[TypeInformation[_]] = None) extends Attribute {
+case class WindowReference(name: String, tpe: Option[TypeInformation[_]] = None)
+  extends Attribute {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
     throw new UnsupportedOperationException("A window reference can not be used solely.")
@@ -139,7 +141,8 @@ case class WindowReference(name: String, tpe: Option[TypeInformation[_]] = None)
   override def toString: String = s"'$name"
 }
 
-case class TableReference(name: String, table: Table) extends LeafPlannerExpression with NamedExpression {
+case class TableReference(name: String, table: Table)
+  extends LeafPlannerExpression with NamedExpression {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
     throw new UnsupportedOperationException(s"Table reference '$name' can not be used solely.")
@@ -160,16 +163,20 @@ abstract class TimeAttribute(val expression: PlannerExpression)
   override private[flink] def child: PlannerExpression = expression
 }
 
-case class RowtimeAttribute(expr: PlannerExpression) extends TimeAttribute(expr) {
+case class RowtimeAttribute(expr: PlannerExpression)
+  extends TimeAttribute(expr) {
 
   override private[flink] def validateInput(): ValidationResult = {
     child match {
-      case WindowReference(_, Some(tpe: TypeInformation[_])) if isProctimeIndicatorType(tpe) =>
+      case WindowReference(_, Some(tpe: TypeInformation[_]))
+        if isProctimeIndicatorType(tpe) =>
         ValidationFailure("A proctime window cannot provide a rowtime attribute.")
-      case WindowReference(_, Some(tpe: TypeInformation[_])) if isRowtimeIndicatorType(tpe) =>
+      case WindowReference(_, Some(tpe: TypeInformation[_]))
+        if isRowtimeIndicatorType(tpe) =>
         // rowtime window
         ValidationSuccess
-      case WindowReference(_, Some(tpe)) if tpe == Types.LONG || tpe == Types.SQL_TIMESTAMP =>
+      case WindowReference(_, Some(tpe))
+        if tpe == Types.LONG || tpe == Types.SQL_TIMESTAMP =>
         // batch time window
         ValidationSuccess
       case WindowReference(_, _) =>
@@ -183,10 +190,12 @@ case class RowtimeAttribute(expr: PlannerExpression) extends TimeAttribute(expr)
 
   override def resultType: TypeInformation[_] = {
     child match {
-      case WindowReference(_, Some(tpe: TypeInformation[_])) if isRowtimeIndicatorType(tpe) =>
+      case WindowReference(_, Some(tpe: TypeInformation[_]))
+        if isRowtimeIndicatorType(tpe) =>
         // rowtime window
         TimeIndicatorTypeInfo.ROWTIME_INDICATOR
-      case WindowReference(_, Some(tpe)) if tpe == Types.LONG || tpe == Types.SQL_TIMESTAMP =>
+      case WindowReference(_, Some(tpe))
+        if tpe == Types.LONG || tpe == Types.SQL_TIMESTAMP =>
         // batch time window
         Types.SQL_TIMESTAMP
       case _ =>

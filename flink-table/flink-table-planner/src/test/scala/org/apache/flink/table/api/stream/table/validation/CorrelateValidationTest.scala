@@ -30,7 +30,7 @@ import org.junit.Test
 class CorrelateValidationTest extends TableTestBase {
 
   @Test
-  def testRegisterFunctionException(): Unit ={
+  def testRegisterFunctionException(): Unit = {
     val util = streamTestUtil()
     val t = util.addTable[(Int, Long, String)]('a, 'b, 'c)
 
@@ -74,12 +74,6 @@ class CorrelateValidationTest extends TableTestBase {
     // table function call distinct
     expectExceptionThrown(
       func1('c).distinct(),
-      "Table functions can only be used in table.joinLateral() and table.leftOuterJoinLateral()."
-    )
-
-    // table function call filter
-    expectExceptionThrown(
-      func1('c).filter('f0 === "?"),
       "Table functions can only be used in table.joinLateral() and table.leftOuterJoinLateral()."
     )
 

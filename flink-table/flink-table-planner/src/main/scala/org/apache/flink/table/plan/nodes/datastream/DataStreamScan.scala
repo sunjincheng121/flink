@@ -71,7 +71,7 @@ class DataStreamScan(
         // extract timestamp from StreamRecord
         Some(
           Cast(
-            org.apache.flink.table.expressions.StreamRecordTimestamp(),
+            org.apache.flink.table.plan.expressions.StreamRecordTimestamp(),
             TimeIndicatorTypeInfo.ROWTIME_INDICATOR)
             .toRexNode(tableEnv.getRelBuilder))
       } else {

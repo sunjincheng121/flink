@@ -22,7 +22,7 @@ import org.apache.calcite.sql.fun.SqlStdOperatorTable
 import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, TypeInformation}
-import org.apache.flink.table.plan.expressions.TrimMode.TrimMode
+import org.apache.flink.table.plan.expressions.PlannerTrimMode.PlannerTrimMode
 import org.apache.flink.table.functions.sql.ScalarSqlFunctions
 import org.apache.flink.table.validate._
 
@@ -76,7 +76,8 @@ case class InitCap(child: PlannerExpression) extends UnaryPlannerExpression {
 /**
   * Returns true if `str` matches `pattern`.
   */
-case class Like(str: PlannerExpression, pattern: PlannerExpression) extends BinaryPlannerExpression {
+case class Like(str: PlannerExpression, pattern: PlannerExpression)
+  extends BinaryPlannerExpression {
   private[flink] def left: PlannerExpression = str
   private[flink] def right: PlannerExpression = pattern
 
@@ -123,7 +124,8 @@ case class Lower(child: PlannerExpression) extends UnaryPlannerExpression {
 /**
   * Returns true if `str` is similar to `pattern`.
   */
-case class Similar(str: PlannerExpression, pattern: PlannerExpression) extends BinaryPlannerExpression {
+case class Similar(str: PlannerExpression, pattern: PlannerExpression)
+  extends BinaryPlannerExpression {
   private[flink] def left: PlannerExpression = str
   private[flink] def right: PlannerExpression = pattern
 
@@ -149,9 +151,9 @@ case class Similar(str: PlannerExpression, pattern: PlannerExpression) extends B
   * Returns substring of `str` from `begin`(inclusive) for `length`.
   */
 case class Substring(
-                      str: PlannerExpression,
-                      begin: PlannerExpression,
-                      length: PlannerExpression) extends PlannerExpression with InputTypeSpec {
+    str: PlannerExpression,
+    begin: PlannerExpression,
+    length: PlannerExpression) extends PlannerExpression with InputTypeSpec {
 
   def this(str: PlannerExpression, begin: PlannerExpression) = this(str, begin, CharLength(str))
 
@@ -173,17 +175,18 @@ case class Substring(
   * Trim `trimString` from `str` according to `trimMode`.
   */
 case class Trim(
-                 trimMode: PlannerExpression,
-                 trimString: PlannerExpression,
-                 str: PlannerExpression) extends PlannerExpression {
+    trimMode: PlannerExpression,
+    trimString: PlannerExpression,
+    str: PlannerExpression) extends PlannerExpression {
 
-  override private[flink] def children: Seq[PlannerExpression] = trimMode :: trimString :: str :: Nil
+  override private[flink] def children: Seq[PlannerExpression] =
+    trimMode :: trimString :: str :: Nil
 
   override private[flink] def resultType: TypeInformation[_] = STRING_TYPE_INFO
 
   override private[flink] def validateInput(): ValidationResult = {
     trimMode match {
-      case SymbolPlannerExpression(_: TrimMode) =>
+      case SymbolPlannerExpression(_: PlannerTrimMode) =>
         if (trimString.resultType != STRING_TYPE_INFO) {
           ValidationFailure(s"String expected for trimString, get ${trimString.resultType}")
         } else if (str.resultType != STRING_TYPE_INFO) {
@@ -251,10 +254,10 @@ case class Position(needle: PlannerExpression, haystack: PlannerExpression)
   * Starting at a position for a given length.
   */
 case class Overlay(
-                    str: PlannerExpression,
-                    replacement: PlannerExpression,
-                    starting: PlannerExpression,
-                    position: PlannerExpression)
+    str: PlannerExpression,
+    replacement: PlannerExpression,
+    starting: PlannerExpression,
+    position: PlannerExpression)
   extends PlannerExpression with InputTypeSpec {
 
   def this(str: PlannerExpression, replacement: PlannerExpression, starting: PlannerExpression) =
@@ -362,7 +365,10 @@ case class Rpad(text: PlannerExpression, len: PlannerExpression, pad: PlannerExp
   * Returns a string with all substrings that match the regular expression consecutively
   * being replaced.
   */
-case class RegexpReplace(str: PlannerExpression, regex: PlannerExpression, replacement: PlannerExpression)
+case class RegexpReplace(
+    str: PlannerExpression,
+    regex: PlannerExpression,
+    replacement: PlannerExpression)
   extends PlannerExpression with InputTypeSpec {
 
   override private[flink] def resultType: TypeInformation[_] = BasicTypeInfo.STRING_TYPE_INFO
@@ -385,7 +391,10 @@ case class RegexpReplace(str: PlannerExpression, regex: PlannerExpression, repla
 /**
   * Returns a string extracted with a specified regular expression and a regex match group index.
   */
-case class RegexpExtract(str: PlannerExpression, regex: PlannerExpression, extractIndex: PlannerExpression)
+case class RegexpExtract(
+    str: PlannerExpression,
+    regex: PlannerExpression,
+    extractIndex: PlannerExpression)
   extends PlannerExpression with InputTypeSpec {
   def this(str: PlannerExpression, regex: PlannerExpression) = this(str, regex, null)
 
@@ -418,7 +427,8 @@ case class RegexpExtract(str: PlannerExpression, regex: PlannerExpression, extra
 }
 
 object RegexpExtract {
-  def apply(str: PlannerExpression, regex: PlannerExpression): RegexpExtract = RegexpExtract(str, regex, null)
+  def apply(str: PlannerExpression, regex: PlannerExpression): RegexpExtract =
+    RegexpExtract(str, regex, null)
 }
 
 /**
@@ -526,7 +536,8 @@ case class RTrim(child: PlannerExpression) extends UnaryPlannerExpression with I
 /**
   * Returns a string that repeats the base str n times.
   */
-case class Repeat(str: PlannerExpression, n: PlannerExpression) extends PlannerExpression with InputTypeSpec {
+case class Repeat(str: PlannerExpression, n: PlannerExpression)
+  extends PlannerExpression with InputTypeSpec {
 
   override private[flink] def resultType: TypeInformation[_] = STRING_TYPE_INFO
 
@@ -555,9 +566,10 @@ case class Repeat(str: PlannerExpression, n: PlannerExpression) extends PlannerE
   * Returns a new string which replaces all the occurrences of the search target
   * with the replacement string (non-overlapping).
   */
-case class Replace(str: PlannerExpression,
-                   search: PlannerExpression,
-                   replacement: PlannerExpression) extends PlannerExpression with InputTypeSpec {
+case class Replace(
+    str: PlannerExpression,
+    search: PlannerExpression,
+    replacement: PlannerExpression) extends PlannerExpression with InputTypeSpec {
 
   def this(str: PlannerExpression, begin: PlannerExpression) = this(str, begin, CharLength(str))
 

@@ -118,7 +118,6 @@ case class Sha2(child: PlannerExpression, hashLength: PlannerExpression)
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     relBuilder.call(ScalarSqlFunctions.SHA2, left.toRexNode, right.toRexNode)
   }
-
 }
 
 

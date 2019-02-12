@@ -28,6 +28,7 @@ import org.apache.calcite.sql.`type`.SqlTypeName
 import org.apache.calcite.sql.`type`.SqlTypeName.{BIGINT, INTEGER, VARCHAR}
 import org.apache.calcite.sql.fun.SqlStdOperatorTable
 import org.apache.calcite.util.{DateString, TimeString, TimestampString}
+import org.apache.flink.table.expressions.DefaultExpressionVisitor
 import org.apache.flink.table.plan.expressions._
 import org.apache.flink.table.plan.util.{RexNodeToExpressionConverter, RexProgramExtractor}
 import org.apache.flink.table.utils.InputTypeBuilder.inputOf
@@ -64,7 +65,9 @@ class RexProgramExtractorTest extends RexProgramTestBase {
         builder,
         functionCatalog)
 
-    assertExpressionArrayEquals(expected, convertedExpressions)
+    assertExpressionArrayEquals(
+      expected,
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -91,7 +94,9 @@ class RexProgramExtractorTest extends RexProgramTestBase {
         functionCatalog)
 
     val expected: Array[PlannerExpression] = Array(ExpressionParser.parseExpression("amount >= id"))
-    assertExpressionArrayEquals(expected, convertedExpressions)
+    assertExpressionArrayEquals(
+      expected,
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -146,7 +151,9 @@ class RexProgramExtractorTest extends RexProgramTestBase {
       ExpressionParser.parseExpression("amount < 100 || price == 100 || price === 200"),
       ExpressionParser.parseExpression("id > 100 || price == 100 || price === 200"),
       ExpressionParser.parseExpression("!(amount <= id)"))
-    assertExpressionArrayEquals(expected, convertedExpressions)
+    assertExpressionArrayEquals(
+      expected,
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -190,14 +197,16 @@ class RexProgramExtractorTest extends RexProgramTestBase {
 
     expanded.accept(converter) match {
       case Some(expression) =>
-        convertedExpressions += expression
+        convertedExpressions += expression.accept(new DefaultExpressionVisitor)
       case None => unconvertedRexNodes += expanded
     }
 
     val expected: Array[PlannerExpression] = Array(
       ExpressionParser.parseExpression("amount < 100 && id > 100 && price === 100 && amount <= id"))
 
-    assertExpressionArrayEquals(expected, convertedExpressions.toArray)
+    assertExpressionArrayEquals(
+      expected,
+      convertedExpressions.toArray)
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -246,7 +255,9 @@ class RexProgramExtractorTest extends RexProgramTestBase {
       )
     )
 
-    assertExpressionArrayEquals(expected, converted)
+    assertExpressionArrayEquals(
+      expected,
+      converted.map(_.accept(new DefaultExpressionVisitor)))
   }
 
     @Test
@@ -313,19 +324,21 @@ class RexProgramExtractorTest extends RexProgramTestBase {
       ExpressionParser.parseExpression("amount / id == 100"),
       ExpressionParser.parseExpression("-amount == 100")
     )
-    assertExpressionArrayEquals(expected, convertedExpressions)
+    assertExpressionArrayEquals(
+      expected,
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
   @Test
   def testExtractPostfixConditions(): Unit = {
-    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_NULL, "('flag).isNull")
+    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_NULL, "isNull(flag)")
     // IS_NOT_NULL will be eliminated since flag is not nullable
     // testExtractSinglePostfixCondition(SqlStdOperatorTable.IS_NOT_NULL, "('flag).isNotNull")
-    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_TRUE, "('flag).isTrue")
-    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_NOT_TRUE, "('flag).isNotTrue")
-    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_FALSE, "('flag).isFalse")
-    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_NOT_FALSE, "('flag).isNotFalse")
+    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_TRUE, "isTrue(flag)")
+    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_NOT_TRUE, "isNotTrue(flag)")
+    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_FALSE, "isFalse(flag)")
+    testExtractSinglePostfixCondition(4, SqlStdOperatorTable.IS_NOT_FALSE, "isNotFalse(flag)")
   }
 
   @Test
@@ -365,7 +378,9 @@ class RexProgramExtractorTest extends RexProgramTestBase {
       GreaterThan(Sum(UnresolvedFieldReference("amount")), Literal(100)),
       EqualTo(Min(UnresolvedFieldReference("id")), Literal(100))
     )
-    assertExpressionArrayEquals(expected, convertedExpressions)
+    assertExpressionArrayEquals(
+      expected,
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -411,7 +426,9 @@ class RexProgramExtractorTest extends RexProgramTestBase {
     val expected: Array[PlannerExpression] = Array(
       ExpressionParser.parseExpression("amount <= id")
     )
-    assertExpressionArrayEquals(expected, convertedExpressions)
+    assertExpressionArrayEquals(
+      expected,
+      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
     assertEquals(2, unconvertedRexNodes.length)
     assertEquals(">(CAST($2):BIGINT NOT NULL, 100)", unconvertedRexNodes(0).toString)
     assertEquals("OR(>(CAST($2):BIGINT NOT NULL, 100), <=($2, $1))",
