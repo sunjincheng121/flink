@@ -21,10 +21,8 @@ package org.apache.flink.table.expressions;
 import org.apache.flink.annotation.Internal;
 
 /**
- * The visitor definition of expression. ExpressionVisitor is the transformation mechanism of
- * api module expression to planner module expression.
- *
- * @param <R> The type of result expression.
+ * The visitor definition of expression. ExpressionVisitor transformations an expression to
+ * the R type expression.
  */
 @Internal
 public interface ExpressionVisitor<R> {
@@ -42,4 +40,5 @@ public interface ExpressionVisitor<R> {
 	R visitOther(Expression other);
 
 	R visitFieldReference(FieldReference fieldReference);
+
 }

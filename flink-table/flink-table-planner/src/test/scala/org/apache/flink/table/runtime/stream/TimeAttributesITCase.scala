@@ -558,20 +558,20 @@ class TimeAttributesITCase extends AbstractTestBase {
 
     // Java expressions
 
-    val javaRegitsterMethod = tEnv.getClass.getSuperclass.getDeclaredMethod(
+    val javaRegisterMethod = tEnv.getClass.getSuperclass.getDeclaredMethod(
       "registerDataStreamInternal",
       classOf[String],
       classOf[org.apache.flink.streaming.api.datastream.DataStream[_]],
       classOf[Array[PlannerExpression]]
     )
-    javaRegitsterMethod.setAccessible(true)
+    javaRegisterMethod.setAccessible(true)
     val createUniqueTableName = tEnv.getClass.getSuperclass.getDeclaredMethod(
       "createUniqueTableName")
     createUniqueTableName.setAccessible(true)
     // use aliases, swap all attributes, and skip b2
     def fromDataStream[T](dataStream: DataStream[T], fields: String): Table = {
       val name = createUniqueTableName.invoke(tEnv).asInstanceOf[String]
-      javaRegitsterMethod.invoke(tEnv, name, dataStream.javaStream,
+      javaRegisterMethod.invoke(tEnv, name, dataStream.javaStream,
         ExpressionParser.parseExpressionList(fields).toArray)
       tEnv.scan(name)
     }

@@ -207,8 +207,7 @@ case class OverCall(
 
     // check preceding is valid
     preceding match {
-      case _: CurrentRow | _: CurrentRange
-           | _: UnboundedRow | _: UnboundedRange =>
+      case _: CurrentRow | _: CurrentRange | _: UnboundedRow | _: UnboundedRange =>
         ValidationSuccess
       case Literal(v: Long, _: RowIntervalTypeInfo) if v > 0 =>
         ValidationSuccess
@@ -224,8 +223,7 @@ case class OverCall(
 
     // check following is valid
     following match {
-      case _: CurrentRow | _: CurrentRange
-           | _: UnboundedRow | _: UnboundedRange =>
+      case _: CurrentRow | _: CurrentRange | _: UnboundedRow | _: UnboundedRange =>
         ValidationSuccess
       case Literal(v: Long, _: RowIntervalTypeInfo) if v > 0 =>
         ValidationSuccess

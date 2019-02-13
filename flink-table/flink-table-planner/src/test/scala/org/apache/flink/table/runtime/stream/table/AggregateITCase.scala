@@ -50,13 +50,13 @@ class AggregateITCase extends StreamingWithStateTestBase {
     val testAgg = new DataViewTestAgg
     val t = StreamTestData.get5TupleDataStream(env).toTable(tEnv, 'a, 'b, 'c, 'd, 'e)
       .groupBy('e)
-      .select('e, testAgg.distinct('d, 'e), 'e.sum)
+      .select('e, testAgg.distinct('d, 'e))
 
     val results = t.toRetractStream[Row](queryConfig)
     results.addSink(new StreamITCase.RetractingSink).setParallelism(1)
     env.execute()
 
-    val expected = mutable.MutableList("1,10,5", "2,21,14", "3,12,9")
+    val expected = mutable.MutableList("1,10", "2,21", "3,12")
     assertEquals(expected.sorted, StreamITCase.retractedResults.sorted)
   }
 

@@ -19,7 +19,7 @@
 package org.apache.flink.table.expressions;
 
 /**
- * Function type.
+ * TThe types used to identify the function.
  */
 public enum FunctionType {
 	LOGICAL,

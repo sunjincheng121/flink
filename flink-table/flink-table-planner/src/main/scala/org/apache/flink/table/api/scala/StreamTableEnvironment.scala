@@ -126,10 +126,7 @@ class StreamTableEnvironment @deprecated(
     * @param fields The field names of the registered table.
     * @tparam T The type of the [[DataStream]] to register.
     */
-  def registerDataStream[T](
-      name: String,
-      dataStream: DataStream[T],
-      fields: Expression*): Unit = {
+  def registerDataStream[T](name: String, dataStream: DataStream[T], fields: Expression*): Unit = {
 
     checkValidTableName(name)
     registerDataStreamInternal(

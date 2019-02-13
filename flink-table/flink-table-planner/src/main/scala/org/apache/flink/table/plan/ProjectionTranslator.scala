@@ -199,7 +199,7 @@ object ProjectionTranslator {
   }
 
   /**
-    * Expands an FieldReference("*") to parent's full project list.
+    * Expands an UnresolvedFieldReference("*") to parent's full project list.
     */
   def expandProjectList(
       exprs: Seq[PlannerExpression],

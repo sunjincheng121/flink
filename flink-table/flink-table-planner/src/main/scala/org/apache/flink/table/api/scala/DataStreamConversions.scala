@@ -21,6 +21,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.api.Table
 import org.apache.flink.table.plan.expressions.PlannerExpression
 import org.apache.flink.streaming.api.scala.DataStream
+import org.apache.flink.table.expressions.Expression
 
 /**
   * Holds methods to convert a [[DataStream]] into a [[Table]].
@@ -51,7 +52,7 @@ class DataStreamConversions[T](dataStream: DataStream[T], inputType: TypeInforma
     * @param fields The field names of the new [[Table]] (optional).
     * @return The resulting [[Table]].
     */
-  def toTable(tableEnv: StreamTableEnvironment, fields: PlannerExpression*): Table = {
+  def toTable(tableEnv: StreamTableEnvironment, fields: Expression*): Table = {
     if (fields.isEmpty) {
       tableEnv.fromDataStream(dataStream)
     } else {

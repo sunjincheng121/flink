@@ -26,7 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The function call expression.
+ * General expression for unresolved function calls. The function can be a built-in function
+ * or a user-defined function.
  */
 @PublicEvolving
 public class Call implements Expression {

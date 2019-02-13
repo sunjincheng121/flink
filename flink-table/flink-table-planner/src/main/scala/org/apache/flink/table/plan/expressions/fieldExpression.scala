@@ -121,8 +121,7 @@ case class UnresolvedAlias(child: PlannerExpression)
   override private[flink] lazy val valid = false
 }
 
-case class WindowReference(name: String, tpe: Option[TypeInformation[_]] = None)
-  extends Attribute {
+case class WindowReference(name: String, tpe: Option[TypeInformation[_]] = None) extends Attribute {
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode =
     throw new UnsupportedOperationException("A window reference can not be used solely.")

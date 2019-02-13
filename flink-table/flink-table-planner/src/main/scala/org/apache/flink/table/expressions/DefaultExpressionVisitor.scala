@@ -666,7 +666,7 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
       case TrimMode.TRAILING => PlannerTrimMode.TRAILING
 
       case _ =>
-        throw new TableException("unsupported TableSymbolValue: " + symbolExpression.getSymbol)
+        throw new TableException("Unsupported TableSymbolValue: " + symbolExpression.getSymbol)
     }
     SymbolPlannerExpression(tableSymbol)
   }
@@ -689,7 +689,6 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
       case _ =>
         throw new TableException("Unrecognized expression [" + other + "]")
     }
-
   }
 
   override def visitFieldReference(fieldReference: FieldReference): PlannerExpression = {

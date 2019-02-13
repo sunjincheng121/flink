@@ -674,8 +674,7 @@ class GroupWindowTest extends TableTestBase {
           "DataStreamGroupWindowAggregate",
           streamTableNode(0),
           term("groupBy", "string, int2, int3"),
-          term("window",
-            SlidingGroupWindow(WindowReference("w"), 'proctime,  2.rows, 1.rows)),
+          term("window", SlidingGroupWindow(WindowReference("w"), 'proctime,  2.rows, 1.rows)),
           term(
             "select",
             "string",

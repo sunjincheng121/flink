@@ -18,6 +18,7 @@
 
 package org.apache.flink.table.expressions;
 
+import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.table.api.Table;
 
 import java.util.Collections;
@@ -26,7 +27,8 @@ import java.util.List;
 /**
  * The expression of table reference.
  */
-public class TableReference implements Expression {
+@PublicEvolving
+public final class TableReference implements Expression {
 
 	private final String name;
 	private final Table table;

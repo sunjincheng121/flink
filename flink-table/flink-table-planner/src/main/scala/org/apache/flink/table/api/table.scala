@@ -163,12 +163,9 @@ class Table(
         expandedFields, tableEnv, aggNames, propNames)
       val projectFields = extractFieldReferences(expandedFields)
 
-      new Table(
-        tableEnv,
-        Project(
-          projectsOnAgg,
-          Aggregate(
-            Nil, aggNames.map(a => Alias(a._1, a._2)).toSeq,
+      new Table(tableEnv,
+        Project(projectsOnAgg,
+          Aggregate(Nil, aggNames.map(a => Alias(a._1, a._2)).toSeq,
             Project(projectFields, logicalPlan).validate(tableEnv)
           ).validate(tableEnv)
         ).validate(tableEnv)
@@ -298,7 +295,7 @@ class Table(
         }
         if (!fields.forall(_.isInstanceOf[UnresolvedFieldReference])) {
           throw new ValidationException(
-            "Alias field must be an instance of FieldReference"
+            "Alias field must be an instance of UnresolvedFieldReference"
           )
         }
         new Table(
@@ -1038,9 +1035,9 @@ class Table(
   private def orderByInternal(fields: PlannerExpression*): Table = {
     val order: Seq[Ordering] = fields.map {
       case o: Ordering => o
-      case asc: Call if "asc".equals(asc.functionName) =>
+      case asc: Call if "asc".equalsIgnoreCase(asc.functionName) =>
         Asc(asc.args.head)
-      case desc: Call if "desc".equals(desc.functionName) =>
+      case desc: Call if "desc".equalsIgnoreCase(desc.functionName) =>
         Desc(desc.args.head)
       case e => Asc(e)
     }
@@ -1426,12 +1423,10 @@ class GroupedTable(
       expandedFields, table.tableEnv, aggNames, propNames)
     val projectFields = extractFieldReferences(expandedFields ++ groupKey)
 
-    new Table(
-      table.tableEnv,
-      Project(
-        projectsOnAgg,
+    new Table(table.tableEnv,
+      Project(projectsOnAgg,
         Aggregate(groupKey, aggNames.map(a => Alias(a._1, a._2)).toSeq,
-                  Project(projectFields, table.logicalPlan).validate(table.tableEnv)
+          Project(projectFields, table.logicalPlan).validate(table.tableEnv)
         ).validate(table.tableEnv)
       ).validate(table.tableEnv))
   }

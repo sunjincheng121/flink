@@ -25,7 +25,8 @@ import java.util.List;
 
 /**
  * The distinct aggregate expression, we add this definition for
- * prevent users from continuously calling distinct. e.g.: a.distinct.distinct.
+ * prevent users from continuously calling distinct.
+ * e.g.: a.distinct.distinct.
  */
 @PublicEvolving
 public final class DistinctAgg implements Expression {

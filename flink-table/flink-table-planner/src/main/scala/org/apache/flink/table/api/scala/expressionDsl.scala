@@ -237,7 +237,6 @@ trait ImplicitExpressionOperations {
     */
   def as(name: Symbol, extraNames: Symbol*) =
     call(AS, Seq(expr) ++ Seq(Literal(name.name)) ++ extraNames.map(name => Literal(name.name)))
-//    new Alias(expr, name.name, extraNames.map(_.name).asJava)
 
   /**
     * Specifies ascending order of an expression i.e. a field for orderBy call.
@@ -286,7 +285,7 @@ trait ImplicitExpressionOperations {
 
   /**
     * Ternary conditional operator that decides which of two other expressions should be
-    * evaluated based on a evaluated boolean condition.
+    * based on a evaluated boolean condition.
     *
     * e.g. (42 > 5).?("A", "B") leads to "A"
     *
@@ -579,11 +578,10 @@ trait ImplicitExpressionOperations {
     */
   def over(alias: Expression): Expression = {
     expr match {
-      case call: Call if call.getFunctionDefinition.isInstanceOf[FunctionDefinition] &&
-        call.getFunctionDefinition.getFunctionType == FunctionType.AGGREGATION =>
+      case call: Call if call.getFunctionDefinition.getFunctionType == FunctionType.AGGREGATION =>
         ExpressionUtils.call(FunctionDefinitions.OVER_CALL, Seq(expr, alias))
       case _ => throw new TableException(
-        "The over method can only using with aggregation call expression.")
+        "The over method can only using with aggregation expression.")
     }
   }
 
@@ -605,21 +603,21 @@ trait ImplicitExpressionOperations {
     call(OVERLAY, Seq(expr, newString, starting, length))
 
   /**
-    * Returns a string with all substrings that match the regular Expression consecutively
+    * Returns a string with all substrings that match the regular expression consecutively
     * being replaced.
     */
   def regexpReplace(regex: Expression, replacement: Expression) =
     call(REGEXP_REPLACE, Seq(expr, regex, replacement))
 
   /**
-    * Returns a string extracted with a specified regular Expression and a regex match group
+    * Returns a string extracted with a specified regular expression and a regex match group
     * index.
     */
   def regexpExtract(regex: Expression, extractIndex: Expression) =
     call(REGEXP_EXTRACT, Seq(expr, regex, extractIndex))
 
   /**
-    * Returns a string extracted with a specified regular Expression.
+    * Returns a string extracted with a specified regular expression.
     */
   def regexpExtract(regex: Expression) =
     call(REGEXP_EXTRACT, Seq(expr, regex))
@@ -753,7 +751,7 @@ trait ImplicitExpressionOperations {
     *
     * @return interval of milliseconds
     */
-  def day: Expression = ExpressionUtils.toMilliInterval(expr, MILLIS_PER_DAY)
+  def day: Expression = toMilliInterval(expr, MILLIS_PER_DAY)
 
   /**
     * Creates an interval of the given number of days.
@@ -767,7 +765,7 @@ trait ImplicitExpressionOperations {
     *
     * @return interval of milliseconds
     */
-  def hour: Expression = ExpressionUtils.toMilliInterval(expr, MILLIS_PER_HOUR)
+  def hour: Expression = toMilliInterval(expr, MILLIS_PER_HOUR)
 
   /**
     * Creates an interval of the given number of hours.
@@ -781,7 +779,7 @@ trait ImplicitExpressionOperations {
     *
     * @return interval of milliseconds
     */
-  def minute: Expression = ExpressionUtils.toMilliInterval(expr, MILLIS_PER_MINUTE)
+  def minute: Expression = toMilliInterval(expr, MILLIS_PER_MINUTE)
 
   /**
     * Creates an interval of the given number of minutes.
@@ -795,7 +793,7 @@ trait ImplicitExpressionOperations {
     *
     * @return interval of milliseconds
     */
-  def second: Expression = ExpressionUtils.toMilliInterval(expr, MILLIS_PER_SECOND)
+  def second: Expression = toMilliInterval(expr, MILLIS_PER_SECOND)
 
   /**
     * Creates an interval of the given number of seconds.
@@ -809,7 +807,7 @@ trait ImplicitExpressionOperations {
     *
     * @return interval of milliseconds
     */
-  def milli: Expression = ExpressionUtils.toMilliInterval(expr, 1)
+  def milli: Expression = toMilliInterval(expr, 1)
 
   /**
     * Creates an interval of the given number of milliseconds.
@@ -825,7 +823,7 @@ trait ImplicitExpressionOperations {
     *
     * @return interval of rows
     */
-  def rows: Expression = ExpressionUtils.toRowInterval(expr)
+  def rows: Expression = toRowInterval(expr)
 
   // Advanced type helper functions
 
@@ -833,7 +831,7 @@ trait ImplicitExpressionOperations {
     * Accesses the field of a Flink composite type (such as Tuple, POJO, etc.) by name and
     * returns it's value.
     *
-    * @param name name of the field (similar to Flink's field Expressions)
+    * @param name name of the field (similar to Flink's field expressions)
     * @return value of the field
     */
   def get(name: String) = call(GET_COMPOSITE_FIELD, Seq(expr, name))
@@ -961,8 +959,8 @@ trait ImplicitExpressionOperations {
     * inclusive). False otherwise. The parameters must be numeric types or identical
     * comparable types.
     *
-    * @param lowerBound numeric or comparable Expression
-    * @param upperBound numeric or comparable Expression
+    * @param lowerBound numeric or comparable expression
+    * @param upperBound numeric or comparable expression
     * @return boolean or null
     */
   def notBetween(lowerBound: Expression, upperBound: Expression) =
@@ -970,8 +968,8 @@ trait ImplicitExpressionOperations {
 }
 
 /**
-  * Implicit conversions from Scala Literals to expression [[Literal]] and from
-  * [[Expression]] to [[ImplicitExpressionOperations]].
+  * Implicit conversions from Scala Literals to expression [[Literal]] and from [[Expression]]
+  * to [[ImplicitExpressionOperations]].
   */
 trait ImplicitExpressionConversions {
 
@@ -1349,8 +1347,12 @@ object log {
   /**
     * Returns a value that is closer than any other value to e.
     */
-  def apply(expr: Expression): Expression = {
-    call(LOG, Seq(expr))
+  def apply(antilogarithm: Expression): Expression = {
+    call(LOG, Seq(antilogarithm))
+  }
+
+  def apply(base: Expression, antilogarithm: Expression): Expression = {
+    call(LOG, Seq(base, antilogarithm))
   }
 }
 

@@ -22,6 +22,7 @@ import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{Types, ValidationException}
 import org.apache.flink.table.expressions._
+import org.apache.flink.table.expressions.FunctionDefinitions.CAST
 
 /**
   * Converts an existing [[Long]], [[java.sql.Timestamp]], or
@@ -66,13 +67,11 @@ final class ExistingField(val field: String) extends TimestampExtractor {
         fieldAccessWithType
       case Types.SQL_TIMESTAMP =>
         // cast timestamp to long
-        ExpressionUtils.call(FunctionDefinitions.CAST, Seq(fieldAccessWithType, Types.LONG))
+        ExpressionUtils.call(CAST, Seq(fieldAccessWithType, Types.LONG))
       case Types.STRING =>
-        ExpressionUtils.call(
-          FunctionDefinitions.CAST,
+        ExpressionUtils.call(CAST,
           Seq(
-            ExpressionUtils
-              .call(FunctionDefinitions.CAST, Seq(fieldAccessWithType, SqlTimeTypeInfo.TIMESTAMP)),
+            ExpressionUtils.call(CAST, Seq(fieldAccessWithType, SqlTimeTypeInfo.TIMESTAMP)),
             Types.LONG))
     }
   }

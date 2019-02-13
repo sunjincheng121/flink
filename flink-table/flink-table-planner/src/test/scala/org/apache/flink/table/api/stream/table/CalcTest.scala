@@ -52,7 +52,10 @@ class CalcTest extends TableTestBase {
           term("select", "c", "a", "rowtime", "UPPER(c) AS $f3")
         ),
         term("window",
-          TumblingGroupWindow(WindowReference("w"), 'rowtime, 5.millis)),
+          TumblingGroupWindow(
+            WindowReference("w"),
+            'rowtime,
+            5.millis)),
         term("select", "COUNT($f3) AS TMP_0", "SUM(a) AS TMP_1")
       )
 
@@ -80,7 +83,10 @@ class CalcTest extends TableTestBase {
           ),
           term("groupBy", "b"),
           term("window",
-            TumblingGroupWindow(WindowReference("w"), 'rowtime, 5.millis)),
+            TumblingGroupWindow(
+              WindowReference("w"),
+              'rowtime,
+              5.millis)),
           term("select", "b", "COUNT($f4) AS TMP_0", "SUM(a) AS TMP_1")
         ),
         term("select", "TMP_0", "TMP_1", "b")

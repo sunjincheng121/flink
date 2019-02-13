@@ -230,7 +230,7 @@ class SqlITCase extends StreamingWithStateTestBase {
     val tEnv = StreamTableEnvironment.create(env)
     StreamITCase.clear
 
-    val sqlQuery = "SELECT b, COUNT(a) as x FROM MyTable GROUP BY b"
+    val sqlQuery = "SELECT b, COUNT(a) FROM MyTable GROUP BY b"
 
     val t = StreamTestData.get3TupleDataStream(env).toTable(tEnv).as('a, 'b, 'c)
     tEnv.registerTable("MyTable", t)
