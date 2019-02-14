@@ -76,12 +76,12 @@ object ProjectionTranslator {
         identifyAggregationsAndProperties(b.right, tableEnv, l._1, l._2)
 
       // Functions calls
-      case c @ Call(name, args) =>
+      case c @ Call(name, args: Seq[PlannerExpression]) =>
         args.foldLeft((aggNames, propNames)){
           (x, y) => identifyAggregationsAndProperties(y, tableEnv, x._1, x._2)
         }
 
-      case sfc @ ScalarFunctionCall(clazz, args) =>
+      case sfc @ ScalarFunctionCall(clazz, args: Seq[PlannerExpression]) =>
         args.foldLeft((aggNames, propNames)){
           (x, y) => identifyAggregationsAndProperties(y, tableEnv, x._1, x._2)
         }
@@ -389,7 +389,7 @@ object ProjectionTranslator {
         val r = replaceAggFunctionCall(b.right, tableEnv)
         b.makeCopy(Array(l, r))
       // Functions calls
-      case c @ Call(name, args) =>
+      case c @ Call(name, args: Seq[PlannerExpression]) =>
         val function = tableEnv.getFunctionCatalog.lookupFunction(name, args)
         function match {
           case a: AggFunctionCall => a
@@ -403,7 +403,7 @@ object ProjectionTranslator {
             c.makeCopy(Array(name, newArgs))
         }
       // Scala functions
-      case sfc @ ScalarFunctionCall(clazz, args) =>
+      case sfc @ ScalarFunctionCall(clazz, args: Seq[PlannerExpression]) =>
         val newArgs: Seq[PlannerExpression] =
           args.map(
             (exp: PlannerExpression) =>

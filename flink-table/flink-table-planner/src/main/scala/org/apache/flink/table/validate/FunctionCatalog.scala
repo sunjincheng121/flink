@@ -70,6 +70,14 @@ class FunctionCatalog {
     val funcClass = functionBuilders
       .getOrElse(name.toLowerCase, throw new ValidationException(s"Undefined function: $name"))
 
+    def createT(plannerExpression: () => T, expression: () => T): T = {
+      classTag[T] match {
+        case _: ClassTag[PlannerExpression] => plannerExpression()
+        case _: ClassTag[Expression] => expression()
+        case _ => throw new TableException("Unsupported type: " + classTag[T])
+      }
+    }
+
     // Instantiate a function using the provided `children`
     funcClass match {
 
@@ -80,17 +88,13 @@ class FunctionCatalog {
           .getOrElse(throw new ValidationException(s"Undefined scalar function: $name"))
           .asInstanceOf[ScalarSqlFunction]
 
-        classTag[T] match {
-          case _: ClassTag[PlannerExpression] =>
-            ScalarFunctionCall(
-              scalarSqlFunction.getScalarFunction, children.asInstanceOf[Seq[PlannerExpression]])
-            .asInstanceOf[T]
-          case _: ClassTag[Expression] =>
-            new org.apache.flink.table.expressions.Call(
-              new ScalarFunctionDefinition(scalarSqlFunction.getScalarFunction),
-              children.asInstanceOf[Seq[Expression]]).asInstanceOf[T]
-          case _ => throw new TableException("Unsupported type: " + classTag[T])
-        }
+        createT(
+          () => ScalarFunctionCall(
+            scalarSqlFunction.getScalarFunction, children.asInstanceOf[Seq[PlannerExpression]])
+                .asInstanceOf[T],
+          () => new org.apache.flink.table.expressions.Call(
+            new ScalarFunctionDefinition(scalarSqlFunction.getScalarFunction),
+            children.asInstanceOf[Seq[Expression]]).asInstanceOf[T])
 
       // user-defined table function call
       case tf if classOf[TableFunction[_]].isAssignableFrom(tf) =>
@@ -101,19 +105,15 @@ class FunctionCatalog {
         val typeInfo = tableSqlFunction.getRowTypeInfo
         val function = tableSqlFunction.getTableFunction
 
-        classTag[T] match {
-          case _: ClassTag[PlannerExpression] =>
-            TableFunctionCall(
-              name,
-              function,
-              children.asInstanceOf[Seq[PlannerExpression]],
-              typeInfo).asInstanceOf[T]
-          case _: ClassTag[Expression] =>
-            new org.apache.flink.table.expressions.TableFunctionCall(
-              new TableFunctionDefinition(
-                function, typeInfo), children.asInstanceOf[Seq[Expression]]).asInstanceOf[T]
-          case _ => throw new TableException("Unsupported type: " + classTag[T])
-        }
+        createT(
+          () => TableFunctionCall(
+            name,
+            function,
+            children.asInstanceOf[Seq[PlannerExpression]],
+            typeInfo).asInstanceOf[T],
+          () => new org.apache.flink.table.expressions.TableFunctionCall(
+            new TableFunctionDefinition(function, typeInfo),
+            children.asInstanceOf[Seq[Expression]]).asInstanceOf[T])
 
       // user-defined aggregate function call
       case af if classOf[AggregateFunction[_, _]].isAssignableFrom(af) =>
@@ -125,19 +125,15 @@ class FunctionCatalog {
         val returnType = aggregateFunction.returnType
         val accType = aggregateFunction.accType
 
-        classTag[T] match {
-          case _: ClassTag[PlannerExpression] =>
-            AggFunctionCall(
-              function,
-              returnType,
-              accType,
-              children.asInstanceOf[Seq[PlannerExpression]]).asInstanceOf[T]
-          case _: ClassTag[Expression] =>
-            new org.apache.flink.table.expressions.Call(
-              new AggregateFunctionDefinition(function, returnType, accType),
-              children.asInstanceOf[Seq[Expression]]).asInstanceOf[T]
-          case _ => throw new TableException("Unsupported type: " + classTag[T])
-        }
+        createT(
+          () => AggFunctionCall(
+            function,
+            returnType,
+            accType,
+            children.asInstanceOf[Seq[PlannerExpression]]).asInstanceOf[T],
+          () => new org.apache.flink.table.expressions.Call(
+            new AggregateFunctionDefinition(function, returnType, accType),
+            children.asInstanceOf[Seq[Expression]]).asInstanceOf[T])
 
       // general expression call for PlannerExpression
       case expression if classTag[T].runtimeClass.equals(classOf[PlannerExpression]) &&
