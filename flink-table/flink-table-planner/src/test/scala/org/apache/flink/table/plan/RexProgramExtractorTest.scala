@@ -67,7 +67,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
 
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
+      convertedExpressions.map(_.accept(DefaultExpressionVisitor.INSTANCE)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -96,7 +96,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
     val expected: Array[PlannerExpression] = Array(ExpressionParser.parseExpression("amount >= id"))
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
+      convertedExpressions.map(_.accept(DefaultExpressionVisitor.INSTANCE)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -153,7 +153,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
       ExpressionParser.parseExpression("!(amount <= id)"))
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
+      convertedExpressions.map(_.accept(DefaultExpressionVisitor.INSTANCE)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -197,7 +197,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
 
     expanded.accept(converter) match {
       case Some(expression) =>
-        convertedExpressions += expression.accept(new DefaultExpressionVisitor)
+        convertedExpressions += expression.accept(DefaultExpressionVisitor.INSTANCE)
       case None => unconvertedRexNodes += expanded
     }
 
@@ -257,7 +257,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
 
     assertExpressionArrayEquals(
       expected,
-      converted.map(_.accept(new DefaultExpressionVisitor)))
+      converted.map(_.accept(DefaultExpressionVisitor.INSTANCE)))
   }
 
     @Test
@@ -326,7 +326,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
     )
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
+      convertedExpressions.map(_.accept(DefaultExpressionVisitor.INSTANCE)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -380,7 +380,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
     )
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
+      convertedExpressions.map(_.accept(DefaultExpressionVisitor.INSTANCE)))
     assertEquals(0, unconvertedRexNodes.length)
   }
 
@@ -428,7 +428,7 @@ class RexProgramExtractorTest extends RexProgramTestBase {
     )
     assertExpressionArrayEquals(
       expected,
-      convertedExpressions.map(_.accept(new DefaultExpressionVisitor)))
+      convertedExpressions.map(_.accept(DefaultExpressionVisitor.INSTANCE)))
     assertEquals(2, unconvertedRexNodes.length)
     assertEquals(">(CAST($2):BIGINT NOT NULL, 100)", unconvertedRexNodes(0).toString)
     assertEquals("OR(>(CAST($2):BIGINT NOT NULL, 100), <=($2, $1))",

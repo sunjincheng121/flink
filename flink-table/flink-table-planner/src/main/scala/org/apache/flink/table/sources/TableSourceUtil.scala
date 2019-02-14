@@ -384,7 +384,7 @@ object TableSourceUtil {
       // add cast to requested type and convert expression to RexNode
       val rexExpression = ExpressionUtils
         .call(FunctionDefinitions.CAST, Seq(expression, resultType))
-        .accept(new DefaultExpressionVisitor)
+        .accept(DefaultExpressionVisitor.INSTANCE)
         .toRexNode(relBuilder)
       relBuilder.clear()
       rexExpression

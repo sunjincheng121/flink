@@ -87,7 +87,7 @@ class PushFilterIntoTableSourceScanRule extends RelOptRule(
         relBuilder.push(scan)
         val remainingConditions =
           (remainingPredicates.asScala
-            .map(expr => expr.accept(new DefaultExpressionVisitor).toRexNode(relBuilder))
+            .map(expr => expr.accept(DefaultExpressionVisitor.INSTANCE).toRexNode(relBuilder))
               ++ unconvertedRexNodes)
         remainingConditions.reduce((l, r) => relBuilder.and(l, r))
       } else {

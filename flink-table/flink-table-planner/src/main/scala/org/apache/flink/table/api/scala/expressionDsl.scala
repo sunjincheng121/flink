@@ -1070,7 +1070,7 @@ trait ImplicitExpressionConversions {
       LogicalTableFunctionCall(
         tfd.getTableFunction.getClass.getCanonicalName,
         tfd.getTableFunction,
-        tfc.getChildren.map(_.accept(new DefaultExpressionVisitor)).toList,
+        tfc.getChildren.map(_.accept(DefaultExpressionVisitor.INSTANCE)).toList,
         tfd.getResultType,
         if (tfc.alias.isPresent) tfc.alias().get() else Array.empty,
         child = null // Child will be set later.

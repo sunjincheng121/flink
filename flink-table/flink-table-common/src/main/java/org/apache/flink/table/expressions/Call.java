@@ -43,7 +43,7 @@ public class Call implements Expression {
 
 	@Override
 	public List<Expression> getChildren() {
-		return new ArrayList<>(this.args);
+		return this.args;
 	}
 
 	public FunctionDefinition getFunctionDefinition() {

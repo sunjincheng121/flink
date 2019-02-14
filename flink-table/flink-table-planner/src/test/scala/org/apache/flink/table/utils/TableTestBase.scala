@@ -47,11 +47,11 @@ import util.control.Breaks._
 class TableTestBase {
 
   implicit def expression2PlannerExpression(expression: Expression): PlannerExpression = {
-    expression.accept(new DefaultExpressionVisitor)
+    expression.accept(DefaultExpressionVisitor.INSTANCE)
   }
 
   implicit def symbol2PlannerExpression(expression: Symbol): PlannerExpression = {
-    expression.accept(new DefaultExpressionVisitor)
+    expression.accept(DefaultExpressionVisitor.INSTANCE)
   }
 
   // used for accurate exception information checking.

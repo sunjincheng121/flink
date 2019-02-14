@@ -273,7 +273,7 @@ class RexNodeToExpressionConverter(
   private def lookupFunction(
       name: String,
       operands: Seq[Expression]): Option[Expression] = {
-    Try(functionCatalog.lookupFunctionWithExpressionArguments(name, operands))
+    Try(functionCatalog.lookupFunction(name, operands))
     match {
       case Success(expr) => Some(expr)
       case Failure(_) => None

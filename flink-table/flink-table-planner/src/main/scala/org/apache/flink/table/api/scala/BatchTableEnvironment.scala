@@ -82,7 +82,7 @@ class BatchTableEnvironment @deprecated(
   def fromDataSet[T](dataSet: DataSet[T], fields: Expression*): Table = {
     val name = createUniqueTableName()
     registerDataSetInternal(
-      name, dataSet.javaSet, fields.map(_.accept(new DefaultExpressionVisitor)).toArray)
+      name, dataSet.javaSet, fields.map(_.accept(DefaultExpressionVisitor.INSTANCE)).toArray)
     scan(name)
   }
 
@@ -124,7 +124,7 @@ class BatchTableEnvironment @deprecated(
 
     checkValidTableName(name)
     registerDataSetInternal(
-      name, dataSet.javaSet, fields.map(_.accept(new DefaultExpressionVisitor)).toArray)
+      name, dataSet.javaSet, fields.map(_.accept(DefaultExpressionVisitor.INSTANCE)).toArray)
   }
 
   /**

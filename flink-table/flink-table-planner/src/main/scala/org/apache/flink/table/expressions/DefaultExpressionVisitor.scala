@@ -27,7 +27,7 @@ import _root_.scala.collection.JavaConverters._
 /**
   * Default implementation of expression visitor.
   */
-class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
+class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpression] {
 
   override def visitCall(call: Call): PlannerExpression = {
 
@@ -700,4 +700,8 @@ class DefaultExpressionVisitor extends ExpressionVisitor[PlannerExpression] {
       UnresolvedFieldReference(fieldReference.getName)
     }
   }
+}
+
+object DefaultExpressionVisitor {
+  val INSTANCE: DefaultExpressionVisitor = new DefaultExpressionVisitor
 }

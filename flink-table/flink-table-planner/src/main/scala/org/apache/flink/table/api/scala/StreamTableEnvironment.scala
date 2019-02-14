@@ -20,7 +20,6 @@ package org.apache.flink.table.api.scala
 import org.apache.flink.api.scala._
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.api.{StreamQueryConfig, Table, TableConfig, TableEnvironment}
-import org.apache.flink.table.plan.expressions.ExpressionParser
 import org.apache.flink.table.functions.{AggregateFunction, TableFunction}
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
 import org.apache.flink.streaming.api.scala.asScalaStream
@@ -87,7 +86,7 @@ class StreamTableEnvironment @deprecated(
 
     val name = createUniqueTableName()
     registerDataStreamInternal(
-      name, dataStream.javaStream, fields.map(_.accept(new DefaultExpressionVisitor)).toArray)
+      name, dataStream.javaStream, fields.map(_.accept(DefaultExpressionVisitor.INSTANCE)).toArray)
     scan(name)
   }
 
@@ -130,7 +129,7 @@ class StreamTableEnvironment @deprecated(
 
     checkValidTableName(name)
     registerDataStreamInternal(
-      name, dataStream.javaStream, fields.map(_.accept(new DefaultExpressionVisitor)).toArray)
+      name, dataStream.javaStream, fields.map(_.accept(DefaultExpressionVisitor.INSTANCE)).toArray)
   }
 
   /**
