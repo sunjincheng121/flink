@@ -20,7 +20,7 @@ package org.apache.flink.table.plan
 
 import org.apache.flink.api.common.typeutils.CompositeType
 import org.apache.flink.table.api.{OverWindow, TableEnvironment, ValidationException}
-import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.plan.logical.{LogicalNode, Project}
 
 import scala.collection.mutable

@@ -155,19 +155,20 @@ class TestFilterableTableSource(
 
   private def shouldPushDown(expr: Expression): Boolean = {
     expr match {
-      case call: Call if call.getFunctionDefinition.getFunctionType == FunctionType.COMPARISON =>
+      case call: CallExpression
+        if call.getFunctionDefinition.getFunctionType == FunctionType.COMPARISON =>
         shouldPushDown(call)
       case _ => false
     }
   }
 
-  private def shouldPushDown(binaryComparison: Call): Boolean = {
+  private def shouldPushDown(binaryComparison: CallExpression): Boolean = {
     (binaryComparison.getChildren.get(0), binaryComparison.getChildren.get(1)) match {
-      case (f: FieldReference, v: Literal) =>
+      case (f: FieldReferenceExpression, v: ValueLiteralExpression) =>
         filterableFields.contains(f.getName)
-      case (v: Literal, f: FieldReference) =>
+      case (v: ValueLiteralExpression, f: FieldReferenceExpression) =>
         filterableFields.contains(f.getName)
-      case (f1: FieldReference, f2: FieldReference) =>
+      case (f1: FieldReferenceExpression, f2: FieldReferenceExpression) =>
         filterableFields.contains(f1.getName) && filterableFields.contains(f2.getName)
       case (_, _) => false
     }
@@ -175,13 +176,14 @@ class TestFilterableTableSource(
 
   private def shouldKeep(row: Row): Boolean = {
     filterPredicates.isEmpty || filterPredicates.forall {
-      case expr: Call if expr.getFunctionDefinition.getFunctionType == FunctionType.COMPARISON =>
+      case expr: CallExpression
+        if expr.getFunctionDefinition.getFunctionType == FunctionType.COMPARISON =>
         binaryFilterApplies(expr, row)
       case expr => throw new RuntimeException(expr + " not supported!")
     }
   }
 
-  private def binaryFilterApplies(binaryComparison: Call, row: Row): Boolean = {
+  private def binaryFilterApplies(binaryComparison: CallExpression, row: Row): Boolean = {
     val (lhsValue, rhsValue) = extractValues(binaryComparison, row)
     val left = binaryComparison.getChildren.get(0)
     val right = binaryComparison.getChildren.get(1)
@@ -189,45 +191,45 @@ class TestFilterableTableSource(
     binaryComparison.getFunctionDefinition match {
       case FunctionDefinitions.GREATER_THAN =>
         lhsValue.compareTo(rhsValue) > 0
-      case FunctionDefinitions.LESS_THAN
-        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
+      case FunctionDefinitions.LESS_THAN if left.isInstanceOf[FieldReferenceExpression]
+          && right.isInstanceOf[ValueLiteralExpression] =>
         lhsValue.compareTo(rhsValue) < 0
-      case FunctionDefinitions.GREATER_THAN_OR_EQUAL
-        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
+      case FunctionDefinitions.GREATER_THAN_OR_EQUAL if left.isInstanceOf[FieldReferenceExpression]
+          && right.isInstanceOf[ValueLiteralExpression] =>
         lhsValue.compareTo(rhsValue) >= 0
-      case FunctionDefinitions.LESS_THAN_OR_EQUAL
-        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
+      case FunctionDefinitions.LESS_THAN_OR_EQUAL if left.isInstanceOf[FieldReferenceExpression]
+          && right.isInstanceOf[ValueLiteralExpression] =>
         lhsValue.compareTo(rhsValue) <= 0
-      case FunctionDefinitions.EQUALS
-        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
+      case FunctionDefinitions.EQUALS if left.isInstanceOf[FieldReferenceExpression]
+          && right.isInstanceOf[ValueLiteralExpression] =>
         lhsValue.compareTo(rhsValue) == 0
-      case FunctionDefinitions.NOT_EQUALS
-        if left.isInstanceOf[FieldReference] && right.isInstanceOf[Literal] =>
+      case FunctionDefinitions.NOT_EQUALS if left.isInstanceOf[FieldReferenceExpression]
+        && right.isInstanceOf[ValueLiteralExpression] =>
         lhsValue.compareTo(rhsValue) != 0
     }
   }
 
-  private def extractValues(binaryComparison: Call, row: Row)
+  private def extractValues(binaryComparison: CallExpression, row: Row)
     : (Comparable[Any], Comparable[Any]) = {
     val left = binaryComparison.getChildren.get(0)
     val right = binaryComparison.getChildren.get(1)
 
     (left, right) match {
-      case (l: FieldReference, r: Literal) =>
+      case (l: FieldReferenceExpression, r: ValueLiteralExpression) =>
         val idx = rowTypeInfo.getFieldIndex(l.getName)
         val lv = row.getField(idx).asInstanceOf[Comparable[Any]]
         val rv = r.getValue.asInstanceOf[Comparable[Any]]
         (lv, rv)
-      case (l: Literal, r: FieldReference) =>
+      case (l: ValueLiteralExpression, r: FieldReferenceExpression) =>
         val idx = rowTypeInfo.getFieldIndex(r.getName)
         val lv = l.getValue.asInstanceOf[Comparable[Any]]
         val rv = row.getField(idx).asInstanceOf[Comparable[Any]]
         (lv, rv)
-      case (l: Literal, r: Literal) =>
+      case (l: ValueLiteralExpression, r: ValueLiteralExpression) =>
         val lv = l.getValue.asInstanceOf[Comparable[Any]]
         val rv = r.getValue.asInstanceOf[Comparable[Any]]
         (lv, rv)
-      case (l: FieldReference, r: FieldReference) =>
+      case (l: FieldReferenceExpression, r: FieldReferenceExpression) =>
         val lidx = rowTypeInfo.getFieldIndex(l.getName)
         val ridx = rowTypeInfo.getFieldIndex(r.getName)
         val lv = row.getField(lidx).asInstanceOf[Comparable[Any]]

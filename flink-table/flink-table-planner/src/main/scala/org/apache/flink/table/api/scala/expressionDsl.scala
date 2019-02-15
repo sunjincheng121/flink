@@ -24,8 +24,8 @@ import org.apache.calcite.avatica.util.DateTimeUtils._
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.api._
 import org.apache.flink.table.expressions.ExpressionUtils._
-import org.apache.flink.table.expressions.FunctionDefinitions._
-import org.apache.flink.table.expressions.{Call, DefaultExpressionVisitor, DistinctAggExpression, Expression, ExpressionUtils, FieldReference, FunctionDefinition, FunctionDefinitions, FunctionType, ScalarFunctionDefinition, SymbolExpression, TableFunctionCall, TableFunctionDefinition, TableReference, TableSymbol, TimeIntervalUnit, TimePointUnit, TrimMode, TypeLiteral, UDAGGExpression, Literal => ELiteral}
+import org.apache.flink.table.expressions.FunctionDefinitions.{E => FDE, UUID => FDUUID, _}
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.functions.{AggregateFunction, DistinctAggregateFunction, ScalarFunction, TableFunction}
 import org.apache.flink.table.plan.logical.LogicalTableFunctionCall
 
@@ -37,7 +37,7 @@ import _root_.scala.language.implicitConversions
   * expression operations.
   *
   * These operations must be kept in sync with the parser in
-  * [[org.apache.flink.table.plan.expressions.ExpressionParser]].
+  * [[org.apache.flink.table.expressions.ExpressionParser]].
   */
 trait ImplicitExpressionOperations {
   private[flink] def expr: Expression
@@ -166,58 +166,58 @@ trait ImplicitExpressionOperations {
     * Returns the sum of the numeric field across all input values.
     * If all values are null, null is returned.
     */
-  def sum = call(SUM, Seq(expr))
+  def sum = aggCall(SUM, Seq(expr))
 
   /**
     * Returns the sum of the numeric field across all input values.
     * If all values are null, 0 is returned.
     */
-  def sum0 = call(SUM0, Seq(expr))
+  def sum0 = aggCall(SUM0, Seq(expr))
 
   /**
     * Returns the minimum value of field across all input values.
     */
-  def min = call(MIN, Seq(expr))
+  def min = aggCall(MIN, Seq(expr))
 
   /**
     * Returns the maximum value of field across all input values.
     */
-  def max = call(MAX, Seq(expr))
+  def max = aggCall(MAX, Seq(expr))
 
   /**
     * Returns the number of input rows for which the field is not null.
     */
-  def count = call(COUNT, Seq(expr))
+  def count = aggCall(COUNT, Seq(expr))
 
   /**
     * Returns the average (arithmetic mean) of the numeric field across all input values.
     */
-  def avg = call(AVG, Seq(expr))
+  def avg = aggCall(AVG, Seq(expr))
 
   /**
     * Returns the population standard deviation of an expression (the square root of varPop()).
     */
-  def stddevPop = call(STDDEV_POP, Seq(expr))
+  def stddevPop = aggCall(STDDEV_POP, Seq(expr))
 
   /**
     * Returns the sample standard deviation of an expression (the square root of varSamp()).
     */
-  def stddevSamp = call(STDDEV_SAMP, Seq(expr))
+  def stddevSamp = aggCall(STDDEV_SAMP, Seq(expr))
 
   /**
     * Returns the population standard variance of an expression.
     */
-  def varPop = call(VAR_POP, Seq(expr))
+  def varPop = aggCall(VAR_POP, Seq(expr))
 
   /**
     *  Returns the sample variance of a given expression.
     */
-  def varSamp = call(VAR_SAMP, Seq(expr))
+  def varSamp = aggCall(VAR_SAMP, Seq(expr))
 
   /**
     * Returns multiset aggregate of a given expression.
     */
-  def collect = call(COLLECT, Seq(expr))
+  def collect = aggCall(COLLECT, Seq(expr))
 
   /**
     * Converts a value to a given type.
@@ -226,7 +226,7 @@ trait ImplicitExpressionOperations {
     *
     * @return casted expression
     */
-  def cast(toType: TypeLiteral) = call(CAST, Seq(expr, toType))
+  def cast(toType: TypeLiteralExpression) = call(CAST, Seq(expr, toType))
 
   /**
     * Specifies a name for an expression i.e. a field.
@@ -269,7 +269,7 @@ trait ImplicitExpressionOperations {
     *
     * Note: This operation is not supported in a streaming environment yet.
     */
-  def in(table: Table) = call(IN, Seq(expr, new TableReference(table.toString, table)))
+  def in(table: Table) = call(IN, Seq(expr, new TableReferenceExpression(table.toString, table)))
 
   /**
     * Returns the start time (inclusive) of a window when applied on a window reference.
@@ -489,7 +489,7 @@ trait ImplicitExpressionOperations {
   def trim(
       removeLeading: Boolean = true,
       removeTrailing: Boolean = true,
-      character: Expression = new ELiteral(" ")) = {
+      character: Expression = new ValueLiteralExpression(" ")) = {
     if (removeLeading && removeTrailing) {
       call(TRIM, Seq(TrimMode.BOTH, character, expr))
     } else if (removeLeading) {
@@ -578,7 +578,8 @@ trait ImplicitExpressionOperations {
     */
   def over(alias: Expression): Expression = {
     expr match {
-      case call: Call if call.getFunctionDefinition.getFunctionType == FunctionType.AGGREGATION =>
+      case call: CallExpression
+        if call.getFunctionDefinition.getFunctionType == FunctionType.AGGREGATION =>
         ExpressionUtils.call(FunctionDefinitions.OVER_CALL, Seq(expr, alias))
       case _ => throw new TableException(
         "The over method can only using with aggregation expression.")
@@ -880,7 +881,6 @@ trait ImplicitExpressionOperations {
     * Declares a field as the rowtime attribute for indicating, accessing, and working in
     * Flink's event time.
     */
-//  def rowtime = new RowtimeAttribute(expr)
   def rowtime = call(ROW_TIME, Seq(expr))
 
   /**
@@ -984,7 +984,7 @@ trait ImplicitExpressionConversions {
   }
 
   implicit class UnresolvedFieldExpression(s: Symbol) extends ImplicitExpressionOperations {
-    def expr =  new FieldReference(s.name)
+    def expr =  new FieldReferenceExpression(s.name)
   }
 
   implicit class LiteralLongExpression(l: Long) extends ImplicitExpressionOperations {
@@ -1051,19 +1051,20 @@ trait ImplicitExpressionConversions {
     }
   }
 
-  implicit class TableFunctionCallExpression[T: TypeInformation](val t: TableFunction[T]) {
-    def apply(params: Expression*): TableFunctionCall = {
+  implicit class TableFunctionCallExpressionExpression
+  [T: TypeInformation](val t: TableFunction[T]) {
+    def apply(params: Expression*): TableFunctionCallExpression = {
       val resultType = if (t.getResultType == null) {
         implicitly[TypeInformation[T]]
       } else {
         t.getResultType
       }
-      new TableFunctionCall(new TableFunctionDefinition(t, resultType), params)
+      new TableFunctionCallExpression(new TableFunctionDefinition(t, resultType), params)
     }
   }
 
   @deprecated("Please use Table.joinLateral() or Table.leftOuterJoinLateral() instead.", "1.8")
-  implicit def tableFunctionCall2Table(tfc: TableFunctionCall): Table = {
+  implicit def tableFunctionCall2Table(tfc: TableFunctionCallExpression): Table = {
     val tfd = tfc.getFunctionDefinition.asInstanceOf[TableFunctionDefinition]
     new Table(
       tableEnv = null, // table environment will be set later.
@@ -1078,8 +1079,8 @@ trait ImplicitExpressionConversions {
     )
   }
 
-  implicit class TableFunctionCallAlias(val tfc: TableFunctionCall) {
-    def as(name: Symbol, extraNames: Symbol*): TableFunctionCall = {
+  implicit class TableFunctionCallAlias(val tfc: TableFunctionCallExpression) {
+    def as(name: Symbol, extraNames: Symbol*): TableFunctionCallExpression = {
       // NOTE: this method is only a temporary solution until we
       // remove the deprecated table constructor. Otherwise Scala would be confused
       // about Table.as() and Expression.as(). In the future, we can rely on Expression.as() only.
@@ -1092,7 +1093,7 @@ trait ImplicitExpressionConversions {
   implicit def tableSymbolToExpression(symbol: TableSymbol): SymbolExpression =
     new SymbolExpression(symbol)
   implicit def symbol2FieldExpression(sym: Symbol): Expression =
-    new FieldReference(sym.name)
+    new FieldReferenceExpression(sym.name)
   implicit def byte2Literal(b: Byte): Expression = Literal(b)
   implicit def short2Literal(s: Short): Expression = Literal(s)
   implicit def int2Literal(i: Int): Expression = Literal(i)
@@ -1110,11 +1111,12 @@ trait ImplicitExpressionConversions {
     literal(sqlTimestamp)
   implicit def array2ArrayConstructor(array: Array[_]): Expression =
     ExpressionUtils.convertArray(array)
-  implicit def typeInformation2TypeLiteral(t: TypeInformation[_]): TypeLiteral =
-    new TypeLiteral(t)
+  implicit def typeInformation2TypeLiteral(t: TypeInformation[_]): TypeLiteralExpression =
+    new TypeLiteralExpression(t)
   implicit def userDefinedAggFunctionConstructor[T: TypeInformation, ACC: TypeInformation]
   (udagg: AggregateFunction[T, ACC]): UDAGGExpression[T, ACC] = UDAGGExpression(udagg)
-  implicit def toDistinct(agg: Call): DistinctAggExpression = DistinctAggExpression(agg)
+  implicit def toDistinct(agg: AggregateCallExpression): DistinctAggExpression =
+    DistinctAggExpression(agg)
   implicit def toDistinct[T: TypeInformation, ACC: TypeInformation]
   (agg: AggregateFunction[T, ACC]): DistinctAggregateFunction[T, ACC] =
     DistinctAggregateFunction(agg)
@@ -1338,7 +1340,7 @@ object e {
     * Returns a value that is closer than any other value to e.
     */
   def apply(): Expression = {
-    call(E, Seq())
+    call(FDE, Seq())
   }
 }
 
@@ -1458,7 +1460,7 @@ object uuid {
     * generator.
     */
   def apply(): Expression = {
-    call(UUID, Seq())
+    call(FDUUID, Seq())
   }
 }
 
@@ -1467,14 +1469,14 @@ object uuid {
   */
 object Null {
   def apply(t: TypeInformation[_]): Expression =
-    new org.apache.flink.table.expressions.Literal(null, t)
+    new ValueLiteralExpression(null, t)
 }
 
 /**
   * Returns literal expression.
   */
 object Literal {
-  def apply(l: Any): ELiteral = literal(l)
+  def apply(l: Any): ValueLiteralExpression = literal(l)
 }
 
 // scalastyle:on object.name

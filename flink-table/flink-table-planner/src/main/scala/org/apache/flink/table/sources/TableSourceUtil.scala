@@ -375,9 +375,9 @@ object TableSourceUtil {
         // push an empty values node with the physical schema on the relbuilder
         relBuilder.push(createSchemaRelNode(resolvedFields))
         // get extraction expression
-        (resolvedFields.map(f => new FieldReference(f._1)), resolvedFields.map(f => f._3))
+        (resolvedFields.map(f => new FieldReferenceExpression(f._1)), resolvedFields.map(f => f._3))
       } else {
-        (new Array[FieldReference](0), new Array[TypeInformation[_]](0))
+        (new Array[FieldReferenceExpression](0), new Array[TypeInformation[_]](0))
       }
 
       val expression = tsExtractor.getExpression(fieldAccesses, fieldTypes)

@@ -22,7 +22,7 @@ import java.sql.Timestamp
 
 import org.apache.flink.api.java.typeutils.RowTypeInfo
 import org.apache.flink.table.api.Table
-import org.apache.flink.table.plan.expressions.PlannerExpression
+import org.apache.flink.table.expressions.PlannerExpression
 import org.apache.flink.types.Row
 
 /**

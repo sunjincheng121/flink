@@ -39,7 +39,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
 import org.apache.flink.table.calcite.{FlinkTypeFactory, RelTimeIndicatorConverter}
 import org.apache.flink.table.descriptors.{ConnectorDescriptor, StreamTableDescriptor}
 import org.apache.flink.table.explain.PlanJsonParser
-import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.plan.nodes.FlinkConventions
 import org.apache.flink.table.plan.nodes.datastream.{DataStreamRel, UpdateAsRetractionTrait}
 import org.apache.flink.table.plan.rules.FlinkRuleSets
@@ -537,10 +537,11 @@ abstract class StreamTableEnvironment(
   protected def registerDataStreamInternal[T](
       name: String,
       dataStream: DataStream[T],
-      fields: Array[PlannerExpression])
+      fieldsExpr: Array[Expression])
     : Unit = {
 
     val streamType = dataStream.getType
+    val fields: Array[Expression] = fieldsExpr.map(_.accept(DefaultExpressionVisitor.INSTANCE))
 
     // get field names and types for all non-replaced fields
     val (fieldNames, fieldIndexes) = getFieldInfo[T](streamType, fields)
@@ -575,7 +576,7 @@ abstract class StreamTableEnvironment(
     */
   private def validateAndExtractTimeAttributes(
     streamType: TypeInformation[_],
-    exprs: Array[PlannerExpression])
+    exprs: Array[Expression])
   : (Option[(Int, String)], Option[(Int, String)]) = {
 
     val (isRefByPos, fieldTypes) = streamType match {

@@ -78,6 +78,7 @@ public final class FunctionDefinitions {
 	public static final FunctionDefinition VAR_POP = new FunctionDefinition("varPop", AGGREGATION);
 	public static final FunctionDefinition VAR_SAMP = new FunctionDefinition("varSamp", AGGREGATION);
 	public static final FunctionDefinition COLLECT = new FunctionDefinition("collect", AGGREGATION);
+	public static final FunctionDefinition DISTINCT = new FunctionDefinition("distinct", AGGREGATION);
 
 	// string functions
 	public static final FunctionDefinition CHAR_LENGTH = new FunctionDefinition("charLength", OTHER);

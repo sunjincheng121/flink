@@ -19,9 +19,8 @@
 package org.apache.flink.table.expressions
 
 import org.apache.flink.table.api._
-import org.apache.flink.table.plan.expressions._
-import org.apache.flink.table.plan.expressions.{Call => PlannerCall, Literal => PlannerLiteral, DistinctAgg => PlannerDistinctAgg, TableFunctionCall => PlannerTableFunctionCall, TableReference => PlannerTableReference}
-
+import org.apache.flink.table.expressions.FunctionDefinitions._
+import org.apache.flink.table.expressions.{UUID => PlannerUUID, E => PlannerE, Call => PlannerCall, Literal => PlannerLiteral, TableFunctionCall => PlannerTableFunctionCall, TableReference => PlannerTableReference}
 import _root_.scala.collection.JavaConverters._
 
 /**
@@ -29,7 +28,7 @@ import _root_.scala.collection.JavaConverters._
   */
 class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpression] {
 
-  override def visitCall(call: Call): PlannerExpression = {
+  override def visitCall(call: CallExpression): PlannerExpression = {
 
     val func = call.getFunctionDefinition
     val args = call.getChildren.asScala
@@ -41,7 +40,7 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
       case e: TableFunctionDefinition =>
         val tfc = PlannerTableFunctionCall(
           e.getName, e.getTableFunction, args.map(_.accept(this)), e.getResultType)
-        val alias = call.asInstanceOf[TableFunctionCall].alias()
+        val alias = call.asInstanceOf[TableFunctionCallExpression].alias()
         if (alias.isPresent) {
           tfc.setAliases(alias.get())
         }
@@ -56,167 +55,172 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
 
       case e: FunctionDefinition =>
         e match {
-          case FunctionDefinitions.CAST =>
+          case CAST =>
             assert(args.size == 2)
-            Cast(args.head.accept(this), args.last.asInstanceOf[TypeLiteral].getType)
+            Cast(args.head.accept(this), args.last.asInstanceOf[TypeLiteralExpression].getType)
 
-          case FunctionDefinitions.AS =>
+          case AS =>
             assert(args.size >= 2)
             val child = args(0)
-            val name = args(1).asInstanceOf[Literal].getValue.asInstanceOf[String]
+            val name = args(1).asInstanceOf[ValueLiteralExpression].getValue.asInstanceOf[String]
             val extraNames =
-              args.drop(1).drop(1).map(e => e.asInstanceOf[Literal].getValue.asInstanceOf[String])
+              args.drop(1).drop(1)
+                .map(e => e.asInstanceOf[ValueLiteralExpression].getValue.asInstanceOf[String])
             Alias(child.accept(this), name, extraNames)
 
-          case FunctionDefinitions.FLATTEN =>
+          case FLATTEN =>
             assert(args.size == 1)
             Flattening(args.head.accept(this))
 
-          case FunctionDefinitions.GET_COMPOSITE_FIELD =>
+          case GET_COMPOSITE_FIELD =>
             assert(args.size == 2)
             GetCompositeField(args.head.accept(this),
-              args.last.asInstanceOf[Literal].getValue)
+              args.last.asInstanceOf[ValueLiteralExpression].getValue)
 
-          case FunctionDefinitions.AND =>
+          case AND =>
             assert(args.size == 2)
             And(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.OR =>
+          case OR =>
             assert(args.size == 2)
             Or(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.NOT =>
+          case NOT =>
             assert(args.size == 1)
             Not(args.head.accept(this))
 
-          case FunctionDefinitions.EQUALS =>
+          case EQUALS =>
             assert(args.size == 2)
             EqualTo(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.GREATER_THAN =>
+          case GREATER_THAN =>
             assert(args.size == 2)
             GreaterThan(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.GREATER_THAN_OR_EQUAL =>
+          case GREATER_THAN_OR_EQUAL =>
             assert(args.size == 2)
             GreaterThanOrEqual(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.LESS_THAN =>
+          case LESS_THAN =>
             assert(args.size == 2)
             LessThan(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.LESS_THAN_OR_EQUAL =>
+          case LESS_THAN_OR_EQUAL =>
             assert(args.size == 2)
             LessThanOrEqual(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.NOT_EQUALS =>
+          case NOT_EQUALS =>
             assert(args.size == 2)
             NotEqualTo(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.IN =>
+          case IN =>
             In(args.head.accept(this), args.slice(1, args.size).map(_.accept(this)))
 
-          case FunctionDefinitions.IS_NULL =>
+          case IS_NULL =>
             assert(args.size == 1)
             IsNull(args.head.accept(this))
 
-          case FunctionDefinitions.IS_NOT_NULL =>
+          case IS_NOT_NULL =>
             assert(args.size == 1)
             IsNotNull(args.head.accept(this))
 
-          case FunctionDefinitions.IS_TRUE =>
+          case IS_TRUE =>
             assert(args.size == 1)
             IsTrue(args.head.accept(this))
 
-          case FunctionDefinitions.IS_FALSE =>
+          case IS_FALSE =>
             assert(args.size == 1)
             IsFalse(args.head.accept(this))
 
-          case FunctionDefinitions.IS_NOT_TRUE =>
+          case IS_NOT_TRUE =>
             assert(args.size == 1)
             IsNotTrue(args.head.accept(this))
 
-          case FunctionDefinitions.IS_NOT_FALSE =>
+          case IS_NOT_FALSE =>
             assert(args.size == 1)
             IsNotFalse(args.head.accept(this))
 
-          case FunctionDefinitions.IF =>
+          case IF =>
             assert(args.size == 3)
             If(args.head.accept(this), args(1).accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.BETWEEN =>
+          case BETWEEN =>
             assert(args.size == 3)
             Between(args.head.accept(this), args(1).accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.NOT_BETWEEN =>
+          case NOT_BETWEEN =>
             assert(args.size == 3)
             NotBetween(args.head.accept(this), args(1).accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.AVG =>
+          case DISTINCT =>
+            assert(args.size == 1)
+            PlannerDistinctAgg(args.head.accept(this))
+
+          case AVG =>
             assert(args.size == 1)
             Avg(args.head.accept(this))
 
-          case FunctionDefinitions.COUNT =>
+          case COUNT =>
             assert(args.size == 1)
             Count(args.head.accept(this))
 
-          case FunctionDefinitions.MAX =>
+          case MAX =>
             assert(args.size == 1)
             Max(args.head.accept(this))
 
-          case FunctionDefinitions.MIN =>
+          case MIN =>
             assert(args.size == 1)
             Min(args.head.accept(this))
 
-          case FunctionDefinitions.SUM =>
+          case SUM =>
             assert(args.size == 1)
             Sum(args.head.accept(this))
 
-          case FunctionDefinitions.SUM0 =>
+          case SUM0 =>
             assert(args.size == 1)
             Sum0(args.head.accept(this))
 
-          case FunctionDefinitions.STDDEV_POP =>
+          case STDDEV_POP =>
             assert(args.size == 1)
             StddevPop(args.head.accept(this))
 
-          case FunctionDefinitions.STDDEV_SAMP =>
+          case STDDEV_SAMP =>
             assert(args.size == 1)
             StddevSamp(args.head.accept(this))
 
-          case FunctionDefinitions.VAR_POP =>
+          case VAR_POP =>
             assert(args.size == 1)
             VarPop(args.head.accept(this))
 
-          case FunctionDefinitions.VAR_SAMP =>
+          case VAR_SAMP =>
             assert(args.size == 1)
             VarSamp(args.head.accept(this))
 
-          case FunctionDefinitions.COLLECT =>
+          case COLLECT =>
             assert(args.size == 1)
             Collect(args.head.accept(this))
 
-          case FunctionDefinitions.CHAR_LENGTH =>
+          case CHAR_LENGTH =>
             assert(args.size == 1)
             CharLength(args.head.accept(this))
 
-          case FunctionDefinitions.INIT_CAP =>
+          case INIT_CAP =>
             assert(args.size == 1)
             InitCap(args.head.accept(this))
 
-          case FunctionDefinitions.LIKE =>
+          case LIKE =>
             assert(args.size == 2)
             Like(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.LOWER =>
+          case LOWER =>
             assert(args.size == 1)
             Lower(args.head.accept(this))
 
-          case FunctionDefinitions.SIMILAR =>
+          case SIMILAR =>
             assert(args.size == 2)
             Similar(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.SUBSTRING =>
+          case SUBSTRING =>
             assert(args.size == 2 || args.size == 3)
             if (args.size == 2) {
               new Substring(args.head.accept(this), args.last.accept(this))
@@ -224,7 +228,7 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
               Substring(args.head.accept(this), args(1).accept(this), args.last.accept(this))
             }
 
-          case FunctionDefinitions.REPLACE =>
+          case REPLACE =>
             assert(args.size == 2 || args.size == 3)
             if (args.size == 2) {
               new Replace(args.head.accept(this), args.last.accept(this))
@@ -232,19 +236,19 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
               Replace(args.head.accept(this), args(1).accept(this), args.last.accept(this))
             }
 
-          case FunctionDefinitions.TRIM =>
+          case TRIM =>
             assert(args.size == 3)
             Trim(args.head.accept(this), args(1).accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.UPPER =>
+          case UPPER =>
             assert(args.size == 1)
             Upper(args.head.accept(this))
 
-          case FunctionDefinitions.POSITION =>
+          case POSITION =>
             assert(args.size == 2)
             Position(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.OVERLAY =>
+          case OVERLAY =>
             assert(args.size == 3 || args.size == 4)
             if (args.size == 3) {
               new Overlay(args.head.accept(this), args(1).accept(this), args.last.accept(this))
@@ -256,22 +260,22 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
                 args.last.accept(this))
             }
 
-          case FunctionDefinitions.CONCAT =>
+          case CONCAT =>
             Concat(args.map(_.accept(this)))
 
-          case FunctionDefinitions.CONCAT_WS =>
+          case CONCAT_WS =>
             assert(args.nonEmpty)
             ConcatWs(args.head.accept(this), args.tail.map(_.accept(this)))
 
-          case FunctionDefinitions.LPAD =>
+          case LPAD =>
             assert(args.size == 3)
             Lpad(args.head.accept(this), args(1).accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.RPAD =>
+          case RPAD =>
             assert(args.size == 3)
             Rpad(args.head.accept(this), args(1).accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.REGEXP_EXTRACT =>
+          case REGEXP_EXTRACT =>
             assert(args.size == 2 || args.size == 3)
             if (args.size == 2) {
               RegexpExtract(args.head.accept(this), args.last.accept(this))
@@ -279,79 +283,79 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
               RegexpExtract(args.head.accept(this), args(1).accept(this), args.last.accept(this))
             }
 
-          case FunctionDefinitions.FROM_BASE64 =>
+          case FROM_BASE64 =>
             assert(args.size == 1)
             FromBase64(args.head.accept(this))
 
-          case FunctionDefinitions.TO_BASE64 =>
+          case TO_BASE64 =>
             assert(args.size == 1)
             ToBase64(args.head.accept(this))
 
           case FunctionDefinitions.UUID =>
             assert(args.isEmpty)
-            UUID()
+            PlannerUUID()
 
-          case FunctionDefinitions.LTRIM =>
+          case LTRIM =>
             assert(args.size == 1)
             LTrim(args.head.accept(this))
 
-          case FunctionDefinitions.RTRIM =>
+          case RTRIM =>
             assert(args.size == 1)
             RTrim(args.head.accept(this))
 
-          case FunctionDefinitions.REPEAT =>
+          case REPEAT =>
             assert(args.size == 2)
             Repeat(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.REGEXP_REPLACE =>
+          case REGEXP_REPLACE =>
             assert(args.size == 3)
             RegexpReplace(args.head.accept(this), args(1).accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.PLUS =>
+          case PLUS =>
             assert(args.size == 2)
             Plus(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.MINUS =>
+          case MINUS =>
             assert(args.size == 2)
             Minus(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.DIVIDE =>
+          case DIVIDE =>
             assert(args.size == 2)
             Div(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.TIMES =>
+          case TIMES =>
             assert(args.size == 2)
             Mul(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.ABS =>
+          case ABS =>
             assert(args.size == 1)
             Abs(args.head.accept(this))
 
-          case FunctionDefinitions.CEIL =>
+          case CEIL =>
             assert(args.size == 1)
             Ceil(args.head.accept(this))
 
-          case FunctionDefinitions.EXP =>
+          case EXP =>
             assert(args.size == 1)
             Exp(args.head.accept(this))
 
-          case FunctionDefinitions.FLOOR =>
+          case FLOOR =>
             assert(args.size == 1)
             Floor(args.head.accept(this))
 
-          case FunctionDefinitions.LOG10 =>
+          case LOG10 =>
             assert(args.size == 1)
             Log10(args.head.accept(this))
 
-          case FunctionDefinitions.LOG2 =>
+          case LOG2 =>
             assert(args.size == 1)
             Log2(args.head.accept(this))
 
-          case FunctionDefinitions.LN =>
+          case LN =>
             assert(args.size == 1)
             Ln(args.head.accept(this))
 
-          case FunctionDefinitions.LOG =>
+          case LOG =>
             assert(args.size == 1 || args.size == 2)
             if (args.size == 1) {
               Log(args.head.accept(this))
@@ -359,91 +363,91 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
               Log(args.head.accept(this), args.last.accept(this))
             }
 
-          case FunctionDefinitions.POWER =>
+          case POWER =>
             assert(args.size == 2)
             Power(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.MOD =>
+          case MOD =>
             assert(args.size == 2)
             Mod(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.SQRT =>
+          case SQRT =>
             assert(args.size == 1)
             Sqrt(args.head.accept(this))
 
-          case FunctionDefinitions.MINUS_PREFIX =>
+          case MINUS_PREFIX =>
             assert(args.size == 1)
             UnaryMinus(args.head.accept(this))
 
-          case FunctionDefinitions.SIN =>
+          case SIN =>
             assert(args.size == 1)
             Sin(args.head.accept(this))
 
-          case FunctionDefinitions.COS =>
+          case COS =>
             assert(args.size == 1)
             Cos(args.head.accept(this))
 
-          case FunctionDefinitions.SINH =>
+          case SINH =>
             assert(args.size == 1)
             Sinh(args.head.accept(this))
 
-          case FunctionDefinitions.TAN =>
+          case TAN =>
             assert(args.size == 1)
             Tan(args.head.accept(this))
 
-          case FunctionDefinitions.TANH =>
+          case TANH =>
             assert(args.size == 1)
             Tanh(args.head.accept(this))
 
-          case FunctionDefinitions.COT =>
+          case COT =>
             assert(args.size == 1)
             Cot(args.head.accept(this))
 
-          case FunctionDefinitions.ASIN =>
+          case ASIN =>
             assert(args.size == 1)
             Asin(args.head.accept(this))
 
-          case FunctionDefinitions.ACOS =>
+          case ACOS =>
             assert(args.size == 1)
             Acos(args.head.accept(this))
 
-          case FunctionDefinitions.ATAN =>
+          case ATAN =>
             assert(args.size == 1)
             Atan(args.head.accept(this))
 
-          case FunctionDefinitions.ATAN2 =>
+          case ATAN2 =>
             assert(args.size == 2)
             Atan2(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.COSH =>
+          case COSH =>
             assert(args.size == 1)
             Cosh(args.head.accept(this))
 
-          case FunctionDefinitions.DEGREES =>
+          case DEGREES =>
             assert(args.size == 1)
             Degrees(args.head.accept(this))
 
-          case FunctionDefinitions.RADIANS =>
+          case RADIANS =>
             assert(args.size == 1)
             Radians(args.head.accept(this))
 
-          case FunctionDefinitions.SIGN =>
+          case SIGN =>
             assert(args.size == 1)
             Sign(args.head.accept(this))
 
-          case FunctionDefinitions.ROUND =>
+          case ROUND =>
             assert(args.size == 2)
             Round(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.PI =>
+          case PI =>
             assert(args.isEmpty)
             Pi()
 
           case FunctionDefinitions.E =>
             assert(args.isEmpty)
-            E()
+            PlannerE()
 
-          case FunctionDefinitions.RAND =>
+          case RAND =>
             assert(args.isEmpty || args.size == 1)
             if (args.isEmpty) {
               new Rand()
@@ -451,7 +455,7 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
               Rand(args.head.accept(this))
             }
 
-          case FunctionDefinitions.RAND_INTEGER =>
+          case RAND_INTEGER =>
             assert(args.size == 1 || args.size == 2)
             if (args.size == 1) {
               new RandInteger(args.head.accept(this))
@@ -459,15 +463,15 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
               RandInteger(args.head.accept(this), args.last.accept(this))
             }
 
-          case FunctionDefinitions.BIN =>
+          case BIN =>
             assert(args.size == 1)
             Bin(args.head.accept(this))
 
-          case FunctionDefinitions.HEX =>
+          case HEX =>
             assert(args.size == 1)
             Hex(args.head.accept(this))
 
-          case FunctionDefinitions.TRUNCATE =>
+          case TRUNCATE =>
             assert(args.size == 1 || args.size == 2)
             if (args.size == 1) {
               new Truncate(args.head.accept(this))
@@ -475,35 +479,35 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
               Truncate(args.head.accept(this), args.last.accept(this))
             }
 
-          case FunctionDefinitions.EXTRACT =>
+          case EXTRACT =>
             assert(args.size == 2)
             Extract(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.CURRENT_DATE =>
+          case CURRENT_DATE =>
             assert(args.isEmpty)
             CurrentDate()
 
-          case FunctionDefinitions.CURRENT_TIME =>
+          case CURRENT_TIME =>
             assert(args.isEmpty)
             CurrentTime()
 
-          case FunctionDefinitions.CURRENT_TIMESTAMP =>
+          case CURRENT_TIMESTAMP =>
             assert(args.isEmpty)
             CurrentTimestamp()
 
-          case FunctionDefinitions.LOCAL_TIME =>
+          case LOCAL_TIME =>
             assert(args.isEmpty)
             LocalTime()
 
-          case FunctionDefinitions.LOCAL_TIMESTAMP =>
+          case LOCAL_TIMESTAMP =>
             assert(args.isEmpty)
             LocalTimestamp()
 
-          case FunctionDefinitions.QUARTER =>
+          case QUARTER =>
             assert(args.size == 1)
             Quarter(args.head.accept(this))
 
-          case FunctionDefinitions.TEMPORAL_OVERLAPS =>
+          case TEMPORAL_OVERLAPS =>
             assert(args.size == 4)
             TemporalOverlaps(
               args.head.accept(this),
@@ -511,113 +515,113 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
               args(2).accept(this),
               args.last.accept(this))
 
-          case FunctionDefinitions.DATE_TIME_PLUS =>
+          case DATE_TIME_PLUS =>
             assert(args.size == 2)
             Plus(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.DATE_FORMAT =>
+          case DATE_FORMAT =>
             assert(args.size == 2)
             DateFormat(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.TIMESTAMP_DIFF =>
+          case TIMESTAMP_DIFF =>
             assert(args.size == 3)
             TimestampDiff(args.head.accept(this), args(1).accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.TEMPORAL_FLOOR =>
+          case TEMPORAL_FLOOR =>
             assert(args.size == 2)
             TemporalFloor(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.TEMPORAL_CEIL =>
+          case TEMPORAL_CEIL =>
             assert(args.size == 2)
             TemporalCeil(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.AT =>
+          case AT =>
             assert(args.size == 2)
             ItemAt(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.CARDINALITY =>
+          case CARDINALITY =>
             assert(args.size == 1)
             Cardinality(args.head.accept(this))
 
-          case FunctionDefinitions.ARRAY =>
+          case ARRAY =>
             ArrayConstructor(args.map(_.accept(this)))
 
-          case FunctionDefinitions.ARRAY_ELEMENT =>
+          case ARRAY_ELEMENT =>
             assert(args.size == 1)
             ArrayElement(args.head.accept(this))
 
-          case FunctionDefinitions.MAP =>
+          case MAP =>
             MapConstructor(args.map(_.accept(this)))
 
-          case FunctionDefinitions.ROW =>
+          case ROW =>
             RowConstructor(args.map(_.accept(this)))
 
-          case FunctionDefinitions.WIN_START =>
+          case WIN_START =>
             assert(args.size == 1)
             WindowStart(args.head.accept(this))
 
-          case FunctionDefinitions.WIN_END =>
+          case WIN_END =>
             assert(args.size == 1)
             WindowEnd(args.head.accept(this))
 
-          case FunctionDefinitions.ASC =>
+          case ASC =>
             assert(args.size == 1)
             Asc(args.head.accept(this))
 
-          case FunctionDefinitions.DESC =>
+          case DESC =>
             assert(args.size == 1)
             Desc(args.head.accept(this))
 
-          case FunctionDefinitions.MD5 =>
+          case MD5 =>
             assert(args.size == 1)
             Md5(args.head.accept(this))
 
-          case FunctionDefinitions.SHA1 =>
+          case SHA1 =>
             assert(args.size == 1)
             Sha1(args.head.accept(this))
 
-          case FunctionDefinitions.SHA224 =>
+          case SHA224 =>
             assert(args.size == 1)
             Sha224(args.head.accept(this))
 
-          case FunctionDefinitions.SHA256 =>
+          case SHA256 =>
             assert(args.size == 1)
             Sha256(args.head.accept(this))
 
-          case FunctionDefinitions.SHA384 =>
+          case SHA384 =>
             assert(args.size == 1)
             Sha384(args.head.accept(this))
 
-          case FunctionDefinitions.SHA512 =>
+          case SHA512 =>
             assert(args.size == 1)
             Sha512(args.head.accept(this))
 
-          case FunctionDefinitions.SHA2 =>
+          case SHA2 =>
             assert(args.size == 2)
             Sha2(args.head.accept(this), args.last.accept(this))
 
-          case FunctionDefinitions.PROC_TIME =>
+          case PROC_TIME =>
             ProctimeAttribute(args.head.accept(this))
 
-          case FunctionDefinitions.ROW_TIME =>
+          case ROW_TIME =>
             RowtimeAttribute(args.head.accept(this))
 
-          case FunctionDefinitions.OVER_CALL =>
+          case OVER_CALL =>
             UnresolvedOverCall(
               args.head.accept(this),
               args.last.accept(this)
             )
 
-          case FunctionDefinitions.UNBOUNDED_RANGE =>
+          case UNBOUNDED_RANGE =>
             UnboundedRange()
 
-          case FunctionDefinitions.UNBOUNDED_ROW =>
+          case UNBOUNDED_ROW =>
             UnboundedRow()
 
-          case FunctionDefinitions.CURRENT_RANGE =>
+          case CURRENT_RANGE =>
             CurrentRange()
 
-          case FunctionDefinitions.CURRENT_ROW =>
+          case CURRENT_ROW =>
             CurrentRow()
 
           case _ => PlannerCall(e.getName, args.map(_.accept(this)))
@@ -625,53 +629,11 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
     }
   }
 
-  override def visitDistinctAgg(distinctAgg: DistinctAgg): PlannerExpression = {
-    PlannerDistinctAgg(distinctAgg.getChildren.get(0).accept(this))
+  override def visitSymbol(symbolExpression: SymbolExpression): PlannerExpression = {
+    SymbolPlannerExpression(symbolExpression.getSymbol)
   }
 
-  // needn't process TypeLiteral directly. It is processed with Cast
-  override def visitTypeLiteral(typeLiteral: TypeLiteral): PlannerExpression = ???
-
-  override def visitSymbolExpression(symbolExpression: SymbolExpression): PlannerExpression = {
-    val tableSymbol = symbolExpression.getSymbol match {
-      case TimeIntervalUnit.YEAR => PlannerTimeIntervalUnit.YEAR
-      case TimeIntervalUnit.YEAR_TO_MONTH => PlannerTimeIntervalUnit.YEAR_TO_MONTH
-      case TimeIntervalUnit.QUARTER => PlannerTimeIntervalUnit.QUARTER
-      case TimeIntervalUnit.MONTH => PlannerTimeIntervalUnit.MONTH
-      case TimeIntervalUnit.WEEK => PlannerTimeIntervalUnit.WEEK
-      case TimeIntervalUnit.DAY => PlannerTimeIntervalUnit.DAY
-      case TimeIntervalUnit.DAY_TO_HOUR => PlannerTimeIntervalUnit.DAY_TO_HOUR
-      case TimeIntervalUnit.DAY_TO_MINUTE => PlannerTimeIntervalUnit.DAY_TO_MINUTE
-      case TimeIntervalUnit.DAY_TO_SECOND => PlannerTimeIntervalUnit.DAY_TO_SECOND
-      case TimeIntervalUnit.HOUR => PlannerTimeIntervalUnit.HOUR
-      case TimeIntervalUnit.HOUR_TO_MINUTE => PlannerTimeIntervalUnit.HOUR_TO_MINUTE
-      case TimeIntervalUnit.HOUR_TO_SECOND => PlannerTimeIntervalUnit.HOUR_TO_SECOND
-      case TimeIntervalUnit.MINUTE => PlannerTimeIntervalUnit.MINUTE
-      case TimeIntervalUnit.MINUTE_TO_SECOND => PlannerTimeIntervalUnit.MINUTE_TO_SECOND
-      case TimeIntervalUnit.SECOND => PlannerTimeIntervalUnit.SECOND
-
-      case TimePointUnit.YEAR => PlannerTimePointUnit.YEAR
-      case TimePointUnit.MONTH => PlannerTimePointUnit.MONTH
-      case TimePointUnit.DAY => PlannerTimePointUnit.DAY
-      case TimePointUnit.HOUR => PlannerTimePointUnit.HOUR
-      case TimePointUnit.MINUTE => PlannerTimePointUnit.MINUTE
-      case TimePointUnit.SECOND => PlannerTimePointUnit.SECOND
-      case TimePointUnit.QUARTER => PlannerTimePointUnit.QUARTER
-      case TimePointUnit.WEEK => PlannerTimePointUnit.WEEK
-      case TimePointUnit.MILLISECOND => PlannerTimePointUnit.MILLISECOND
-      case TimePointUnit.MICROSECOND => PlannerTimePointUnit.MICROSECOND
-
-      case TrimMode.BOTH => PlannerTrimMode.BOTH
-      case TrimMode.LEADING => PlannerTrimMode.LEADING
-      case TrimMode.TRAILING => PlannerTrimMode.TRAILING
-
-      case _ =>
-        throw new TableException("Unsupported TableSymbolValue: " + symbolExpression.getSymbol)
-    }
-    SymbolPlannerExpression(tableSymbol)
-  }
-
-  override def visitLiteral(literal: Literal): PlannerExpression = {
+  override def visitValueLiteral(literal: ValueLiteralExpression): PlannerExpression = {
     if (!literal.getType.isPresent) {
       PlannerLiteral(literal.getValue)
     } else if (literal.getValue == null) {
@@ -681,17 +643,18 @@ class DefaultExpressionVisitor private extends ExpressionVisitor[PlannerExpressi
     }
   }
 
-  override def visitOther(other: Expression): PlannerExpression = {
+  override def visit(other: Expression): PlannerExpression = {
     other match {
-      case e: TableReference => PlannerTableReference(
-        e.asInstanceOf[TableReference].getName,
-        e.asInstanceOf[TableReference].getTable)
+      case e: TableReferenceExpression => PlannerTableReference(
+        e.asInstanceOf[TableReferenceExpression].getName,
+        e.asInstanceOf[TableReferenceExpression].getTable)
+      case plannerExpression: PlannerExpression => plannerExpression
       case _ =>
         throw new TableException("Unrecognized expression [" + other + "]")
     }
   }
 
-  override def visitFieldReference(fieldReference: FieldReference): PlannerExpression = {
+  override def visitFieldReference(fieldReference: FieldReferenceExpression): PlannerExpression = {
     if (fieldReference.getResultType.isPresent) {
       ResolvedFieldReference(
         fieldReference.getName,

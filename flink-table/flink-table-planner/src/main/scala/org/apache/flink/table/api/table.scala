@@ -21,10 +21,11 @@ import org.apache.calcite.rel.RelNode
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
 import org.apache.flink.table.api.java.{OverWindow => JOverWindow, SessionWithGapOnTimeWithAlias => JSessionWithGapOnTimeWithAlias, SlideWithSizeAndSlideOnTimeWithAlias => JSlideWithSizeAndSlideOnTimeWithAlias, TumbleWithSizeOnTimeWithAlias => JTumbleWithSizeOnTimeWithAlias}
+import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.scala.{OverWindow =>SOverWindow, SessionWithGapOnTimeWithAlias => SSessionWithGapOnTimeWithAlias, SlideWithSizeAndSlideOnTimeWithAlias => SSlideWithSizeAndSlideOnTimeWithAlias, TumbleWithSizeOnTimeWithAlias => STumbleWithSizeOnTimeWithAlias}
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
-import org.apache.flink.table.expressions.{Expression, DefaultExpressionVisitor}
-import org.apache.flink.table.plan.expressions.{Asc, Desc, ExpressionParser, Ordering, Alias, Call, PlannerExpression, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
+import org.apache.flink.table.expressions.Expression
+import org.apache.flink.table.expressions.{Asc, Desc, ExpressionParser, Ordering, Alias, Call, PlannerExpression, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
 import org.apache.flink.table.functions.{TableFunction, TemporalTableFunction}
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.table.plan.ProjectionTranslator._
@@ -129,9 +130,7 @@ class Table(
     * }}}
     */
   def select(fields: Expression*): Table = {
-    val fieldExprs = fields.map(_.accept(DefaultExpressionVisitor.INSTANCE))
-    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, tableEnv))
-    selectInternal(withResolvedAggFunctionCall: _*)
+    selectInternal(fields: _*)
   }
 
   /**
@@ -147,12 +146,12 @@ class Table(
   def select(fields: String): Table = {
     val fieldExprs = ExpressionParser.parseExpressionList(fields)
     //get the correct expression for AggFunctionCall
-    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, tableEnv))
-    selectInternal(withResolvedAggFunctionCall: _*)
+    selectInternal(fieldExprs: _*)
   }
 
   private def selectInternal(fields: PlannerExpression*): Table = {
-    val expandedFields = expandProjectList(fields, logicalPlan, tableEnv)
+    val withResolvedAggFunctionCall = fields.map(replaceAggFunctionCall(_, tableEnv))
+    val expandedFields = expandProjectList(withResolvedAggFunctionCall, logicalPlan, tableEnv)
     val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, tableEnv)
     if (propNames.nonEmpty) {
       throw new ValidationException("Window properties can only be used on windowed tables.")
@@ -225,9 +224,7 @@ class Table(
   def createTemporalTableFunction(
     timeAttribute: Expression,
     primaryKey: Expression): TableFunction[Row] = {
-    createTemporalTableFunctionInternal(
-      timeAttribute.accept(DefaultExpressionVisitor.INSTANCE),
-      primaryKey.accept(DefaultExpressionVisitor.INSTANCE))
+    createTemporalTableFunctionInternal(timeAttribute, primaryKey)
   }
 
   private def createTemporalTableFunctionInternal(
@@ -279,8 +276,7 @@ class Table(
     * }}}
     */
   def as(fields: Expression*): Table = {
-    val fieldExprs = fields.map(_.accept(DefaultExpressionVisitor.INSTANCE))
-    asInternal(fieldExprs: _*)
+    asInternal(fields: _*)
   }
 
   private def asInternal(fields: PlannerExpression*): Table = {
@@ -340,8 +336,7 @@ class Table(
     * }}}
     */
   def filter(predicate: Expression): Table = {
-    val predicateExpr = predicate.accept(DefaultExpressionVisitor.INSTANCE)
-    filterInternal(predicateExpr)
+    filterInternal(predicate)
   }
 
   private def filterInternal(predicate: PlannerExpression): Table = {
@@ -402,8 +397,7 @@ class Table(
     * }}}
     */
   def groupBy(fields: Expression*): GroupedTable = {
-    val fieldsExpr = fields.map(_.accept(DefaultExpressionVisitor.INSTANCE))
-    groupByInternal(fieldsExpr: _*)
+    groupByInternal(fields: _*)
   }
 
   private def groupByInternal(fields: PlannerExpression*): GroupedTable = {
@@ -597,8 +591,7 @@ class Table(
   }
 
   private def join(right: Table, joinPredicate: Expression, joinType: JoinType): Table = {
-    val joinPredicateExpr = joinPredicate.accept(DefaultExpressionVisitor.INSTANCE)
-    joinInternal(right, Some(joinPredicateExpr), joinType)
+    joinInternal(right, Some(joinPredicate), joinType)
   }
 
   private def joinInternal(
@@ -711,8 +704,7 @@ class Table(
     * }}}
     */
   def joinLateral(tableFunctionCall: Expression): Table = {
-    val tableFunctionCallExpr = tableFunctionCall.accept(DefaultExpressionVisitor.INSTANCE)
-    joinLateral(tableFunctionCallExpr, None, JoinType.INNER)
+    joinLateral(tableFunctionCall, None, JoinType.INNER)
   }
 
   /**
@@ -733,9 +725,7 @@ class Table(
     * }}}
     */
   def joinLateral(tableFunctionCall: Expression, joinPredicate: Expression): Table = {
-    val tableFunctionCallExpr = tableFunctionCall.accept(DefaultExpressionVisitor.INSTANCE)
-    val joinPredicateExpr = joinPredicate.accept(DefaultExpressionVisitor.INSTANCE)
-    joinLateral(tableFunctionCallExpr, Some(joinPredicateExpr), JoinType.INNER)
+    joinLateral(tableFunctionCall, Some(joinPredicate), JoinType.INNER)
   }
 
   /**
@@ -806,8 +796,7 @@ class Table(
     * }}}
     */
   def leftOuterJoinLateral(tableFunctionCall: Expression): Table = {
-    val tableFunctionCallExpr = tableFunctionCall.accept(DefaultExpressionVisitor.INSTANCE)
-    joinLateral(tableFunctionCallExpr, None, JoinType.LEFT_OUTER)
+    joinLateral(tableFunctionCall, None, JoinType.LEFT_OUTER)
   }
 
   /**
@@ -829,9 +818,7 @@ class Table(
     * }}}
     */
   def leftOuterJoinLateral(tableFunctionCall: Expression, joinPredicate: Expression): Table = {
-    val tableFunctionCallExpr = tableFunctionCall.accept(DefaultExpressionVisitor.INSTANCE)
-    val joinPredicateExpr = joinPredicate.accept(DefaultExpressionVisitor.INSTANCE)
-    joinLateral(tableFunctionCallExpr, Some(joinPredicateExpr), JoinType.LEFT_OUTER)
+    joinLateral(tableFunctionCall, Some(joinPredicate), JoinType.LEFT_OUTER)
   }
 
   private def joinLateral(
@@ -1028,8 +1015,7 @@ class Table(
     * }}}
     */
   def orderBy(fields: Expression*): Table = {
-    val parsedFields = fields.map(_.accept(DefaultExpressionVisitor.INSTANCE))
-    orderByInternal(parsedFields: _*)
+    orderByInternal(fields: _*)
   }
 
   private def orderByInternal(fields: PlannerExpression*): Table = {
@@ -1229,25 +1215,15 @@ class Table(
     val windowImpl: PlannerWindow = window match {
       case STumbleWithSizeOnTimeWithAlias(
       alias: Expression, timeField: Expression, size: Expression) =>
-        new TumbleWithSizeOnTimeWithAlias(
-          alias.accept(DefaultExpressionVisitor.INSTANCE),
-          timeField.accept(DefaultExpressionVisitor.INSTANCE),
-          size.accept(DefaultExpressionVisitor.INSTANCE))
+        new TumbleWithSizeOnTimeWithAlias(alias, timeField, size)
 
       case SSlideWithSizeAndSlideOnTimeWithAlias(
       alias: Expression, timeField: Expression, size: Expression, slide: Expression) =>
-        new SlideWithSizeAndSlideOnTimeWithAlias(
-          alias.accept(DefaultExpressionVisitor.INSTANCE),
-          timeField.accept(DefaultExpressionVisitor.INSTANCE),
-          size.accept(DefaultExpressionVisitor.INSTANCE),
-          slide.accept(DefaultExpressionVisitor.INSTANCE))
+        new SlideWithSizeAndSlideOnTimeWithAlias(alias, timeField, size, slide)
 
       case SSessionWithGapOnTimeWithAlias(
       alias: Expression, timeField: Expression, gap: Expression) =>
-        new SessionWithGapOnTimeWithAlias(
-          alias.accept(DefaultExpressionVisitor.INSTANCE),
-          timeField.accept(DefaultExpressionVisitor.INSTANCE),
-          gap.accept(DefaultExpressionVisitor.INSTANCE))
+        new SessionWithGapOnTimeWithAlias(alias, timeField, gap)
 
       case JTumbleWithSizeOnTimeWithAlias(alias, timeField, size) =>
         new TumbleWithSizeOnTimeWithAlias(
@@ -1309,15 +1285,15 @@ class Table(
     val overWindowImpls: Seq[OverWindow] = overWindows.map {
       case w: SOverWindow =>
         val following = if (w.following != null) {
-          w.following.accept(DefaultExpressionVisitor.INSTANCE)
+          w.following
         } else {
           null
         }
         new OverWindowWithPreceding(
-          w.partitionBy.map(_.accept(DefaultExpressionVisitor.INSTANCE)),
-          w.orderBy.accept(DefaultExpressionVisitor.INSTANCE),
-          w.preceding.accept(DefaultExpressionVisitor.INSTANCE)
-        ).following(following).as(w.alias.accept(DefaultExpressionVisitor.INSTANCE))
+          w.partitionBy,
+          w.orderBy,
+          w.preceding
+        ).following(following).as(w.alias)
       case w: JOverWindow =>
         val partitionBy = if ("" != w.partitionBy) {
           ExpressionParser.parseExpressionList(w.partitionBy)
@@ -1406,9 +1382,8 @@ class GroupedTable(
     * }}}
     */
   def select(fields: Expression*): Table = {
-    val fieldExprs = fields.map(_.accept(DefaultExpressionVisitor.INSTANCE))
     // get the correct expression for AggFunctionCall
-    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, table.tableEnv))
+    val withResolvedAggFunctionCall = fields.map(replaceAggFunctionCall(_, table.tableEnv))
     selectInternal(withResolvedAggFunctionCall: _*)
   }
 
@@ -1474,8 +1449,7 @@ class WindowedTable(
     * }}}
     */
   def groupBy(fields: Expression*): WindowGroupedTable = {
-    val fieldsExpr = fields.map(_.accept(DefaultExpressionVisitor.INSTANCE))
-    groupByInternal(fieldsExpr: _*)
+    groupByInternal(fields: _*)
   }
 
   private def groupByInternal(fields: PlannerExpression*): WindowGroupedTable = {
@@ -1501,9 +1475,8 @@ class OverWindowedTable(
   }
 
   def select(fields: Expression*): Table = {
-    val fieldExprs = fields.map(_.accept(DefaultExpressionVisitor.INSTANCE))
     // get the correct expression for AggFunctionCall
-    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, table.tableEnv))
+    val withResolvedAggFunctionCall = fields.map(replaceAggFunctionCall(_, table.tableEnv))
     selectInternal(withResolvedAggFunctionCall: _*)
   }
 
@@ -1565,9 +1538,8 @@ class WindowGroupedTable(
     * }}}
     */
   def select(fields: Expression*): Table = {
-    val fieldExprs = fields.map(_.accept(DefaultExpressionVisitor.INSTANCE))
     // get the correct expression for AggFunctionCall
-    val withResolvedAggFunctionCall = fieldExprs.map(replaceAggFunctionCall(_, table.tableEnv))
+    val withResolvedAggFunctionCall = fields.map(replaceAggFunctionCall(_, table.tableEnv))
     selectInternal(withResolvedAggFunctionCall: _*)
   }
 

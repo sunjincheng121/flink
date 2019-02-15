@@ -18,7 +18,7 @@
 
 package org.apache.flink.table.api
 
-import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.plan.logical._
 import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeInfo}
 

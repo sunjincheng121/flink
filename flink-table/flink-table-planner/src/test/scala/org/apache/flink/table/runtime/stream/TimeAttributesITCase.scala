@@ -31,9 +31,8 @@ import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironm
 import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{Table, TableSchema, Types}
-import org.apache.flink.table.expressions.TimeIntervalUnit
+import org.apache.flink.table.expressions.{Expression, ExpressionParser, TimeIntervalUnit}
 import org.apache.flink.table.plan.TimeIndicatorConversionTest.TableFunc
-import org.apache.flink.table.plan.expressions.{ExpressionParser, PlannerExpression}
 import org.apache.flink.table.runtime.stream.TimeAttributesITCase.{AtomicTimestampWithEqualWatermark, TestPojo, TimestampWithEqualWatermark, TimestampWithEqualWatermarkPojo}
 import org.apache.flink.table.runtime.utils.JavaPojos.Pojo1
 import org.apache.flink.table.runtime.utils.StreamITCase
@@ -562,7 +561,7 @@ class TimeAttributesITCase extends AbstractTestBase {
       "registerDataStreamInternal",
       classOf[String],
       classOf[org.apache.flink.streaming.api.datastream.DataStream[_]],
-      classOf[Array[PlannerExpression]]
+      classOf[Array[Expression]]
     )
     javaRegisterMethod.setAccessible(true)
     val createUniqueTableName = tEnv.getClass.getSuperclass.getDeclaredMethod(

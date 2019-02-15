@@ -19,7 +19,7 @@
 package org.apache.flink.table.plan.logical
 
 import org.apache.flink.table.api.TableEnvironment
-import org.apache.flink.table.plan.expressions.{PlannerExpression, WindowReference}
+import org.apache.flink.table.expressions.{PlannerExpression, WindowReference}
 import org.apache.flink.table.validate.{ValidationFailure, ValidationResult, ValidationSuccess}
 
 /**

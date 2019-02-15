@@ -95,7 +95,7 @@ class RowtimeTest extends DescriptorTestBase {
       "rowtime.timestamps.class" -> ("org.apache.flink.table.descriptors." +
         "RowtimeTest$CustomExtractor"),
       "rowtime.timestamps.serialized" -> ("rO0ABXNyAD5vcmcuYXBhY2hlLmZsaW5rLnRhYmxlLmRlc2NyaXB0b3" +
-        "JzLlJvd3RpbWVUZXN0JEN1c3RvbUV4dHJhY3RvcsrCAj-mxakFAgABTAAFZmllbGR0ABJMamF2YS9sYW5nL1N0cm" +
+        "JzLlJvd3RpbWVUZXN0JEN1c3RvbUV4dHJhY3RvcvhQPUL66Ob9AgABTAAFZmllbGR0ABJMamF2YS9sYW5nL1N0cm" +
         "luZzt4cgA-b3JnLmFwYWNoZS5mbGluay50YWJsZS5zb3VyY2VzLnRzZXh0cmFjdG9ycy5UaW1lc3RhbXBFeHRyYW" +
         "N0b3LU8E2thK4wMQIAAHhwdAAHdHNGaWVsZA"),
       "rowtime.watermarks.delay" -> "1000",
@@ -131,7 +131,7 @@ object RowtimeTest {
     }
 
     override def getExpression(
-        fieldAccesses: Array[FieldReference],
+        fieldAccesses: Array[FieldReferenceExpression],
         fieldTypes: Array[TypeInformation[_]]): Expression = {
       val fieldAccess: Expression = fieldAccesses(0)
       val fieldType = fieldTypes(0)

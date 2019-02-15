@@ -18,7 +18,7 @@
 
 package org.apache.flink.table.plan.logical
 
-import org.apache.flink.table.plan.expressions.PlannerExpression
+import org.apache.flink.table.expressions.PlannerExpression
 
 /**
   * A class implementing this interface can resolve the expressions of its parameters and

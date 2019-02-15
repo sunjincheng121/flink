@@ -20,7 +20,7 @@ package org.apache.flink.table.plan.util
 import org.apache.calcite.rel.{RelNode, RelVisitor}
 import org.apache.calcite.rex.{RexCall, RexInputRef, RexNode}
 import org.apache.calcite.sql.SqlKind
-import org.apache.flink.table.plan.expressions.ProctimeAttribute
+import org.apache.flink.table.expressions.ProctimeAttribute
 import org.apache.flink.table.plan.nodes.datastream._
 
 import _root_.scala.collection.JavaConversions._

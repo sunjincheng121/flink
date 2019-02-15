@@ -25,7 +25,7 @@ import org.apache.calcite.rex.{RexCall, RexNode}
 import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.table.api.{TableException, Types, ValidationException}
 import org.apache.flink.table.calcite.FlinkRelBuilder.NamedWindowProperty
-import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.plan.logical.LogicalWindow
 import org.apache.flink.table.plan.logical.rel.LogicalWindowAggregate
 import org.apache.flink.table.validate.BasicOperatorTable
@@ -69,16 +69,12 @@ abstract class WindowPropertiesBaseRule(rulePredicate: RelOptRuleOperand, ruleNa
     val timeProperties = windowType match {
       case 'streamRowtime =>
         Seq(
-          NamedWindowProperty(
-            propertyName(w, "rowtime"), RowtimeAttribute(w.aliasAttribute)),
-          NamedWindowProperty(
-            propertyName(w, "proctime"), ProctimeAttribute(w.aliasAttribute)))
+          NamedWindowProperty(propertyName(w, "rowtime"), RowtimeAttribute(w.aliasAttribute)),
+          NamedWindowProperty(propertyName(w, "proctime"), ProctimeAttribute(w.aliasAttribute)))
       case 'streamProctime =>
-        Seq(NamedWindowProperty(
-          propertyName(w, "proctime"), ProctimeAttribute(w.aliasAttribute)))
+        Seq(NamedWindowProperty(propertyName(w, "proctime"), ProctimeAttribute(w.aliasAttribute)))
       case 'batchRowtime =>
-        Seq(NamedWindowProperty(
-          propertyName(w, "rowtime"), RowtimeAttribute(w.aliasAttribute)))
+        Seq(NamedWindowProperty(propertyName(w, "rowtime"), RowtimeAttribute(w.aliasAttribute)))
       case _ =>
         throw new TableException("Unknown window type encountered. Please report this bug.")
     }
@@ -109,9 +105,9 @@ abstract class WindowPropertiesBaseRule(rulePredicate: RelOptRuleOperand, ruleNa
   }
 
   private def getWindowType(window: LogicalWindow): Symbol = {
-    if (ExpressionUtils.isRowtimeAttribute(window.timeAttribute)) {
+    if (PlannerExpressionUtils.isRowtimeAttribute(window.timeAttribute)) {
       'streamRowtime
-    } else if (ExpressionUtils.isProctimeAttribute(window.timeAttribute)) {
+    } else if (PlannerExpressionUtils.isProctimeAttribute(window.timeAttribute)) {
       'streamProctime
     } else if (window.timeAttribute.resultType == Types.SQL_TIMESTAMP) {
       'batchRowtime

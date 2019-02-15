@@ -27,12 +27,12 @@ import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.orc.OrcRowInputFormat.Predicate;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.expressions.Call;
+import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
-import org.apache.flink.table.expressions.FieldReference;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.FunctionDefinitions;
 import org.apache.flink.table.expressions.FunctionType;
-import org.apache.flink.table.expressions.Literal;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.sources.BatchTableSource;
 import org.apache.flink.table.sources.FilterableTableSource;
 import org.apache.flink.table.sources.ProjectableTableSource;
@@ -218,8 +218,8 @@ public class OrcTableSource
 	// Predicate conversion for filter push-down.
 
 	private Predicate toOrcPredicate(Expression pred) {
-		if (pred instanceof Call) {
-			Call predCall = (Call) pred;
+		if (pred instanceof CallExpression) {
+			CallExpression predCall = (CallExpression) pred;
 			if (predCall.getFunctionDefinition() == FunctionDefinitions.OR) {
 				Predicate c1 = toOrcPredicate(predCall.getChildren().get(0));
 				Predicate c2 = toOrcPredicate(predCall.getChildren().get(1));
@@ -310,7 +310,7 @@ public class OrcTableSource
 					return null;
 				}
 				PredicateLeaf.Type colType =
-					toOrcType(((FieldReference) (predCall.getChildren().get(0))).getResultType().get());
+					toOrcType(((FieldReferenceExpression) (predCall.getChildren().get(0))).getResultType().get());
 				if (colType == null) {
 					// unsupported type
 					LOG.debug("Unsupported predicate [{}] cannot be pushed into OrcTableSource.", pred);
@@ -334,18 +334,18 @@ public class OrcTableSource
 	}
 
 	private boolean isValid(Expression expression) {
-		return expression instanceof FieldReference;
+		return expression instanceof FieldReferenceExpression;
 	}
 
 	private boolean isValid(Expression left, Expression right) {
-		return (left instanceof Literal && right instanceof FieldReference) ||
-			(left instanceof FieldReference && right instanceof Literal);
+		return (left instanceof ValueLiteralExpression && right instanceof FieldReferenceExpression) ||
+			(left instanceof FieldReferenceExpression && right instanceof ValueLiteralExpression);
 	}
 
 	private boolean literalOnRight(Expression left, Expression right) {
-		if (left instanceof Literal && right instanceof FieldReference) {
+		if (left instanceof ValueLiteralExpression && right instanceof FieldReferenceExpression) {
 			return false;
-		} else if (left instanceof FieldReference && right instanceof Literal) {
+		} else if (left instanceof FieldReferenceExpression && right instanceof ValueLiteralExpression) {
 			return true;
 		} else {
 			throw new RuntimeException("Invalid binary comparison.");
@@ -353,30 +353,30 @@ public class OrcTableSource
 	}
 
 	private String getColumnName(Expression expression) {
-		return ((FieldReference) expression).getName();
+		return ((FieldReferenceExpression) expression).getName();
 	}
 
 	private String getColumnName(Expression left, Expression right) {
 		if (literalOnRight(left, right)) {
-			return ((FieldReference) left).getName();
+			return ((FieldReferenceExpression) left).getName();
 		} else {
-			return ((FieldReference) right).getName();
+			return ((FieldReferenceExpression) right).getName();
 		}
 	}
 
 	private PredicateLeaf.Type getLiteralType(Expression left, Expression right) {
 		if (literalOnRight(left, right)) {
-			return toOrcType(((Literal) right).getType().get());
+			return toOrcType(((ValueLiteralExpression) right).getType().get());
 		} else {
-			return toOrcType(((Literal) left).getType().get());
+			return toOrcType(((ValueLiteralExpression) left).getType().get());
 		}
 	}
 
 	private Object getLiteral(Expression left, Expression right) {
 		if (literalOnRight(left, right)) {
-			return ((Literal) right).getValue();
+			return ((ValueLiteralExpression) right).getValue();
 		} else {
-			return ((Literal) left).getValue();
+			return ((ValueLiteralExpression) left).getValue();
 		}
 	}
 

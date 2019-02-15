@@ -27,18 +27,14 @@ import org.apache.flink.annotation.Internal;
 @Internal
 public interface ExpressionVisitor<R> {
 
-	R visitCall(Call call);
+	R visitCall(CallExpression call);
 
-	R visitDistinctAgg(DistinctAgg distinctAgg);
+	R visitSymbol(SymbolExpression symbolExpression);
 
-	R visitTypeLiteral(TypeLiteral typeLiteral);
+	R visitValueLiteral(ValueLiteralExpression valueLiteralExpression);
 
-	R visitSymbolExpression(SymbolExpression symbolExpression);
+	R visit(Expression other);
 
-	R visitLiteral(Literal literal);
-
-	R visitOther(Expression other);
-
-	R visitFieldReference(FieldReference fieldReference);
+	R visitFieldReference(FieldReferenceExpression fieldReference);
 
 }

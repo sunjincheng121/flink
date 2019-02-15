@@ -46,6 +46,6 @@ public final class SymbolExpression implements Expression {
 
 	@Override
 	public <R> R accept(ExpressionVisitor<R> visitor) {
-		return visitor.visitSymbolExpression(this);
+		return visitor.visitSymbol(this);
 	}
 }

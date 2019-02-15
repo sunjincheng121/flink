@@ -55,12 +55,12 @@ final class ExistingField(val field: String) extends TimestampExtractor {
     * into a rowtime attribute.
     */
   override def getExpression(
-      fieldAccesses: Array[FieldReference],
+      fieldAccesses: Array[FieldReferenceExpression],
       fieldTypes: Array[TypeInformation[_]]): Expression = {
-    val fieldAccess: FieldReference = fieldAccesses(0)
+    val fieldAccess: FieldReferenceExpression = fieldAccesses(0)
     val fieldType = fieldTypes(0)
 
-    val fieldAccessWithType = new FieldReference(fieldAccess.getName, Types.LONG)
+    val fieldAccessWithType = new FieldReferenceExpression(fieldAccess.getName, Types.LONG)
     fieldType match {
       case Types.LONG =>
         // access LONG field

@@ -29,11 +29,11 @@ import org.apache.flink.api.java.typeutils.MapTypeInfo;
 import org.apache.flink.api.java.typeutils.ObjectArrayTypeInfo;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.table.api.TableSchema;
-import org.apache.flink.table.expressions.Call;
+import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
-import org.apache.flink.table.expressions.FieldReference;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.FunctionDefinitions;
-import org.apache.flink.table.expressions.Literal;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.types.Row;
 
 import org.apache.flink.shaded.guava18.com.google.common.collect.Lists;
@@ -178,38 +178,38 @@ public class OrcTableSourceTest {
 			.build();
 
 		// expressions for supported predicates
-		Expression pred1 = new Call(FunctionDefinitions.GREATER_THAN,
-			Lists.newArrayList(new FieldReference("int1", Types.INT),
-			new Literal(100, Types.INT)));
-		Expression pred2 = new Call(FunctionDefinitions.EQUALS,
-			Lists.newArrayList(new FieldReference("string1", Types.STRING),
-			new Literal("hello", Types.STRING)));
+		Expression pred1 = new CallExpression(FunctionDefinitions.GREATER_THAN,
+			Lists.newArrayList(new FieldReferenceExpression("int1", Types.INT),
+			new ValueLiteralExpression(100, Types.INT)));
+		Expression pred2 = new CallExpression(FunctionDefinitions.EQUALS,
+			Lists.newArrayList(new FieldReferenceExpression("string1", Types.STRING),
+			new ValueLiteralExpression("hello", Types.STRING)));
 		// unsupported predicate
-		Expression unsupportedPred = new Call(FunctionDefinitions.EQUALS,
+		Expression unsupportedPred = new CallExpression(FunctionDefinitions.EQUALS,
 			Lists.newArrayList(
-				new Call(
+				new CallExpression(
 					FunctionDefinitions.GET_COMPOSITE_FIELD,
 					Lists.newArrayList(
-						new Call(
+						new CallExpression(
 							FunctionDefinitions.AT,
 							Lists.newArrayList(
-								new FieldReference(
+								new FieldReferenceExpression(
 									"list",
 									ObjectArrayTypeInfo.getInfoFor(
 										Types.ROW_NAMED(
 											new String[]{"int1", "string1"},
 											Types.INT,
 											Types.STRING))),
-								new Literal(1, Types.INT))),
-						new FieldReference("int1"))),
-				new Literal(1, Types.INT))
+								new ValueLiteralExpression(1, Types.INT))),
+						new FieldReferenceExpression("int1"))),
+				new ValueLiteralExpression(1, Types.INT))
 		);
 		// invalid predicate
-		Expression invalidPred = new Call(FunctionDefinitions.EQUALS,
+		Expression invalidPred = new CallExpression(FunctionDefinitions.EQUALS,
 			Lists.newArrayList(
-				new FieldReference("long1", Types.LONG),
+				new FieldReferenceExpression("long1", Types.LONG),
 				// some invalid, non-serializable literal (here an object of this test class)
-				new Literal(new OrcTableSourceTest(), Types.LONG))
+				new ValueLiteralExpression(new OrcTableSourceTest(), Types.LONG))
 		);
 
 		ArrayList<Expression> preds = new ArrayList<>();

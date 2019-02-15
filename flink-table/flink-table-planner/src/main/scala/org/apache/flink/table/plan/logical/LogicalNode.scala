@@ -21,7 +21,7 @@ import org.apache.calcite.rel.RelNode
 import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.table.plan.TreeNode
 import org.apache.flink.table.api.{TableEnvironment, ValidationException}
-import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.typeutils.TypeCoercion
 import org.apache.flink.table.validate._
 

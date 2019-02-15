@@ -20,7 +20,7 @@ package org.apache.flink.table.sources
 
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.table.api.ValidationException
-import org.apache.flink.table.expressions.{Expression, FieldReference}
+import org.apache.flink.table.expressions.{Expression, FieldReferenceExpression}
 
 /**
   * The [[FieldComputer]] interface returns an expression to compute the field of the table schema
@@ -60,7 +60,7 @@ abstract class FieldComputer[T] {
     * @return The expression to extract the timestamp from the [[TableSource]] return type.
     */
   def getExpression(
-      fieldAccesses: Array[FieldReference],
+      fieldAccesses: Array[FieldReferenceExpression],
       fieldTypes: Array[TypeInformation[_]]): Expression
 
 }

@@ -26,11 +26,11 @@ import org.apache.calcite.util.{DateString, TimeString, TimestampString}
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, SqlTimeTypeInfo}
 import org.apache.flink.table.api.TableException
 import org.apache.flink.table.calcite.FlinkTypeFactory
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.validate.FunctionCatalog
 import org.apache.flink.util.Preconditions
 import java.sql.{Date, Time, Timestamp}
 
-import org.apache.flink.table.expressions._
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.JavaConversions._
@@ -151,7 +151,7 @@ class RexNodeToExpressionConverter(
 
   override def visitInputRef(inputRef: RexInputRef): Option[Expression] = {
     Preconditions.checkArgument(inputRef.getIndex < inputNames.length)
-    Some(new FieldReference(
+    Some(new FieldReferenceExpression(
       inputNames(inputRef.getIndex),
       FlinkTypeFactory.toTypeInfo(inputRef.getType)
     ))
@@ -226,7 +226,7 @@ class RexNodeToExpressionConverter(
         return None
     }
 
-    Some(new Literal(literalValue, literalType))
+    Some(new ValueLiteralExpression(literalValue, literalType))
   }
 
   override def visitCall(call: RexCall): Option[Expression] = {

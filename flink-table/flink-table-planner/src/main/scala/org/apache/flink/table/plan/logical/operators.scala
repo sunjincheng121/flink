@@ -31,8 +31,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
 import org.apache.flink.table.api.{StreamTableEnvironment, TableEnvironment, Types, UnresolvedException}
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
-import org.apache.flink.table.plan.expressions.ExpressionUtils.isRowCountLiteral
-import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.expressions.PlannerExpressionUtils.isRowCountLiteral
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.functions.TableFunction
 import org.apache.flink.table.functions.utils.TableSqlFunction
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._
@@ -235,9 +235,9 @@ case class Aggregate(
     groupingExprs.foreach(validateGroupingExpression)
 
     def validateAggregateExpression(expr: PlannerExpression): Unit = expr match {
-      case distinctExpr: DistinctAgg =>
+      case distinctExpr: PlannerDistinctAgg =>
         distinctExpr.child match {
-          case _: DistinctAgg => failValidation(
+          case _: PlannerDistinctAgg => failValidation(
             "Chained distinct operators are not supported!")
           case aggExpr: Aggregation => validateAggregateExpression(aggExpr)
           case _ => failValidation(
@@ -633,7 +633,7 @@ case class WindowAggregate(
       case aggExpr: Aggregation
         if aggExpr.getSqlAggFunction.requiresOver =>
         failValidation(s"OVER clause is necessary for window functions: [${aggExpr.getClass}].")
-      case aggExpr: DistinctAgg =>
+      case aggExpr: PlannerDistinctAgg =>
         validateAggregateExpression(aggExpr.child)
       // check no nested aggregation exists.
       case aggExpr: Aggregation =>

@@ -30,24 +30,29 @@ import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeIn
 import scala.collection.JavaConverters._
 
 object ExpressionUtils {
-  private[flink] def call(func: FunctionDefinition, args: Seq[Expression]): Call = {
-      new Call(func, args.asJava)
+  private[flink] def call(func: FunctionDefinition, args: Seq[Expression]): CallExpression = {
+    new CallExpression(func, args.asJava)
   }
 
-  private[flink] def literal(l: Any): Literal = {
-    new Literal(l)
+  private[flink] def aggCall(
+    func: FunctionDefinition, args: Seq[Expression]): AggregateCallExpression = {
+    new AggregateCallExpression(func, args.asJava)
   }
 
-  private[flink] def literal(l: Any, t: TypeInformation[_]): Literal = {
-    new Literal(l, t)
+  private[flink] def literal(l: Any): ValueLiteralExpression = {
+    new ValueLiteralExpression(l)
+  }
+
+  private[flink] def literal(l: Any, t: TypeInformation[_]): ValueLiteralExpression = {
+    new ValueLiteralExpression(l, t)
   }
 
   private[flink] def toMonthInterval(expr: Expression, multiplier: Int): Expression =
     expr match {
-      case e: Literal if e.getValue.isInstanceOf[Int] && !e.getType.isPresent =>
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Int] && !e.getType.isPresent =>
         literal(e.getValue.asInstanceOf[Int] * multiplier,
           TimeIntervalTypeInfo.INTERVAL_MONTHS)
-      case e: Literal if e.getValue.isInstanceOf[Int] && e.getType.isPresent
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Int] && e.getType.isPresent
         && e.getType.get().equals(BasicTypeInfo.INT_TYPE_INFO) =>
         literal(e.getValue.asInstanceOf[Int] * multiplier,
           TimeIntervalTypeInfo.INTERVAL_MONTHS)
@@ -59,17 +64,17 @@ object ExpressionUtils {
 
   private[flink] def toMilliInterval(expr: Expression, multiplier: Long): Expression =
     expr match {
-      case e: Literal if e.getValue.isInstanceOf[Int] && !e.getType.isPresent =>
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Int] && !e.getType.isPresent =>
         literal(e.getValue.asInstanceOf[Int] * multiplier,
           TimeIntervalTypeInfo.INTERVAL_MILLIS)
-      case e: Literal if e.getValue.isInstanceOf[Int] && e.getType.isPresent
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Int] && e.getType.isPresent
         && e.getType.get().equals(BasicTypeInfo.INT_TYPE_INFO) =>
         literal(e.getValue.asInstanceOf[Int] * multiplier,
           TimeIntervalTypeInfo.INTERVAL_MILLIS)
-      case e: Literal if e.getValue.isInstanceOf[Long] && !e.getType.isPresent =>
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Long] && !e.getType.isPresent =>
         literal(e.getValue.asInstanceOf[Long] * multiplier,
           TimeIntervalTypeInfo.INTERVAL_MILLIS)
-      case e: Literal if e.getValue.isInstanceOf[Long] && e.getType.isPresent
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Long] && e.getType.isPresent
         && e.getType.get().equals(BasicTypeInfo.LONG_TYPE_INFO) =>
         literal(e.getValue.asInstanceOf[Long] * multiplier,
           TimeIntervalTypeInfo.INTERVAL_MILLIS)
@@ -81,16 +86,16 @@ object ExpressionUtils {
 
   private[flink] def toRowInterval(expr: Expression): Expression =
     expr match {
-      case e: Literal if e.getValue.isInstanceOf[Int] && !e.getType.isPresent =>
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Int] && !e.getType.isPresent =>
         literal(e.getValue.asInstanceOf[Int].toLong,
           RowIntervalTypeInfo.INTERVAL_ROWS)
-      case e: Literal if e.getValue.isInstanceOf[Int] && e.getType.isPresent
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Int] && e.getType.isPresent
         && e.getType.get().equals(BasicTypeInfo.INT_TYPE_INFO) =>
         literal(e.getValue.asInstanceOf[Int].toLong,
           RowIntervalTypeInfo.INTERVAL_ROWS)
-      case e: Literal if e.getValue.isInstanceOf[Long] && !e.getType.isPresent =>
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Long] && !e.getType.isPresent =>
         literal(e.getValue, RowIntervalTypeInfo.INTERVAL_ROWS)
-      case e: Literal if e.getValue.isInstanceOf[Long] && e.getType.isPresent
+      case e: ValueLiteralExpression if e.getValue.isInstanceOf[Long] && e.getType.isPresent
         && e.getType.get().equals(BasicTypeInfo.LONG_TYPE_INFO) =>
         literal(e.getValue, RowIntervalTypeInfo.INTERVAL_ROWS)
     }

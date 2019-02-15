@@ -38,8 +38,8 @@ import org.apache.flink.table.api.{StreamQueryConfig, TableConfig, TableExceptio
 import org.apache.flink.table.calcite.FlinkRelBuilder.NamedWindowProperty
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.codegen.AggregationCodeGenerator
-import org.apache.flink.table.plan.expressions.ExpressionUtils.isTimeIntervalLiteral
-import org.apache.flink.table.plan.expressions._
+import org.apache.flink.table.expressions.PlannerExpressionUtils.isTimeIntervalLiteral
+import org.apache.flink.table.expressions._
 import org.apache.flink.table.functions.aggfunctions._
 import org.apache.flink.table.functions.utils.AggSqlFunction
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils._

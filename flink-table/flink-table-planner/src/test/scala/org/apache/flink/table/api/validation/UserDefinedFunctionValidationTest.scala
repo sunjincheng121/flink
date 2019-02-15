@@ -20,7 +20,7 @@ package org.apache.flink.table.api.validation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.ValidationException
 import org.apache.flink.table.api.scala._
-import org.apache.flink.table.plan.expressions.utils.Func0
+import org.apache.flink.table.expressions.utils.Func0
 import org.apache.flink.table.runtime.utils.JavaUserDefinedAggFunctions.OverAgg0
 import org.apache.flink.table.utils.TableTestBase
 import org.junit.Test

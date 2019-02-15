@@ -24,7 +24,7 @@ import org.apache.flink.api.scala._
 import org.apache.flink.table.api.{TableSchema, ValidationException}
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.stream.table.TemporalTableJoinTest._
-import org.apache.flink.table.plan.expressions.ResolvedFieldReference
+import org.apache.flink.table.expressions.ResolvedFieldReference
 import org.apache.flink.table.functions.TemporalTableFunction
 import org.apache.flink.table.plan.logical.rel.LogicalTemporalTableJoin._
 import org.apache.flink.table.utils.TableTestUtil._

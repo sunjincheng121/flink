@@ -17,8 +17,8 @@
  */
 package org.apache.flink.table.expressions
 
-case class DistinctAggExpression(call: Call) {
-  def distinct: DistinctAgg = {
-    new DistinctAgg(call)
+case class DistinctAggExpression(call: AggregateCallExpression) {
+  def distinct: Expression = {
+    ExpressionUtils.aggCall(FunctionDefinitions.DISTINCT, Seq(call))
   }
 }

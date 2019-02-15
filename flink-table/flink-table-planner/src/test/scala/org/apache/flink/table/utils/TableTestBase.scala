@@ -31,9 +31,9 @@ import org.apache.flink.table.api.java.{BatchTableEnvironment => JavaBatchTableE
 import org.apache.flink.table.api.scala.{BatchTableEnvironment => ScalaBatchTableEnv, StreamTableEnvironment => ScalaStreamTableEnv}
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.api.{Table, TableSchema}
-import org.apache.flink.table.expressions.{Expression, DefaultExpressionVisitor}
+import org.apache.flink.table.expressions.{DefaultExpressionVisitor, Expression}
 import org.apache.flink.table.functions.{AggregateFunction, ScalarFunction, TableFunction}
-import org.apache.flink.table.plan.expressions.PlannerExpression
+import org.apache.flink.table.expressions.PlannerExpression
 import org.junit.Assert.assertEquals
 import org.junit.{ComparisonFailure, Rule}
 import org.junit.rules.ExpectedException
@@ -46,11 +46,8 @@ import util.control.Breaks._
   */
 class TableTestBase {
 
-  implicit def expression2PlannerExpression(expression: Expression): PlannerExpression = {
-    expression.accept(DefaultExpressionVisitor.INSTANCE)
-  }
-
-  implicit def symbol2PlannerExpression(expression: Symbol): PlannerExpression = {
+  implicit def expression2PlannerExpression[E](expression: E)(implicit f: E => Expression)
+  : PlannerExpression = {
     expression.accept(DefaultExpressionVisitor.INSTANCE)
   }
 

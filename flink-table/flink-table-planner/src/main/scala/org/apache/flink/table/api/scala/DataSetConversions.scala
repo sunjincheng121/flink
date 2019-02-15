@@ -21,7 +21,6 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api.Table
 import org.apache.flink.table.expressions.Expression
-import org.apache.flink.table.plan.expressions.PlannerExpression
 
 /**
   * Holds methods to convert a [[DataSet]] into a [[Table]].
