@@ -41,7 +41,7 @@ import _root_.scala.collection.JavaConverters._
   * General expression for unresolved function calls. The function can be a built-in
   * scalar function or a user-defined scalar function.
   */
-case class Call(functionName: String, args: Seq[Expression]) extends Expression {
+case class Call(functionName: String, args: Seq[Expression]) extends PlannerExpression {
 
   override private[flink] def children: Seq[Expression] = args
 
@@ -64,7 +64,7 @@ case class Call(functionName: String, args: Seq[Expression]) extends Expression 
   * @param agg The aggregation of the over call.
   * @param alias The alias of the referenced over window.
   */
-case class UnresolvedOverCall(agg: Expression, alias: Expression) extends Expression {
+case class UnresolvedOverCall(agg: Expression, alias: Expression) extends PlannerExpression {
 
   override private[flink] def validateInput() =
     ValidationFailure(s"Over window with alias $alias could not be resolved.")
@@ -244,7 +244,7 @@ case class OverCall(
     }
 
     // check time field
-    if (!ExpressionUtils.isTimeAttribute(orderBy)) {
+    if (!PlannerExpressionUtils.isTimeAttribute(orderBy)) {
       return ValidationFailure("Ordering must be defined on a time attribute.")
     }
 
@@ -261,7 +261,7 @@ case class OverCall(
 case class ScalarFunctionCall(
     scalarFunction: ScalarFunction,
     parameters: Seq[Expression])
-  extends Expression {
+  extends PlannerExpression {
 
   private var foundSignature: Option[Array[Class[_]]] = None
 

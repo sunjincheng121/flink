@@ -175,7 +175,7 @@ case class Substring(
 case class Trim(
     trimMode: Expression,
     trimString: Expression,
-    str: Expression) extends Expression {
+    str: Expression) extends PlannerExpression {
 
   override private[flink] def children: Seq[Expression] = trimMode :: trimString :: str :: Nil
 
@@ -183,7 +183,7 @@ case class Trim(
 
   override private[flink] def validateInput(): ValidationResult = {
     trimMode match {
-      case SymbolExpression(_: TrimMode) =>
+      case SymbolPlannerExpression(_: TrimMode) =>
         if (trimString.resultType != STRING_TYPE_INFO) {
           ValidationFailure(s"String expected for trimString, get ${trimString.resultType}")
         } else if (str.resultType != STRING_TYPE_INFO) {

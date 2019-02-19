@@ -28,7 +28,7 @@ import org.apache.flink.table.api.ValidationException
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeInfo}
 
-object ExpressionUtils {
+object PlannerExpressionUtils {
   /**
     * Retrieve result type of given Expression.
     *
@@ -76,14 +76,14 @@ object ExpressionUtils {
     case _ => throw new IllegalArgumentException()
   }
 
-  private[flink] def toMonthInterval(expr: Expression, multiplier: Int): Expression = expr match {
+  private[flink] def toMonthInterval(expr: Expression, multiplier: Int): PlannerExpression = expr match {
     case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
       Literal(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MONTHS)
     case _ =>
       Cast(Mul(expr, Literal(multiplier)), TimeIntervalTypeInfo.INTERVAL_MONTHS)
   }
 
-  private[flink] def toMilliInterval(expr: Expression, multiplier: Long): Expression = expr match {
+  private[flink] def toMilliInterval(expr: Expression, multiplier: Long): PlannerExpression = expr match {
     case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
       Literal(value * multiplier, TimeIntervalTypeInfo.INTERVAL_MILLIS)
     case Literal(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
@@ -92,7 +92,7 @@ object ExpressionUtils {
       Cast(Mul(expr, Literal(multiplier)), TimeIntervalTypeInfo.INTERVAL_MILLIS)
   }
 
-  private[flink] def toRowInterval(expr: Expression): Expression = expr match {
+  private[flink] def toRowInterval(expr: Expression): PlannerExpression = expr match {
     case Literal(value: Int, BasicTypeInfo.INT_TYPE_INFO) =>
       Literal(value.toLong, RowIntervalTypeInfo.INTERVAL_ROWS)
     case Literal(value: Long, BasicTypeInfo.LONG_TYPE_INFO) =>
@@ -101,8 +101,8 @@ object ExpressionUtils {
       throw new IllegalArgumentException("Invalid value for row interval literal.")
   }
 
-  private[flink] def convertArray(array: Array[_]): Expression = {
-    def createArray(): Expression = {
+  private[flink] def convertArray(array: Array[_]): PlannerExpression = {
+    def createArray(): PlannerExpression = {
       ArrayConstructor(array.map(Literal(_)))
     }
 

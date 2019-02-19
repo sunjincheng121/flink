@@ -29,12 +29,12 @@ import scala.language.{existentials, implicitConversions}
 /**
   * General expression class to represent a symbol.
   */
-case class SymbolExpression(symbol: TableSymbol) extends LeafExpression {
+case class SymbolPlannerExpression(symbol: TableSymbol) extends LeafExpression {
 
   override private[flink] def resultType: TypeInformation[_] =
     throw new UnsupportedOperationException("This should not happen. A symbol has no result type.")
 
-  def toExpr: SymbolExpression = this // triggers implicit conversion
+  def toExpr: SymbolPlannerExpression = this // triggers implicit conversion
 
   override private[flink] def toRexNode(implicit relBuilder: RelBuilder): RexNode = {
     // dirty hack to pass Java enums to Java from Scala
@@ -70,8 +70,8 @@ abstract class TableSymbols extends Enumeration {
 
   protected final def Value(enum: Enum[_]): TableSymbolValue = new TableSymbolValue(enum)
 
-  implicit def symbolToExpression(symbol: TableSymbolValue): SymbolExpression =
-    SymbolExpression(symbol)
+  implicit def symbolToExpression(symbol: TableSymbolValue): SymbolPlannerExpression =
+    SymbolPlannerExpression(symbol)
 
 }
 
