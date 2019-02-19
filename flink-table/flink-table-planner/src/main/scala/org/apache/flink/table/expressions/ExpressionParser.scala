@@ -118,15 +118,15 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   // symbols
 
   lazy val timeIntervalUnit: PackratParser[PlannerExpression] = TimeIntervalUnit.values map {
-    unit: TimeIntervalUnit => literal(unit.toString) ^^^ SymbolPlannerExpression(unit)
+    unit => literal(unit.toString) ^^^ SymbolPlannerExpression(unit.asInstanceOf[TimeIntervalUnit])
   } reduceLeft(_ | _)
 
   lazy val timePointUnit: PackratParser[PlannerExpression] = TimePointUnit.values map {
-    unit: TimePointUnit => literal(unit.toString) ^^^ SymbolPlannerExpression(unit)
+    unit => literal(unit.toString) ^^^ SymbolPlannerExpression(unit.asInstanceOf[TimePointUnit])
   } reduceLeft(_ | _)
 
   lazy val trimMode: PackratParser[PlannerExpression] = TrimMode.values map {
-    mode: TrimMode => literal(mode.toString) ^^^ SymbolPlannerExpression(mode)
+    mode => literal(mode.toString) ^^^ SymbolPlannerExpression(mode.asInstanceOf[TrimMode])
   } reduceLeft(_ | _)
 
   lazy val currentRange: PackratParser[PlannerExpression] = CURRENT_RANGE ^^ {
@@ -219,7 +219,8 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   }
 
   lazy val atom: PackratParser[PlannerExpression] =
-    ( "(" ~> expression <~ ")" ) | (fieldReference ||| literalExpr)
+    ( "(" ~> expression <~ ")" ) |
+      (fieldReference.asInstanceOf[PackratParser[PlannerExpression]] ||| literalExpr)
 
   lazy val over: PackratParser[PlannerExpression] = composite ~ OVER ~ fieldReference ^^ {
     case agg ~ _ ~ windowRef => UnresolvedOverCall(agg, windowRef)

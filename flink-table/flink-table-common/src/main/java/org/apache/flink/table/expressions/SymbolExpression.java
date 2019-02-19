@@ -29,13 +29,13 @@ import java.util.List;
 @PublicEvolving
 public final class SymbolExpression implements CommonExpression {
 
-	private final TableSymbol symbol;
+	private final CommonTableSymbol symbol;
 
-	public SymbolExpression(TableSymbol symbol) {
+	public SymbolExpression(CommonTableSymbol symbol) {
 		this.symbol = symbol;
 	}
 
-	public TableSymbol getSymbol() {
+	public CommonTableSymbol getSymbol() {
 		return symbol;
 	}
 

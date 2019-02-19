@@ -40,7 +40,7 @@ import scala.language.implicitConversions
  * [[org.apache.flink.table.expressions.ExpressionParser]].
  */
 trait ImplicitExpressionOperations {
-  private[flink] def expr: Expression
+  private[flink] def expr: PlannerExpression
 
   /**
     * Enables literals on left side of binary expressions.
@@ -973,7 +973,7 @@ trait ImplicitExpressionConversions {
   implicit val CURRENT_RANGE = CurrentRange()
 
   implicit class WithOperations(e: Expression) extends ImplicitExpressionOperations {
-    def expr = e
+    def expr = e.asInstanceOf[PlannerExpression]
   }
 
   implicit class UnresolvedFieldExpression(s: Symbol) extends ImplicitExpressionOperations {
