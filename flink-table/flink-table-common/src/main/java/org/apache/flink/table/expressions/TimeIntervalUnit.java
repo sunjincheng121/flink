@@ -21,9 +21,23 @@ package org.apache.flink.table.expressions;
 import org.apache.flink.annotation.PublicEvolving;
 
 /**
- * The base interface for all table symbol, such as time interval unit, time point unit
- * are all defined based on TableSymbol.
+ * The definition of time interval unit symbol.
  */
 @PublicEvolving
-public interface CommonTableSymbol {
+public enum TimeIntervalUnit implements TableSymbol {
+	YEAR,
+	YEAR_TO_MONTH,
+	QUARTER,
+	MONTH,
+	WEEK,
+	DAY,
+	DAY_TO_HOUR,
+	DAY_TO_MINUTE,
+	DAY_TO_SECOND,
+	HOUR,
+	SECOND,
+	HOUR_TO_MINUTE,
+	HOUR_TO_SECOND,
+	MINUTE,
+	MINUTE_TO_SECOND
 }

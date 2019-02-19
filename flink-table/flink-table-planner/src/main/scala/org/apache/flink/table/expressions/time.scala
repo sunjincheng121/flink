@@ -25,7 +25,6 @@ import org.apache.calcite.tools.RelBuilder
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo._
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.calcite.FlinkRelBuilder
-import org.apache.flink.table.expressions.TimeIntervalUnit.TimeIntervalUnit
 import org.apache.flink.table.functions.sql.ScalarSqlFunctions
 import org.apache.flink.table.typeutils.TypeCheckUtils.isTimeInterval
 import org.apache.flink.table.typeutils.{TimeIntervalTypeInfo, TypeCheckUtils}
@@ -215,7 +214,7 @@ case class Quarter(child: Expression) extends UnaryExpression with InputTypeSpec
     Plus(
       Div(
         Minus(
-          Extract(TimeIntervalUnit.MONTH, child),
+          Extract(SymbolPlannerExpression(TimeIntervalUnit.MONTH), child),
           Literal(1L)),
         Literal(TimeUnit.QUARTER.multiplier.longValue())),
       Literal(1L)

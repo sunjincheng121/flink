@@ -24,7 +24,7 @@ import org.apache.flink.annotation.PublicEvolving;
  * Modes for trimming strings.
  */
 @PublicEvolving
-public enum CommonTrimMode implements CommonTableSymbol {
+public enum TrimMode implements TableSymbol {
 	BOTH,
 	LEADING,
 	TRAILING

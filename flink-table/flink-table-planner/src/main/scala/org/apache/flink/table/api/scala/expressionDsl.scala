@@ -25,8 +25,6 @@ import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.api.{CurrentRange, CurrentRow, TableException, UnboundedRange, UnboundedRow}
 import org.apache.flink.table.expressions.PlannerExpressionUtils.{convertArray, toMilliInterval, toMonthInterval, toRowInterval}
 import org.apache.flink.table.api.Table
-import org.apache.flink.table.expressions.TimeIntervalUnit.TimeIntervalUnit
-import org.apache.flink.table.expressions.TimePointUnit.TimePointUnit
 import org.apache.flink.table.expressions._
 import org.apache.flink.table.functions.{AggregateFunction, DistinctAggregateFunction, ScalarFunction, TableFunction}
 
@@ -490,11 +488,11 @@ trait ImplicitExpressionOperations {
       removeTrailing: Boolean = true,
       character: PlannerExpression = TrimConstants.TRIM_DEFAULT_CHAR) = {
     if (removeLeading && removeTrailing) {
-      Trim(TrimMode.BOTH, character, expr)
+      Trim(SymbolPlannerExpression(TrimMode.BOTH), character, expr)
     } else if (removeLeading) {
-      Trim(TrimMode.LEADING, character, expr)
+      Trim(SymbolPlannerExpression(TrimMode.LEADING), character, expr)
     } else if (removeTrailing) {
-      Trim(TrimMode.TRAILING, character, expr)
+      Trim(SymbolPlannerExpression(TrimMode.TRAILING), character, expr)
     } else {
       expr
     }
@@ -667,21 +665,24 @@ trait ImplicitExpressionOperations {
     *
     * e.g. "2006-06-05".toDate.extract(DAY) leads to 5
     */
-  def extract(timeIntervalUnit: TimeIntervalUnit) = Extract(timeIntervalUnit, expr)
+  def extract(timeIntervalUnit: TimeIntervalUnit) =
+    Extract(SymbolPlannerExpression(timeIntervalUnit), expr)
 
   /**
     * Rounds down a time point to the given unit.
     *
     * e.g. "12:44:31".toDate.floor(MINUTE) leads to 12:44:00
     */
-  def floor(timeIntervalUnit: TimeIntervalUnit) = TemporalFloor(timeIntervalUnit, expr)
+  def floor(timeIntervalUnit: TimeIntervalUnit) =
+    TemporalFloor(SymbolPlannerExpression(timeIntervalUnit), expr)
 
   /**
     * Rounds up a time point to the given unit.
     *
     * e.g. "12:44:31".toDate.ceil(MINUTE) leads to 12:45:00
     */
-  def ceil(timeIntervalUnit: TimeIntervalUnit) = TemporalCeil(timeIntervalUnit, expr)
+  def ceil(timeIntervalUnit: TimeIntervalUnit) =
+    TemporalCeil(SymbolPlannerExpression(timeIntervalUnit), expr)
 
   // Interval types
 
@@ -1239,7 +1240,7 @@ object timestampDiff {
       timePoint1: Expression,
       timePoint2: Expression)
     : PlannerExpression = {
-    TimestampDiff(timePointUnit, timePoint1, timePoint2)
+    TimestampDiff(SymbolPlannerExpression(timePointUnit), timePoint1, timePoint2)
   }
 }
 

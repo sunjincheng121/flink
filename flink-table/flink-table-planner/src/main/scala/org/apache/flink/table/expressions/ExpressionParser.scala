@@ -21,9 +21,6 @@ import org.apache.calcite.avatica.util.DateTimeUtils.{MILLIS_PER_DAY, MILLIS_PER
 import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.api._
 import org.apache.flink.table.expressions.PlannerExpressionUtils.{toMilliInterval, toMonthInterval}
-import org.apache.flink.table.expressions.TimeIntervalUnit.TimeIntervalUnit
-import org.apache.flink.table.expressions.TimePointUnit.TimePointUnit
-import org.apache.flink.table.expressions.TrimMode.TrimMode
 
 import _root_.scala.language.implicitConversions
 import _root_.scala.util.parsing.combinator.{JavaTokenParsers, PackratParsers}
@@ -118,15 +115,15 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   // symbols
 
   lazy val timeIntervalUnit: PackratParser[PlannerExpression] = TimeIntervalUnit.values map {
-    unit => literal(unit.toString) ^^^ SymbolPlannerExpression(unit.asInstanceOf[TimeIntervalUnit])
+    unit: TimeIntervalUnit => literal(unit.toString) ^^^ SymbolPlannerExpression(unit)
   } reduceLeft(_ | _)
 
   lazy val timePointUnit: PackratParser[PlannerExpression] = TimePointUnit.values map {
-    unit => literal(unit.toString) ^^^ SymbolPlannerExpression(unit.asInstanceOf[TimePointUnit])
+    unit: TimePointUnit => literal(unit.toString) ^^^ SymbolPlannerExpression(unit)
   } reduceLeft(_ | _)
 
   lazy val trimMode: PackratParser[PlannerExpression] = TrimMode.values map {
-    mode => literal(mode.toString) ^^^ SymbolPlannerExpression(mode.asInstanceOf[TrimMode])
+    mode: TrimMode => literal(mode.toString) ^^^ SymbolPlannerExpression(mode)
   } reduceLeft(_ | _)
 
   lazy val currentRange: PackratParser[PlannerExpression] = CURRENT_RANGE ^^ {
