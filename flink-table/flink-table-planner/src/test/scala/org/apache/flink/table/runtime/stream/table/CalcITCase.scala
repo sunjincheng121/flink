@@ -349,4 +349,35 @@ class CalcITCase extends AbstractTestBase {
       "{9=Comment#3}")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
+
+  @Test
+  def testAddColumn(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = StreamTableEnvironment.create(env)
+
+    StreamITCase.testResults = mutable.MutableList()
+
+    val testData = new mutable.MutableList[(Int, Long, String)]
+    testData.+=((1, 1L, "Kevin"))
+    testData.+=((2, 2L, "Sunny"))
+
+    val t = env.fromCollection(testData).toTable(tEnv).as('a, 'b, 'c)
+
+    val result = t
+      .addColumn(true, concat('c, "_kid") as 'kid, concat('c, "kid") as 'kid)
+      .addColumn(true, concat('c, " is a kid") as 'kid)
+      .select('a, 'b, 'kid, 'c)
+      .addColumn(true, concat('c, " is a kid") as 'kid)
+      .select('a, 'b, 'c, 'kid)
+      .addColumn("last")
+
+    result.addSink(new StreamITCase.StringSink[Row])
+    env.execute()
+
+    val expected = mutable.MutableList(
+      "1,1,Kevin,Kevin is a kid,last",
+      "2,2,Sunny,Sunny is a kid,last"
+    )
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
 }

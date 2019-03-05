@@ -17,11 +17,13 @@
  */
 package org.apache.flink.table.api
 
+import _root_.java.util.{HashMap => JMap}
+
 import org.apache.calcite.rel.RelNode
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
-import org.apache.flink.table.expressions.{Alias, Asc, Expression, ExpressionParser, Ordering, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
+import org.apache.flink.table.expressions.{Alias, Asc, Expression, ExpressionParser, Literal, Ordering, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
 import org.apache.flink.table.functions.TemporalTableFunction
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.table.plan.ProjectionTranslator._
@@ -149,6 +151,57 @@ class Table(
     }
   }
 
+  def addColumn(colExpr: String): Table = {
+    addColumn(false, ExpressionParser.parseExpressionList(colExpr): _*)
+  }
+
+  def addColumn(colExprs: Expression*): Table = {
+    addColumn(false, colExprs: _*)
+  }
+
+  def addColumn(replaceIfExist: Boolean, colExpr: String): Table = {
+    addColumn(replaceIfExist, ExpressionParser.parseExpressionList(colExpr): _*)
+  }
+
+  def addColumn(replaceIfExist: Boolean, colExpr: Expression*): Table = {
+    val currentFields =
+      expandProjectList(Seq(ExpressionParser.parseExpression("*")), logicalPlan, tableEnv)
+    val addFields = expandProjectList(colExpr, logicalPlan, tableEnv)
+
+    if (replaceIfExist) {
+      val columnsWithAlias: JMap[String, Expression] = new JMap[String, Expression]
+      addFields.foreach(
+        e => e match {
+          case Alias(_, name, _) => columnsWithAlias.put(name, e)
+          case _ =>
+            throw new TableException(
+              "Should add the alias name for the column if you want replace " +
+                "the exist column.")
+        })
+
+      currentFields.foreach(
+        e => e match {
+          case UnresolvedFieldReference(name) if (columnsWithAlias.keySet().asScala.forall(
+            alias => !alias.equalsIgnoreCase(name))) =>
+            columnsWithAlias.put(name, e)
+          case _ => // ignore
+        })
+
+      select(columnsWithAlias.values().asScala.map(e => e).asInstanceOf[Seq[Expression]]: _*)
+    } else {
+
+      val addFieldsWithAlias = addFields.map(
+        e => e match {
+          case UnresolvedFieldReference(name) if currentFields.forall(
+            e => e match {
+              case UnresolvedFieldReference(ename) if (name.eq(ename)) => false
+              case _ => true
+            }) => Literal(name)
+          case _ => e
+        })
+      select((currentFields ++ addFieldsWithAlias): _*)
+    }
+  }
   /**
     * Performs a selection operation. Similar to an SQL SELECT statement. The field expressions
     * can contain complex expressions and aggregations.
