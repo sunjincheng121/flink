@@ -21,7 +21,7 @@ import org.apache.calcite.rel.RelNode
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
-import org.apache.flink.table.expressions.{Alias, Asc, Expression, ExpressionParser, Ordering, ResolvedFieldReference, UnresolvedAlias, WindowProperty}
+import org.apache.flink.table.expressions.{Alias, Asc, Expression, ExpressionParser, Ordering, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
 import org.apache.flink.table.functions.TemporalTableFunction
 import org.apache.flink.table.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.table.plan.ProjectionTranslator._
@@ -30,6 +30,7 @@ import org.apache.flink.table.sinks.TableSink
 
 import _root_.scala.annotation.varargs
 import _root_.scala.collection.JavaConverters._
+import _root_.scala.collection.mutable.HashMap
 
 /**
   * A Table is the core component of the Table API.
@@ -1101,6 +1102,222 @@ class Table(
     }
 
     new OverWindowedTable(this, overWindows.toArray)
+  }
+
+  /**
+    * Performs a field add operation. Similar to an SQL SELECT statement. The field expressions
+    * can contain complex expressions, but can not be an aggregations. Will report an expression if
+    * the added field name already exists.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab.addColumns("concat(c, 'sunny') as kid")
+    * }}}
+    */
+  def addColumns(fields: String): Table = {
+    addColumns(false, ExpressionParser.parseExpressionList(fields): _*)
+  }
+
+  /**
+    * Performs a field add operation. Similar to an SQL SELECT statement. The field expressions
+    * can contain complex expressions, but can not be an aggregations. Will report an expression if
+    * the added field name already exists.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab.addColumns(concat('c, "sunny") as 'kid)
+    * }}}
+    */
+  def addColumns(fields: Expression*): Table = {
+    addColumns(false, fields: _*)
+  }
+
+  /**
+    * Performs a field add operation. Similar to an SQL SELECT statement. The field expressions
+    * can contain complex expressions, but can not be an aggregations. Existing fields will be
+    * replaced if `replaceIfExist` is true.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab.addColumns(true, "concat(c, 'sunny') as kid")
+    * }}}
+    */
+  def addColumns(replaceIfExist: Boolean, fields: String): Table = {
+    addColumns(replaceIfExist, ExpressionParser.parseExpressionList(fields): _*)
+  }
+
+  /**
+    * Performs a field add operation. Similar to an SQL SELECT statement. The field expressions
+    * can contain complex expressions, but can not be an aggregations.  Existing fields will be
+    * replaced if `replaceIfExist` is true.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab.addColumns(true, concat('c, "sunny") as 'kid)
+    * }}}
+    */
+  def addColumns(replaceIfExist: Boolean, fields: Expression*): Table = {
+    val addedFields = expandProjectList(fields, logicalPlan, tableEnv)
+    val aggNames = extractAggregationsAndProperties(addedFields, tableEnv)._1
+
+    if(aggNames.nonEmpty){
+      throw new TableException(
+        s"The added field expression cannot be an aggregations, find [${aggNames.head}].")
+    }
+
+    if (replaceIfExist) {
+      val currentFields =
+        expandProjectList(Seq(ExpressionParser.parseExpression("*")), logicalPlan, tableEnv)
+
+      val finalFields: HashMap[String, Expression] = HashMap[String, Expression]()
+
+      // Put the added fields in the final field list
+      addedFields.foreach(
+        e => e match {
+          case Alias(_, name, _) => finalFields.put(name, e)
+          case UnresolvedFieldReference(name) =>
+            throw new TableException(
+              s"Should add an alias to the [$name], if you want to replace the existing one.")
+          case _ =>
+            throw new TableException(
+              s"Unexpected field expression type [$e].")
+        })
+
+      // Add all existing fields to the final list,
+      // except for fields that are duplicated with the added column name
+      currentFields.foreach(
+        e => e match {
+          case UnresolvedFieldReference(name) => if (finalFields.keySet.forall(
+            alias => !alias.equalsIgnoreCase(name))) {
+            finalFields.put(name, e)
+          }
+          case _ =>
+            throw new TableException(s"Unexpected field expression type [$e].")
+        })
+
+      select(finalFields.values.map(e => e).asInstanceOf[Seq[Expression]]: _*)
+    } else {
+      select(Seq(ExpressionParser.parseExpression("*")) ++ fields:_*)
+    }
+  }
+
+  /**
+    * Performs a field rename operation. Similar to an field alias statement. The field expressions
+    * should be an alias expressions, and only the existing fields can be renamed.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab.renameColumns("c as c2")
+    * }}}
+    */
+  def renameColumns(fields: String): Table = {
+    renameColumns(ExpressionParser.parseExpressionList(fields): _*)
+  }
+
+  /**
+    * Performs a field rename operation. Similar to an field alias statement. The field expressions
+    * should be an alias expressions, and only the existing fields can be renamed.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab..renameColumns('c as 'c2)
+    * }}}
+    */
+  def renameColumns(fields: Expression*): Table = {
+    val currentFields =
+      expandProjectList(Seq(ExpressionParser.parseExpression("*")), logicalPlan, tableEnv)
+
+    val finalFields: HashMap[String, Expression] = HashMap[String, Expression]()
+
+    // Add all existing fields to the final list
+    currentFields.foreach(
+      e => e match {
+        case UnresolvedFieldReference(name) =>
+          finalFields.put(name, e)
+        case _ =>
+          throw new TableException(s"Unexpected field expression type [$e].")
+      })
+
+    val renameFields = expandProjectList(fields, logicalPlan, tableEnv)
+
+    // Rename existing fields
+    renameFields.foreach(
+      e => e match {
+        case Alias(child, name, _) => child match {
+          case UnresolvedFieldReference(oldName) => if (finalFields.keySet.contains(oldName)){
+            finalFields.put(oldName, Alias(e, name, Seq()))
+          } else {
+            throw new TableException(s"Renamed field [$oldName] does not exist.")
+          }
+          case _ =>
+            throw new TableException(s"Unexpected field expression type [$e].")
+        }
+        case UnresolvedFieldReference(oldName) =>
+          throw new TableException(s"Renaming must add an alias to the original field [$oldName]")
+        case _ =>
+          throw new TableException(s"Unexpected field expression type [$e].")
+      })
+
+    select(finalFields.values.map(e => e).asInstanceOf[Seq[Expression]]: _*)
+  }
+
+  /**
+    * Performs a field drop operation. The field expressions
+    * should be an field reference expressions, and only the existing fields can be drop.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab.dropColumns("c")
+    * }}}
+    */
+  def dropColumns(colNames: String): Table = {
+    dropColumns(ExpressionParser.parseExpressionList(colNames): _*)
+  }
+
+  /**
+    * Performs a field drop operation. The field expressions
+    * should be an field reference expressions, and only the existing fields can be drop.
+    *
+    * Example:
+    *
+    * {{{
+    *   tab.dropColumns('c)
+    * }}}
+    */
+  def dropColumns(colNames: Expression*): Table = {
+    val currentFields =
+      expandProjectList(Seq(ExpressionParser.parseExpression("*")), logicalPlan, tableEnv)
+
+    val finalFields: HashMap[String, Expression] = HashMap[String, Expression]()
+
+    // Add all existing fields to the final list
+    currentFields.foreach(
+      e => e match {
+        case UnresolvedFieldReference(name) =>
+          finalFields.put(name, e)
+        case _ =>
+          throw new TableException(s"Unexpected field expression type [$e].")
+      })
+
+    val dropFields = expandProjectList(colNames, logicalPlan, tableEnv)
+
+    // Remove the fields which should be delete in the final list
+    dropFields.foreach(
+      e => e match {
+        case UnresolvedFieldReference(name) if (finalFields.keySet.contains(name)) =>
+          finalFields.remove(name)
+        case _ =>
+          throw new TableException(s"Unexpected field expression type [$e].")
+      })
+
+    select(finalFields.values.map(e => e).asInstanceOf[Seq[Expression]]: _*)
   }
 
   var tableName: String = _
