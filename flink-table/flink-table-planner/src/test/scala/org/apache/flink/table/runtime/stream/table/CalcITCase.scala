@@ -355,7 +355,7 @@ class CalcITCase extends AbstractTestBase {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val tEnv = StreamTableEnvironment.create(env)
 
-    StreamITCase.testResults = mutable.MutableList()
+    StreamITCase.clear
 
     val testData = new mutable.MutableList[(Int, Long, String)]
     testData.+=((1, 1L, "Kevin"))
@@ -389,7 +389,7 @@ class CalcITCase extends AbstractTestBase {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val tEnv = StreamTableEnvironment.create(env)
 
-    StreamITCase.testResults = mutable.MutableList()
+    StreamITCase.clear
 
     val testData = new mutable.MutableList[(Int, Long, String)]
     testData.+=((1, 1L, "Kevin"))
@@ -419,7 +419,7 @@ class CalcITCase extends AbstractTestBase {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     val tEnv = StreamTableEnvironment.create(env)
 
-    StreamITCase.testResults = mutable.MutableList()
+    StreamITCase.clear
 
     val testData = new mutable.MutableList[(Int, Long, String, String)]
     testData.+=((1, 1L, "Kevin", "Panpan"))
@@ -438,4 +438,113 @@ class CalcITCase extends AbstractTestBase {
     val expected = mutable.MutableList("Kevin", "Sunny")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
+
+  @Test
+  def testColumnSelection(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = StreamTableEnvironment.create(env)
+
+    StreamITCase.clear
+
+    val testData =
+      new mutable.MutableList[(Int, Long, String, String, Int, Int, String, String, String)]
+    testData.+=((1, 1L, "Kevin", "Panpan", 3, 1, "start", "end", "deselect"))
+    testData.+=((2, 2L, "Sunny", "Panpan", 5, 1, "begin", "finish", "deselect"))
+
+    val t = env.fromCollection(testData).toTable(tEnv).as('a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i)
+
+    val result = t.select(
+      columns(0 ~ 2, 3, 'e, 'g ~ 'h), 'f, -columns("a,b,c,d,e,f,g,h"))
+
+    result.addSink(new StreamITCase.StringSink[Row])
+    env.execute()
+
+    val expected = mutable.MutableList(
+      "1,1,Kevin,Panpan,3,start,end,1,deselect",
+      "2,2,Sunny,Panpan,5,begin,finish,1,deselect")
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testColumnGroupBy(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = StreamTableEnvironment.create(env)
+
+    StreamITCase.clear
+
+    val testData =
+      new mutable.MutableList[(Int, Long, String, String, Int, Int, String, String)]
+    testData.+=((1, 1L, "Kevin", "Panpan", 3, 1, "start", "end"))
+    testData.+=((2, 2L, "Sunny", "Panpan", 5, 1, "begin", "finish"))
+    testData.+=((2, 2L, "Sunny", "Panpan", 5, 1, "begin", "finish"))
+
+    val t = env.fromCollection(testData).toTable(tEnv).as('a, 'b, 'c, 'd, 'e, 'f, 'g, 'h)
+
+    val result = t.groupBy(columns(2 ~ 3)).select(columns("2~3"), 'h.count)
+
+    result.toRetractStream[Row].addSink(new StreamITCase.RetractingSink)
+    env.execute()
+
+    val expected = mutable.MutableList("Kevin,Panpan,1", "Sunny,Panpan,2")
+    assertEquals(expected.sorted, StreamITCase.retractedResults.sorted)
+  }
+
+  @Test
+  def testColumnSelectionInGroupWindow(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = StreamTableEnvironment.create(env)
+
+    StreamITCase.clear
+
+    val testData =
+      new mutable.MutableList[(Int, Long, String, String, Int, Int, String, String)]
+    testData.+=((1, 1L, "Kevin", "Panpan", 3, 1, "start", "end"))
+    testData.+=((2, 2L, "Kevin", "Panpan", 5, 1, "begin", "finish"))
+
+    val t =
+      env.fromCollection(testData).toTable(tEnv, 'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 't.proctime)
+
+    val result = t
+      .window(Tumble over 2.rows on 't as 'w)
+      .groupBy('w, columns(2 ~ 3))
+      .select(columns(2 ~ 3), 'e.sum)
+
+    result.toRetractStream[Row].addSink(new StreamITCase.RetractingSink)
+    env.execute()
+
+    val expected = mutable.MutableList("Kevin,Panpan,8")
+    assertEquals(expected.sorted, StreamITCase.retractedResults.sorted)
+  }
+
+  @Test
+  def testColumnSelectionInOverWindow(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = StreamTableEnvironment.create(env)
+
+    StreamITCase.clear
+
+    val testData =
+      new mutable.MutableList[(Int, Long, String, String, Int, Int, String, String)]
+    testData.+=((1, 1L, "Kevin", "Panpan", 3, 1, "start", "end"))
+    testData.+=((1, 1L, "Kevin", "Panpan", 3, 1, "start", "end"))
+    testData.+=((2, 2L, "Sunny", "Panpan", 5, 1, "begin", "finish"))
+
+    val t =
+      env.fromCollection(testData).toTable(tEnv, 'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 't.proctime)
+
+    val result = t
+      .window(Over orderBy 't preceding 2.rows following CURRENT_ROW as 'w)
+      .select(columns(0 ~ 5), 'e.sum over 'w)
+
+    result.addSink(new StreamITCase.StringSink[Row])
+    env.execute()
+
+    val expected = mutable.MutableList(
+      "1,1,Kevin,Panpan,3,1,11",
+      "1,1,Kevin,Panpan,3,1,3",
+      "2,2,Sunny,Panpan,5,1,8"
+      )
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
 }

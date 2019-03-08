@@ -28,6 +28,7 @@ import org.apache.calcite.sql.parser.SqlParserPos
 import org.apache.calcite.tools.RelBuilder
 import org.apache.calcite.util.{DateString, TimeString, TimestampString}
 import org.apache.flink.api.common.typeinfo.{BasicTypeInfo, SqlTimeTypeInfo, TypeInformation}
+import org.apache.flink.table.api.TableException
 import org.apache.flink.table.calcite.FlinkTypeFactory
 import org.apache.flink.table.typeutils.{RowIntervalTypeInfo, TimeIntervalTypeInfo}
 
@@ -120,6 +121,21 @@ case class Literal(value: Any, resultType: TypeInformation[_]) extends LeafExpre
     cal.setTime(date)
     cal
   }
+
+  def ~ (other: Literal): RangeLiteral = RangeLiteral(this, other)
+
+}
+
+case class RangeLiteral(start: Literal, end: Literal) extends BinaryExpression {
+  override private[flink] def left = start
+
+  override private[flink] def right = end
+
+  /**
+    * Returns the [[TypeInformation]] for evaluating this expression.
+    * It is sometimes not available until the expression is valid.
+    */
+  override private[flink] def resultType = throw new TableException("TODO")
 }
 
 @deprecated(

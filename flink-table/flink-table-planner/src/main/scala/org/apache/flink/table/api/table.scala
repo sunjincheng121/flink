@@ -20,6 +20,7 @@ package org.apache.flink.table.api
 import org.apache.calcite.rel.RelNode
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.operators.join.JoinType
+import org.apache.flink.table.api.scala.ColumnsExpression
 import org.apache.flink.table.calcite.{FlinkRelBuilder, FlinkTypeFactory}
 import org.apache.flink.table.expressions.{Alias, Asc, Expression, ExpressionParser, Ordering, ResolvedFieldReference, UnresolvedAlias, UnresolvedFieldReference, WindowProperty}
 import org.apache.flink.table.functions.TemporalTableFunction
@@ -95,7 +96,10 @@ class Table(
     * }}}
     */
   def select(fields: Expression*): Table = {
-    val expandedFields = expandProjectList(fields, logicalPlan, tableEnv)
+
+    val finalFields = rangeExpressionToExpression(this.logicalPlan, this.tableEnv, fields: _*)
+
+    val expandedFields = expandProjectList(finalFields, logicalPlan, tableEnv)
     val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, tableEnv)
     if (propNames.nonEmpty) {
       throw new ValidationException("Window properties can only be used on windowed tables.")
@@ -302,7 +306,8 @@ class Table(
     * }}}
     */
   def groupBy(fields: Expression*): GroupedTable = {
-    new GroupedTable(this, fields)
+    val finalFields = rangeExpressionToExpression(this.logicalPlan, this.tableEnv, fields: _*)
+    new GroupedTable(this, finalFields)
   }
 
   /**
@@ -875,7 +880,8 @@ class Table(
     * }}}
     */
   def orderBy(fields: Expression*): Table = {
-    val order: Seq[Ordering] = fields.map {
+    val finalFields = rangeExpressionToExpression(this.logicalPlan, this.tableEnv, fields: _*)
+    val order: Seq[Ordering] = finalFields.map {
       case o: Ordering => o
       case e => Asc(e)
     }
@@ -1353,7 +1359,8 @@ class GroupedTable(
     * }}}
     */
   def select(fields: Expression*): Table = {
-    val expandedFields = expandProjectList(fields, table.logicalPlan, table.tableEnv)
+    val finalFields = rangeExpressionToExpression(table.logicalPlan, table.tableEnv, fields: _*)
+    val expandedFields = expandProjectList(finalFields, table.logicalPlan, table.tableEnv)
     val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, table.tableEnv)
     if (propNames.nonEmpty) {
       throw new ValidationException("Window properties can only be used on windowed tables.")
@@ -1410,8 +1417,9 @@ class WindowedTable(
     * }}}
     */
   def groupBy(fields: Expression*): WindowGroupedTable = {
-    val fieldsWithoutWindow = fields.filterNot(window.alias.equals(_))
-    if (fields.size != fieldsWithoutWindow.size + 1) {
+    val finalFields = rangeExpressionToExpression(table.logicalPlan, table.tableEnv, fields: _*)
+    val fieldsWithoutWindow = finalFields.filterNot(window.alias.equals(_))
+    if (finalFields.size != fieldsWithoutWindow.size + 1) {
       throw new ValidationException("GroupBy must contain exactly one window alias.")
     }
 
@@ -1456,12 +1464,13 @@ class OverWindowedTable(
     * }}}
     */
   def select(fields: Expression*): Table = {
+    val finalFields = rangeExpressionToExpression(table.logicalPlan, table.tableEnv, fields: _*)
     val expandedFields = expandProjectList(
-      fields,
+      finalFields,
       table.logicalPlan,
       table.tableEnv)
 
-    if(fields.exists(_.isInstanceOf[WindowProperty])){
+    if(finalFields.exists(_.isInstanceOf[WindowProperty])){
       throw new ValidationException(
         "Window start and end properties are not available for Over windows.")
     }
@@ -1513,7 +1522,8 @@ class WindowGroupedTable(
     * }}}
     */
   def select(fields: Expression*): Table = {
-    val expandedFields = expandProjectList(fields, table.logicalPlan, table.tableEnv)
+    val finalFields = rangeExpressionToExpression(table.logicalPlan, table.tableEnv, fields: _*)
+    val expandedFields = expandProjectList(finalFields, table.logicalPlan, table.tableEnv)
     val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, table.tableEnv)
 
     val projectsOnAgg = replaceAggregationsAndProperties(

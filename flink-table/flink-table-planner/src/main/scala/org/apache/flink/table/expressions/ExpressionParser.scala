@@ -190,6 +190,10 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
           }
       }
 
+  lazy val rangeLiteral: PackratParser[Expression] = numberLiteral ~ "~" ~ numberLiteral ^^ {
+    case start ~ _ ~ end => new RangeLiteral(start.asInstanceOf[Literal], end.asInstanceOf[Literal])
+  }
+
   // string with single quotes such as 'It''s me.'
   lazy val singleQuoteStringLiteral: Parser[Expression] = "'(?:''|[^'])*'".r ^^ {
     str =>
@@ -213,7 +217,7 @@ object ExpressionParser extends JavaTokenParsers with PackratParsers {
   }
 
   lazy val literalExpr: PackratParser[Expression] =
-    numberLiteral | doubleQuoteStringLiteral | singleQuoteStringLiteral | boolLiteral
+    rangeLiteral | numberLiteral | doubleQuoteStringLiteral | singleQuoteStringLiteral | boolLiteral
 
   lazy val fieldReference: PackratParser[NamedExpression] = (STAR | ident) ^^ {
     sym => UnresolvedFieldReference(sym)

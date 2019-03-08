@@ -19,6 +19,7 @@
 package org.apache.flink.table.plan
 
 import org.apache.flink.api.common.typeutils.CompositeType
+import org.apache.flink.table.api.scala.ColumnsExpression
 import org.apache.flink.table.api.{OverWindow, TableEnvironment, ValidationException}
 import org.apache.flink.table.expressions._
 import org.apache.flink.table.plan.logical.{LogicalNode, Project}
@@ -231,6 +232,23 @@ object ProjectionTranslator {
       case e: Expression => projectList += e
     }
     projectList
+  }
+
+  def rangeExpressionToExpression(parent: LogicalNode,
+      tableEnv: TableEnvironment, fields: Expression*): Seq[Expression] = {
+    val currentFields = expandProjectList(
+      Seq(ExpressionParser.parseExpression("*")), parent,
+      tableEnv).asInstanceOf[Seq[UnresolvedFieldReference]]
+
+    var finalFields: Seq[Expression] = Seq[Expression]()
+
+    fields.foreach(
+      f => f match {
+        case col: ColumnsExpression => finalFields = finalFields ++: col.parse(currentFields)
+        case _ => finalFields = finalFields ++: Seq(f)
+      })
+
+    finalFields
   }
 
   def resolveOverWindows(

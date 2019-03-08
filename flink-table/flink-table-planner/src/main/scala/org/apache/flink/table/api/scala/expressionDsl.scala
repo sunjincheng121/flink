@@ -1071,21 +1071,22 @@ trait ImplicitExpressionConversions {
     }
   }
 
-  implicit def symbol2FieldExpression(sym: Symbol): Expression = UnresolvedFieldReference(sym.name)
-  implicit def byte2Literal(b: Byte): Expression = Literal(b)
-  implicit def short2Literal(s: Short): Expression = Literal(s)
-  implicit def int2Literal(i: Int): Expression = Literal(i)
-  implicit def long2Literal(l: Long): Expression = Literal(l)
-  implicit def double2Literal(d: Double): Expression = Literal(d)
-  implicit def float2Literal(d: Float): Expression = Literal(d)
-  implicit def string2Literal(str: String): Expression = Literal(str)
-  implicit def boolean2Literal(bool: Boolean): Expression = Literal(bool)
-  implicit def javaDec2Literal(javaDec: JBigDecimal): Expression = Literal(javaDec)
-  implicit def scalaDec2Literal(scalaDec: BigDecimal): Expression =
+  implicit def symbol2FieldExpression(sym: Symbol): UnresolvedFieldReference =
+    UnresolvedFieldReference(sym.name)
+  implicit def byte2Literal(b: Byte): Literal = Literal(b)
+  implicit def short2Literal(s: Short): Literal = Literal(s)
+  implicit def int2Literal(i: Int): Literal = Literal(i)
+  implicit def long2Literal(l: Long): Literal = Literal(l)
+  implicit def double2Literal(d: Double): Literal = Literal(d)
+  implicit def float2Literal(d: Float): Literal = Literal(d)
+  implicit def string2Literal(str: String): Literal = Literal(str)
+  implicit def boolean2Literal(bool: Boolean): Literal = Literal(bool)
+  implicit def javaDec2Literal(javaDec: JBigDecimal): Literal = Literal(javaDec)
+  implicit def scalaDec2Literal(scalaDec: BigDecimal): Literal =
     Literal(scalaDec.bigDecimal)
-  implicit def sqlDate2Literal(sqlDate: Date): Expression = Literal(sqlDate)
-  implicit def sqlTime2Literal(sqlTime: Time): Expression = Literal(sqlTime)
-  implicit def sqlTimestamp2Literal(sqlTimestamp: Timestamp): Expression =
+  implicit def sqlDate2Literal(sqlDate: Date): Literal = Literal(sqlDate)
+  implicit def sqlTime2Literal(sqlTime: Time): Literal = Literal(sqlTime)
+  implicit def sqlTimestamp2Literal(sqlTimestamp: Timestamp): Literal =
     Literal(sqlTimestamp)
   implicit def array2ArrayConstructor(array: Array[_]): Expression = convertArray(array)
   implicit def userDefinedAggFunctionConstructor[T: TypeInformation, ACC: TypeInformation]
@@ -1264,6 +1265,73 @@ object array {
     */
   def apply(head: Expression, tail: Expression*): Expression = {
     ArrayConstructor(head +: tail.toSeq)
+  }
+}
+
+object columns {
+
+  def apply(head: Expression, tail: Expression*): ColumnsExpression = {
+    ColumnsExpression(head +: tail.toSeq)
+  }
+
+  def apply(fields: String): ColumnsExpression = {
+    ColumnsExpression(ExpressionParser.parseExpressionList(fields))
+  }
+}
+
+case class ColumnsExpression(
+    child: Seq[Expression], var selection: Boolean = true) extends LeafExpression {
+
+  override private[flink] def resultType = {
+    throw new TableException("ColumnsExpression have no result type.")
+  }
+
+  def parse(fields: Seq[UnresolvedFieldReference]): Seq[Expression] = {
+    var fieldReferenceExpressions: Seq[Expression] = Seq[Expression]()
+    child.foreach(
+      e => e match {
+        case RangeLiteral(start, end) =>
+          fieldReferenceExpressions = fieldReferenceExpressions ++: fields.zipWithIndex.filter(
+            fieldAndIndex => start.value.asInstanceOf[Integer] <= fieldAndIndex._2 &&
+              fieldAndIndex._2 <= end.value.asInstanceOf[Integer]).map(fi => fi._1)
+        case l: Literal => fieldReferenceExpressions = fieldReferenceExpressions ++:
+          fields.zipWithIndex.filter(
+            fieldAndIndex => l.value.asInstanceOf[Integer] == fieldAndIndex._2).map(fi => fi._1)
+        case fr: RangeUnresolvedFieldReference =>
+          val start = fields.zipWithIndex.filter(
+            fieldAndIndex => fieldAndIndex._1.name.equals(fr.start.name))
+          val startIndex = if (start.isEmpty) {
+            Integer.MAX_VALUE
+          } else {
+            start.head._2
+          }
+          val end = fields.zipWithIndex.filter(
+            fieldAndIndex => fieldAndIndex._1.name.equals(fr.end.name))
+          val endIndex = if (end.isEmpty) {
+            Integer.MAX_VALUE
+          } else {
+            end.head._2
+          }
+          fieldReferenceExpressions = fieldReferenceExpressions ++: fields.zipWithIndex.filter(
+            fieldAndIndex => startIndex <= fieldAndIndex._2 &&
+              fieldAndIndex._2 <= endIndex).map(fi => fi._1)
+        case UnresolvedFieldReference(_) =>
+          fieldReferenceExpressions = fieldReferenceExpressions ++: Seq(e)
+        case _ => throw new TableException(s"Unexpected expression type [$e].")
+      })
+
+    if(!selection){
+      fieldReferenceExpressions = fields.filter(f => fieldReferenceExpressions.forall(
+        df => !df.asInstanceOf[UnresolvedFieldReference].name.equals(f.name)))
+    }
+
+    fieldReferenceExpressions
+
+  }
+
+  def unary_- : ColumnsExpression = {
+    this.selection = false
+    this
   }
 }
 

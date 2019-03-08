@@ -50,6 +50,22 @@ case class UnresolvedFieldReference(name: String) extends Attribute {
 
   override private[flink] def validateInput(): ValidationResult =
     ValidationFailure(s"Unresolved reference $name.")
+
+  def ~ (other: UnresolvedFieldReference): RangeUnresolvedFieldReference =
+    RangeUnresolvedFieldReference(this, other)
+
+}
+
+case class RangeUnresolvedFieldReference(
+    start: UnresolvedFieldReference, end: UnresolvedFieldReference) extends BinaryExpression {
+  override private[flink] def left = start
+  override private[flink] def right = end
+
+  /**
+    * Returns the [[TypeInformation]] for evaluating this expression.
+    * It is sometimes not available until the expression is valid.
+    */
+  override private[flink] def resultType = throw new TableException("TODO")
 }
 
 case class ResolvedFieldReference(
