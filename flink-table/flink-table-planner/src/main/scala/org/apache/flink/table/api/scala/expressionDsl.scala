@@ -21,7 +21,7 @@ import java.math.{BigDecimal => JBigDecimal}
 import java.sql.{Date, Time, Timestamp}
 
 import org.apache.calcite.avatica.util.DateTimeUtils._
-import org.apache.flink.api.common.typeinfo.{SqlTimeTypeInfo, TypeInformation}
+import org.apache.flink.api.common.typeinfo.{IntegerTypeInfo, SqlTimeTypeInfo, TypeInformation}
 import org.apache.flink.table.api.{Table, TableException}
 import org.apache.flink.table.expressions.ExpressionUtils.{convertArray, toMilliInterval, toMonthInterval, toRowInterval}
 import org.apache.flink.table.expressions.TimeIntervalUnit.TimeIntervalUnit
@@ -1294,9 +1294,12 @@ case class ColumnsExpression(
           fieldReferenceExpressions = fieldReferenceExpressions ++: fields.zipWithIndex.filter(
             fieldAndIndex => start.value.asInstanceOf[Integer] <= fieldAndIndex._2 &&
               fieldAndIndex._2 <= end.value.asInstanceOf[Integer]).map(fi => fi._1)
-        case l: Literal => fieldReferenceExpressions = fieldReferenceExpressions ++:
+        case l: Literal if l.resultType.isInstanceOf[IntegerTypeInfo[_]]=>
+          fieldReferenceExpressions = fieldReferenceExpressions ++:
           fields.zipWithIndex.filter(
             fieldAndIndex => l.value.asInstanceOf[Integer] == fieldAndIndex._2).map(fi => fi._1)
+        case l:Literal => throw new TableException(
+            "The parameters of columns() only accept column name or column index.")
         case fr: RangeUnresolvedFieldReference =>
           val start = fields.zipWithIndex.filter(
             fieldAndIndex => fieldAndIndex._1.name.equals(fr.start.name))

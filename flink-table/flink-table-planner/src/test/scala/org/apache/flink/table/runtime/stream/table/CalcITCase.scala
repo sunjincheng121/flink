@@ -454,18 +454,25 @@ class CalcITCase extends AbstractTestBase {
     testData.+=((2, 2L, "Sunny", "Panpan", 5, 1, "begin", "finish", "deselect"))
 
     val fun = Func8
+    val funRow = Func23
     val t = env.fromCollection(testData).toTable(tEnv).as('a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i)
 
     val result = t
       .select(columns("*"))
-      .select(columns(0 ~ 2, 3, 'e, 'g ~ 'h), fun(columns(2 ~ 3)), 'f, -columns("a,b,c,d,e,f,g,h"))
+      .select(
+        columns(0 ~ 2, 3, 'e, 'g ~ 'h),
+        fun(columns(2 ~ 3)),
+        'f,
+        -columns("a,b,c,d,e,f,g,h"),
+        funRow(row(columns('a, 2 ~ 3)))
+      )
 
     result.addSink(new StreamITCase.StringSink[Row])
     env.execute()
 
     val expected = mutable.MutableList(
-      "1,1,Kevin,Panpan,3,start,end,c,1,deselect",
-      "2,2,Sunny,Panpan,5,begin,finish,c,1,deselect")
+      "1,1,Kevin,Panpan,3,start,end,c,1,deselect,1,Kevin,Panpan",
+      "2,2,Sunny,Panpan,5,begin,finish,c,1,deselect,2,Sunny,Panpan")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 
