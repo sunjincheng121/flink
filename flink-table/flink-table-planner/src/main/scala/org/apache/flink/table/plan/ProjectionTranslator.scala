@@ -245,6 +245,21 @@ object ProjectionTranslator {
     fields.foreach(
       f => f match {
         case col: ColumnsExpression => finalFields = finalFields ++: col.parse(currentFields)
+        case ScalarFunctionCall(fun, args) => {
+          val params = rangeExpressionToExpression(parent, tableEnv, args: _*)
+          finalFields = finalFields ++: Seq(ScalarFunctionCall(fun, params))
+        }
+        case TableFunctionCall(name, fun, args, resultType) =>
+          val params = rangeExpressionToExpression(parent, tableEnv, args: _*)
+          finalFields = finalFields ++: Seq(TableFunctionCall(name, fun, params, resultType))
+        case AggFunctionCall(fun, resultType, accType, args) => {
+          val params = rangeExpressionToExpression(parent, tableEnv, args: _*)
+          finalFields = finalFields ++: Seq(AggFunctionCall(fun, resultType, accType, params))
+        }
+        case Alias(child, name, extraNames) => {
+          val expr = rangeExpressionToExpression(parent, tableEnv, child)
+          finalFields = finalFields ++: Seq(Alias(expr.head, name, extraNames))
+        }
         case _ => finalFields = finalFields ++: Seq(f)
       })
 

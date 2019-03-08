@@ -97,7 +97,7 @@ class Table(
     */
   def select(fields: Expression*): Table = {
 
-    val finalFields = rangeExpressionToExpression(this.logicalPlan, this.tableEnv, fields: _*)
+    val finalFields = rangeExpressionToExpression(logicalPlan, tableEnv, fields: _*)
 
     val expandedFields = expandProjectList(finalFields, logicalPlan, tableEnv)
     val (aggNames, propNames) = extractAggregationsAndProperties(expandedFields, tableEnv)
@@ -711,6 +711,7 @@ class Table(
       joinPredicate: Option[Expression],
       joinType: JoinType): Table = {
 
+    val finalCallExpr = rangeExpressionToExpression(logicalPlan, tableEnv, callExpr)
     // check join type
     if (joinType != JoinType.INNER && joinType != JoinType.LEFT_OUTER) {
       throw new ValidationException(
@@ -719,7 +720,7 @@ class Table(
 
     val logicalCall = UserDefinedFunctionUtils.createLogicalFunctionCall(
       tableEnv,
-      callExpr,
+      finalCallExpr.head,
       logicalPlan)
     val validatedLogicalCall = logicalCall.validate(tableEnv)
 

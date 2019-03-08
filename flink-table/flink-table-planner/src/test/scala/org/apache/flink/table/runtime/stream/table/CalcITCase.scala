@@ -23,8 +23,10 @@ import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.table.api.scala._
 import org.apache.flink.table.expressions.Literal
 import org.apache.flink.table.expressions.utils._
+import org.apache.flink.table.functions.aggfunctions.CountAggFunction
 import org.apache.flink.table.runtime.utils.{StreamITCase, StreamTestData, UserDefinedFunctionTestUtils}
-import org.apache.flink.test.util.AbstractTestBase
+import org.apache.flink.table.utils.TableFunc2
+import org.apache.flink.test.util.{AbstractTestBase, TestBaseUtils}
 import org.apache.flink.types.Row
 import org.junit.Assert._
 import org.junit.Test
@@ -451,17 +453,19 @@ class CalcITCase extends AbstractTestBase {
     testData.+=((1, 1L, "Kevin", "Panpan", 3, 1, "start", "end", "deselect"))
     testData.+=((2, 2L, "Sunny", "Panpan", 5, 1, "begin", "finish", "deselect"))
 
+    val fun = Func8
     val t = env.fromCollection(testData).toTable(tEnv).as('a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 'i)
 
-    val result = t.select(
-      columns(0 ~ 2, 3, 'e, 'g ~ 'h), 'f, -columns("a,b,c,d,e,f,g,h"))
+    val result = t
+      .select(columns("*"))
+      .select(columns(0 ~ 2, 3, 'e, 'g ~ 'h), fun(columns(2 ~ 3)), 'f, -columns("a,b,c,d,e,f,g,h"))
 
     result.addSink(new StreamITCase.StringSink[Row])
     env.execute()
 
     val expected = mutable.MutableList(
-      "1,1,Kevin,Panpan,3,start,end,1,deselect",
-      "2,2,Sunny,Panpan,5,begin,finish,1,deselect")
+      "1,1,Kevin,Panpan,3,start,end,c,1,deselect",
+      "2,2,Sunny,Panpan,5,begin,finish,c,1,deselect")
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 
@@ -501,18 +505,20 @@ class CalcITCase extends AbstractTestBase {
     testData.+=((1, 1L, "Kevin", "Panpan", 3, 1, "start", "end"))
     testData.+=((2, 2L, "Kevin", "Panpan", 5, 1, "begin", "finish"))
 
+    val countFun = new CountAggFunction
+
     val t =
       env.fromCollection(testData).toTable(tEnv, 'a, 'b, 'c, 'd, 'e, 'f, 'g, 'h, 't.proctime)
 
     val result = t
       .window(Tumble over 2.rows on 't as 'w)
       .groupBy('w, columns(2 ~ 3))
-      .select(columns(2 ~ 3), 'e.sum)
+      .select(columns(2 ~ 3), 'e.sum, countFun(columns('c)))
 
     result.toRetractStream[Row].addSink(new StreamITCase.RetractingSink)
     env.execute()
 
-    val expected = mutable.MutableList("Kevin,Panpan,8")
+    val expected = mutable.MutableList("Kevin,Panpan,8,2")
     assertEquals(expected.sorted, StreamITCase.retractedResults.sorted)
   }
 
@@ -544,6 +550,36 @@ class CalcITCase extends AbstractTestBase {
       "1,1,Kevin,Panpan,3,1,3",
       "2,2,Sunny,Panpan,5,1,8"
       )
+    assertEquals(expected.sorted, StreamITCase.testResults.sorted)
+  }
+
+  @Test
+  def testColumnSelectionInUDTF(): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    val tEnv = StreamTableEnvironment.create(env)
+
+    StreamITCase.clear
+
+    val testData =
+      new mutable.MutableList[(Int, Long, String)]
+    testData.+=((1, 1L, "Kevin#Sunny"))
+    testData.+=((2, 2L, "Sunny#Panpan"))
+
+    val fun = new TableFunc2
+
+    val t = env.fromCollection(testData).toTable(tEnv, 'a, 'b, 'c)
+
+    val result = t.joinLateral(fun(columns('c)) as ('s, 'l)).select(columns("*"))
+
+    result.addSink(new StreamITCase.StringSink[Row])
+    env.execute()
+
+    val expected = mutable.MutableList(
+      "1,1,Kevin#Sunny,Kevin,5",
+      "1,1,Kevin#Sunny,Sunny,5",
+      "2,2,Sunny#Panpan,Panpan,6",
+      "2,2,Sunny#Panpan,Sunny,5"
+    )
     assertEquals(expected.sorted, StreamITCase.testResults.sorted)
   }
 
