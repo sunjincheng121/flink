@@ -1292,12 +1292,12 @@ case class ColumnsExpression(
       e => e match {
         case RangeLiteral(start, end) =>
           fieldReferenceExpressions = fieldReferenceExpressions ++: fields.zipWithIndex.filter(
-            fieldAndIndex => start.value.asInstanceOf[Integer] <= fieldAndIndex._2 &&
-              fieldAndIndex._2 <= end.value.asInstanceOf[Integer]).map(fi => fi._1)
+            fieldAndIndex => start.value.asInstanceOf[Integer] - 1 <= fieldAndIndex._2 &&
+              fieldAndIndex._2 <= end.value.asInstanceOf[Integer] -1 ).map(fi => fi._1)
         case l: Literal if l.resultType.isInstanceOf[IntegerTypeInfo[_]]=>
           fieldReferenceExpressions = fieldReferenceExpressions ++:
           fields.zipWithIndex.filter(
-            fieldAndIndex => l.value.asInstanceOf[Integer] == fieldAndIndex._2).map(fi => fi._1)
+            fieldAndIndex => l.value.asInstanceOf[Integer] -1  == fieldAndIndex._2).map(fi => fi._1)
         case l:Literal => throw new TableException(
             "The parameters of columns() only accept column name or column index.")
         case fr: RangeUnresolvedFieldReference =>

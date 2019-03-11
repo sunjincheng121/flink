@@ -460,11 +460,11 @@ class CalcITCase extends AbstractTestBase {
     val result = t
       .select(columns("*"))
       .select(
-        columns(0 ~ 2, 3, 'e, 'g ~ 'h),
-        fun(columns(2 ~ 3)),
+        columns(1 ~ 3, 4, 'e, 'g ~ 'h),
+        fun(columns(3 ~ 4)),
         'f,
         -columns("a,b,c,d,e,f,g,h"),
-        funRow(row(columns('a, 2 ~ 3)))
+        funRow(row(columns('a, 3 ~ 4)))
       )
 
     result.addSink(new StreamITCase.StringSink[Row])
@@ -491,7 +491,7 @@ class CalcITCase extends AbstractTestBase {
 
     val t = env.fromCollection(testData).toTable(tEnv).as('a, 'b, 'c, 'd, 'e, 'f, 'g, 'h)
 
-    val result = t.groupBy(columns(2 ~ 3)).select(columns("2~3"), 'h.count)
+    val result = t.groupBy(columns(3 ~ 4)).select(columns("3~4"), 'h.count)
 
     result.toRetractStream[Row].addSink(new StreamITCase.RetractingSink)
     env.execute()
@@ -519,8 +519,8 @@ class CalcITCase extends AbstractTestBase {
 
     val result = t
       .window(Tumble over 2.rows on 't as 'w)
-      .groupBy('w, columns(2 ~ 3))
-      .select(columns(2 ~ 3), 'e.sum, countFun(columns('c)))
+      .groupBy('w, columns(3 ~ 4))
+      .select(columns(3 ~ 4), 'e.sum, countFun(columns('c)))
 
     result.toRetractStream[Row].addSink(new StreamITCase.RetractingSink)
     env.execute()
@@ -547,7 +547,7 @@ class CalcITCase extends AbstractTestBase {
 
     val result = t
       .window(Over orderBy 't preceding 2.rows following CURRENT_ROW as 'w)
-      .select(columns(0 ~ 5), 'e.sum over 'w)
+      .select(columns(1 ~ 6), 'e.sum over 'w)
 
     result.addSink(new StreamITCase.StringSink[Row])
     env.execute()
