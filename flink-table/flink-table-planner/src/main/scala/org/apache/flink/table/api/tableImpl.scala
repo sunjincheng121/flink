@@ -481,7 +481,7 @@ class TableImpl(
   */
 class GroupedTableImpl(
     private[flink] val table: Table,
-    private[flink] val groupKey: Seq[Expression])
+    private[flink] val groupKeys: Seq[Expression])
   extends GroupedTable {
 
   private val tableImpl = table.asInstanceOf[TableImpl]
@@ -506,7 +506,7 @@ class GroupedTableImpl(
     new TableImpl(tableImpl.tableEnv,
       tableImpl.operationTreeBuilder.project(extracted.getProjections,
         tableImpl.operationTreeBuilder.aggregate(
-          groupKey.asJava,
+          groupKeys.asJava,
           extracted.getAggregations,
           tableImpl.operationTree
         )
