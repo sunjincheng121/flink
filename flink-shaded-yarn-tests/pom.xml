@@ -29,16 +29,10 @@ under the License.
 		<relativePath>..</relativePath>
 	</parent>
 
-	<artifactId>flink-shaded-hadoop</artifactId>
-	<name>flink-shaded-hadoop</name>
+	<artifactId>flink-shaded-yarn-tests</artifactId>
+	<name>flink-shaded-yarn-tests</name>
 
-	<packaging>pom</packaging>
-
-	<modules>
-		<module>flink-shaded-hadoop2</module>
-		<module>flink-shaded-hadoop2-uber</module>
-		<module>flink-shaded-yarn-tests</module>
-	</modules>
+	<packaging>jar</packaging>
 
 	<dependencies>
 		<!-- drop dependencies that are already provided by Flink from the shaded / uber jars -->
@@ -52,8 +46,40 @@ under the License.
 			<artifactId>slf4j-api</artifactId>
 			<scope>provided</scope>
 		</dependency>
-	</dependencies>
 
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-common</artifactId>
+			<version>${hadoop.version}</version>
+		</dependency>
+		<!-- NOTE: We do not exclude hadoop's dependencies so that the tests start properly (in particular jetty) -->
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-yarn-server-tests</artifactId>
+			<version>${hadoop.version}</version>
+		</dependency>
+
+		<!-- Add test-jar as well -->
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-yarn-server-tests</artifactId>
+			<version>${hadoop.version}</version>
+			<type>test-jar</type>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-minicluster</artifactId>
+			<version>${hadoop.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.hadoop</groupId>
+			<artifactId>hadoop-yarn-server-resourcemanager</artifactId>
+			<version>${hadoop.version}</version>
+		</dependency>
+
+	</dependencies>
 	<build>
 		<plugins>
 			<plugin>
