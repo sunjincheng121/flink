@@ -399,6 +399,18 @@ under the License.
 					<name>include-hadoop</name>
 				</property>
 			</activation>
+			<dependencies>
+				<!--
+                    The Hadoop 2 Uber jar should not go into the Flink dist jar, but
+                    sit next to it. Hence, we set it to 'provided' here.
+                -->
+				<dependency>
+					<groupId>org.apache.flink</groupId>
+					<artifactId>flink-shaded-hadoop-2-uber</artifactId>
+					<version>${hadoop.version}-${flink.shaded.version}</version>
+					<scope>provided</scope>
+				</dependency>
+			</dependencies>
 			<build>
 				<plugins>
 					<plugin>
@@ -411,6 +423,9 @@ under the License.
 									<goal>single</goal>
 								</goals>
 								<configuration>
+									<descriptors>
+										<descriptor>src/main/assemblies/hadoop.xml</descriptor>
+									</descriptors>
 									<finalName>flink-${project.version}-bin</finalName>
 									<appendAssemblyId>false</appendAssemblyId>
 								</configuration>

@@ -127,14 +127,14 @@ under the License.
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-shaded-hadoop-2</artifactId>
-			<version>${hadoop.version}-7.0</version>
+			<version>${hadoop.version}-${flink.shaded.version}</version>
 			<scope>test</scope>
 		</dependency>
 
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-shaded-hadoop-2-uber</artifactId>
-			<version>${hadoop.version}-7.0</version>
+			<version>${hadoop.version}-${flink.shaded.version}</version>
 			<scope>test</scope>
 		</dependency>
 
@@ -342,7 +342,7 @@ under the License.
 						<artifactItem>
 							<groupId>org.apache.flink</groupId>
 							<artifactId>flink-shaded-hadoop-2-uber</artifactId>
-							<version>${hadoop.version}-7.0</version>
+							<version>${hadoop.version}-${flink.shaded.version}</version>
 							<type>jar</type>
 							<overWrite>true</overWrite>
 							<outputDirectory>${project.build.directory}/shaded-hadoop</outputDirectory>
