@@ -630,7 +630,7 @@ class WindowGroupedTableImpl(
       tableImpl.operationTreeBuilder.project(
         extracted.getProjections,
         tableImpl.operationTreeBuilder.windowAggregate(
-          groupKeys.asJava,
+          groupKeys,
           window,
           extracted.getWindowProperties,
           extracted.getAggregations,
