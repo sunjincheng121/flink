@@ -149,7 +149,7 @@ under the License.
 							<artifactSet>
 								<includes>
 									<include>com.google.guava:*</include>
-									<include>com.google.protobuf:*</include>
+<!--									<include>com.google.protobuf:*</include>-->
 									<include>com.google.code.findbugs:*</include>
 									<include>asm:asm</include>
 									<include>io.netty:netty:*</include>
