@@ -175,7 +175,12 @@ public class CliFrontend {
 
 		final CommandLine commandLine = CliFrontendParser.parse(commandLineOptions, args, true);
 
-		final RunOptions runOptions = new RunOptions(commandLine);
+		ProgramOptions runOptions;
+		if (RunPyOptions.isPython(commandLine)) {
+			runOptions = new RunPyOptions(commandLine);
+		} else {
+			runOptions = new RunOptions(commandLine);
+		}
 
 		// evaluate help flag
 		if (runOptions.isPrintHelp()) {
@@ -211,7 +216,7 @@ public class CliFrontend {
 	private <T> void runProgram(
 			CustomCommandLine<T> customCommandLine,
 			CommandLine commandLine,
-			RunOptions runOptions,
+			ProgramOptions runOptions,
 			PackagedProgram program) throws ProgramInvocationException, FlinkException {
 		final ClusterDescriptor<T> clusterDescriptor = customCommandLine.createClusterDescriptor(commandLine);
 
@@ -781,12 +786,6 @@ public class CliFrontend {
 			// If the job is specified a jar file
 			if (jarFilePath != null) {
 				jarFile = getJarFile(jarFilePath);
-			}
-
-			// If the job is Python Shell job, the entry point class name is PythonGateWayServer.
-			// Otherwise, the entry point class of python job is PythonDriver
-			if (entryPointClass == null) {
-				entryPointClass = "org.apache.flink.client.python.PythonDriver";
 			}
 		} else {
 			if (jarFilePath == null) {
