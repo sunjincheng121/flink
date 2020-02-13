@@ -219,7 +219,7 @@ run sdist.
         scripts=scripts,
         url='http://flink.apache.org',
         license='http://www.apache.org/licenses/LICENSE-2.0',
-        author='Flink Developers',
+        author='Apache Software Foundation',
         author_email='dev@flink.apache.org',
         install_requires=['py4j==0.10.8.1', 'python-dateutil'],
         tests_require=['pytest==4.4.1'],
@@ -227,7 +227,7 @@ run sdist.
         long_description=long_description,
         long_description_content_type='text/markdown',
         classifiers=[
-            'Development Status :: 1 - Planning',
+            'Development Status :: 5 - Production/Stable',
             'License :: OSI Approved :: Apache Software License',
             'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3.5',
